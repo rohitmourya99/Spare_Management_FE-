@@ -32,7 +32,23 @@ prisma.$on('error' as never, (e: { message: string }) => {
 });
 
 export async function connectDatabase(): Promise<void> {
+  if (!process.env.DATABASE_URL) {
+    logger.error('❌ CRITICAL ERROR: DATABASE_URL environment variable is missing!');
+    logger.error('👉 Please go to Render Dashboard -> Web Service -> Environment tab');
+    logger.error('   Add Key: DATABASE_URL  Value: postgresql://...');
+    process.exit(1);
+  }
+
   try {
+    // Sync schema to PostgreSQL at server runtime
+    const { execSync } = await import('child_process');
+    try {
+      logger.info('Syncing Prisma schema with database...');
+      execSync('npx prisma db push --skip-generate', { stdio: 'inherit' });
+    } catch (pushErr) {
+      logger.warn('Prisma db push notice:', pushErr);
+    }
+
     await prisma.$connect();
     logger.info('✅ Database connected successfully');
   } catch (error) {

@@ -102,28 +102,28 @@ export const LoginPage: React.FC = () => {
           </p>
           <div className="grid grid-cols-2 gap-2 text-xs">
             <button
-              onClick={() => fillQuickLogin('admin@proactivedata.in', 'Admin@2026')}
+              onClick={() => fillQuickLogin('admin@proactivedata.in', 'Admin@123')}
               className="px-2.5 py-1.5 rounded-lg bg-slate-900/80 hover:bg-slate-800 border border-slate-800 text-slate-300 text-left transition-colors"
             >
               <span className="font-medium text-brand-400 block">Super Admin</span>
               <span className="text-[10px] text-slate-500 truncate block">admin@proactivedata.in</span>
             </button>
             <button
-              onClick={() => fillQuickLogin('inventory@proactivedata.in', 'Inv@2026')}
+              onClick={() => fillQuickLogin('inventory@proactivedata.in', 'Inv@123')}
               className="px-2.5 py-1.5 rounded-lg bg-slate-900/80 hover:bg-slate-800 border border-slate-800 text-slate-300 text-left transition-colors"
             >
               <span className="font-medium text-emerald-400 block">Inv Admin</span>
               <span className="text-[10px] text-slate-500 truncate block">inventory@proactivedata.in</span>
             </button>
             <button
-              onClick={() => fillQuickLogin('engineer@proactivedata.in', 'Eng@2026')}
+              onClick={() => fillQuickLogin('engineer@proactivedata.in', 'Eng@123')}
               className="px-2.5 py-1.5 rounded-lg bg-slate-900/80 hover:bg-slate-800 border border-slate-800 text-slate-300 text-left transition-colors"
             >
               <span className="font-medium text-amber-400 block">Engineer</span>
               <span className="text-[10px] text-slate-500 truncate block">engineer@proactivedata.in</span>
             </button>
             <button
-              onClick={() => fillQuickLogin('viewer@proactivedata.in', 'View@2026')}
+              onClick={() => fillQuickLogin('viewer@proactivedata.in', 'View@123')}
               className="px-2.5 py-1.5 rounded-lg bg-slate-900/80 hover:bg-slate-800 border border-slate-800 text-slate-300 text-left transition-colors"
             >
               <span className="font-medium text-purple-400 block">Read Only</span>

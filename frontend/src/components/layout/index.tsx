@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
-import { NavLink, useNavigate, useLocation } from 'react-router-dom';
+import React from 'react';
+import { NavLink, useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   LayoutDashboard, Package, Truck, RotateCcw,
   Building2, FileSpreadsheet, Users, Settings,
   History, LogOut, ShieldCheck, ChevronRight,
-  Boxes, Bell, Search,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/useAuthStore';
 import pdsLogo from '../../assets/pds-logo.png';
@@ -33,30 +32,25 @@ export const Sidebar: React.FC = () => {
   const initials = user?.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'U';
 
   return (
-    <aside className="w-[220px] flex flex-col h-screen sticky top-0 z-50" style={{
+    <aside className="w-[220px] flex flex-col h-screen sticky top-0 z-50 shrink-0" style={{
       background: 'linear-gradient(180deg, rgba(8,10,20,0.98) 0%, rgba(10,13,26,0.98) 100%)',
       borderRight: '1px solid rgba(255,255,255,0.06)',
       backdropFilter: 'blur(20px)',
     }}>
-      {/* Brand */}
+      {/* Brand — Proactive Logo in a Square box with thin light black border */}
       <div className="px-4 pt-5 pb-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
         <div className="flex flex-col items-center gap-2">
-          {/* Proactive Logo — white card so original colors stay bright */}
-          <div className="w-full flex items-center justify-center px-3 py-2 rounded-2xl"
-            style={{
-              background: '#ffffff',
-              boxShadow: '0 0 0 1px rgba(255,255,255,0.15), 0 4px 20px rgba(0,0,0,0.4)',
-            }}>
+          {/* Square Logo Box */}
+          <div className="w-14 h-14 aspect-square bg-white rounded-xl flex items-center justify-center p-2 border border-black shadow-sm">
             <img
               src={pdsLogo}
               alt="Proactive Data Systems"
-              className="w-auto object-contain"
-              style={{ height: '40px', maxWidth: '175px', display: 'block' }}
+              className="w-full h-full object-contain block"
             />
           </div>
           {/* App subtitle */}
-          <div className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#10b981' }} />
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
             <p className="text-[10px] text-slate-400 tracking-wide font-medium">Spare IMS · Live</p>
           </div>
         </div>
@@ -127,55 +121,44 @@ export const Sidebar: React.FC = () => {
 
 export const Header: React.FC<{ title: string }> = ({ title }) => {
   const { user } = useAuthStore();
-  const location = useLocation();
 
   const now = new Date();
   const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
   const dateStr = now.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
 
   return (
-    <header className="h-14 px-6 flex items-center justify-between sticky top-0 z-40"
-      style={{
-        background: 'rgba(8,12,20,0.85)',
-        backdropFilter: 'blur(20px)',
-        borderBottom: '1px solid rgba(255,255,255,0.05)',
-      }}>
+    <header className="h-14 px-6 flex items-center justify-between sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200">
       {/* Page Title */}
       <div className="flex items-center gap-3">
         <div className="w-1 h-5 rounded-full" style={{ background: 'linear-gradient(180deg,#6366f1,#8b5cf6)' }} />
-        <h2 className="text-base font-bold text-white tracking-tight">{title}</h2>
+        <h2 className="text-base font-bold text-slate-900 tracking-tight">{title}</h2>
       </div>
 
       {/* Right side */}
       <div className="flex items-center gap-3">
         {/* Live pill */}
-        <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium"
-          style={{
-            background: 'rgba(16,185,129,0.08)',
-            border: '1px solid rgba(16,185,129,0.2)',
-            color: '#34d399',
-          }}>
+        <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-emerald-50 border border-emerald-200 text-emerald-700">
           <span className="pulse-dot" style={{ width: 6, height: 6 }} />
           Live
         </div>
 
         {/* Date/Time (Date on top, Time on bottom) */}
         <div className="hidden md:flex flex-col items-end">
-          <span className="text-xs font-semibold text-slate-200">{dateStr}</span>
-          <span className="text-[10px] text-slate-400 font-mono">{timeStr}</span>
+          <span className="text-xs font-semibold text-slate-800">{dateStr}</span>
+          <span className="text-[10px] text-slate-500 font-mono">{timeStr}</span>
         </div>
 
         {/* Divider */}
-        <div className="w-px h-6" style={{ background: 'rgba(255,255,255,0.07)' }} />
+        <div className="w-px h-6 bg-slate-200" />
 
         {/* User avatar */}
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
+        <Link to="/users" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+          <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm"
             style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}>
             {user?.name?.[0] || 'U'}
           </div>
-          <span className="hidden md:block text-xs font-medium text-slate-300 max-w-[100px] truncate">{user?.name}</span>
-        </div>
+          <span className="hidden md:block text-xs font-semibold text-slate-800 max-w-[100px] truncate">{user?.name}</span>
+        </Link>
       </div>
     </header>
   );
@@ -183,11 +166,11 @@ export const Header: React.FC<{ title: string }> = ({ title }) => {
 
 export const Layout: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => {
   return (
-    <div className="flex min-h-screen app-bg">
+    <div className="flex min-h-screen bg-white" style={{ backgroundColor: '#ffffff' }}>
       <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 bg-white">
         <Header title={title} />
-        <main className="flex-1 p-5 md:p-6 overflow-y-auto page-enter">
+        <main className="flex-1 p-5 md:p-6 overflow-y-auto page-enter bg-white">
           {children}
         </main>
       </div>

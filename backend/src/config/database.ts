@@ -33,10 +33,8 @@ prisma.$on('error' as never, (e: { message: string }) => {
 
 export async function connectDatabase(): Promise<void> {
   if (!process.env.DATABASE_URL) {
-    logger.error('❌ CRITICAL ERROR: DATABASE_URL environment variable is missing!');
-    logger.error('👉 Please go to Render Dashboard -> Web Service -> Environment tab');
-    logger.error('   Add Key: DATABASE_URL  Value: postgresql://...');
-    process.exit(1);
+    logger.info('ℹ️ DATABASE_URL environment variable is missing. Defaulting to zero-config SQLite (file:./dev.db)...');
+    process.env.DATABASE_URL = 'file:./dev.db';
   }
 
   try {

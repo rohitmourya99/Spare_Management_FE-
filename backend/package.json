@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
-    "build:render": "prisma generate && prisma db push && tsc",
-    "start": "node dist/server.js",
+    "build:render": "prisma generate && tsc",
+    "start": "prisma db push && node dist/server.js",
     "test": "jest",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",

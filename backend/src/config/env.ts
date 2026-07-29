@@ -16,7 +16,7 @@ function optional(key: string, defaultValue: string): string {
 export const env = {
   NODE_ENV: optional('NODE_ENV', 'development'),
   PORT: parseInt(optional('PORT', '5000'), 10),
-  DATABASE_URL: required('DATABASE_URL'),
+  DATABASE_URL: optional('DATABASE_URL', process.env.POSTGRES_URL || process.env.DATABASE_PRIVATE_URL || ''),
 
   // JWT
   JWT_SECRET: optional('JWT_SECRET', 'fallback-jwt-secret-change-in-production'),

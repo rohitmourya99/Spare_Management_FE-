@@ -1,43 +1,46 @@
 import { prisma } from './database';
 import bcrypt from 'bcryptjs';
 import { logger } from './logger';
+import xlsx from 'xlsx';
+import path from 'path';
+import fs from 'fs';
+
+function getRowValue(row: Record<string, any>, ...possibleKeys: string[]): any {
+  const rowKeys = Object.keys(row);
+  for (const pKey of possibleKeys) {
+    const matchedKey = rowKeys.find((k) => k.trim().toLowerCase() === pKey.trim().toLowerCase());
+    if (matchedKey && row[matchedKey] !== undefined && row[matchedKey] !== null) {
+      return row[matchedKey];
+    }
+  }
+  return null;
+}
 
 /**
- * Ensures database tables exist and default users are seeded on server startup
+ * Ensures database tables exist, default users are seeded,
+ * and Excel inventory data is automatically imported on server startup.
  */
 export async function ensureDatabaseSeeded(): Promise<void> {
   try {
-    // Check if Super Admin exists
-    const admin = await prisma.user.findUnique({
+    // 1. Ensure Default Users (Admin@123, Inv@123, Eng@123, View@123)
+    const hashedAdmin = await bcrypt.hash('Admin@123', 10);
+    const hashedInv = await bcrypt.hash('Inv@123', 10);
+    const hashedEng = await bcrypt.hash('Eng@123', 10);
+    const hashedView = await bcrypt.hash('View@123', 10);
+
+    const superAdmin = await prisma.user.upsert({
       where: { email: 'admin@proactivedata.in' },
+      update: { password: hashedAdmin, isActive: true },
+      create: {
+        name: 'Super Admin',
+        email: 'admin@proactivedata.in',
+        password: hashedAdmin,
+        role: 'SUPER_ADMIN',
+        phone: '+91-9999999999',
+        isActive: true,
+      },
     });
 
-    const hashedAdmin = await bcrypt.hash('Admin@2026', 10);
-    const hashedInv = await bcrypt.hash('Inv@2026', 10);
-    const hashedEng = await bcrypt.hash('Eng@2026', 10);
-    const hashedView = await bcrypt.hash('View@2026', 10);
-
-    if (!admin) {
-      logger.info('Creating default Super Admin user...');
-      await prisma.user.create({
-        data: {
-          name: 'Super Admin',
-          email: 'admin@proactivedata.in',
-          password: hashedAdmin,
-          role: 'SUPER_ADMIN',
-          phone: '+91-9999999999',
-          isActive: true,
-        },
-      });
-    } else {
-      // Force update password to Admin@123 to guarantee it works
-      await prisma.user.update({
-        where: { email: 'admin@proactivedata.in' },
-        data: { password: hashedAdmin, isActive: true },
-      });
-    }
-
-    // Ensure Inventory Admin
     await prisma.user.upsert({
       where: { email: 'inventory@proactivedata.in' },
       update: { password: hashedInv, isActive: true },
@@ -50,7 +53,6 @@ export async function ensureDatabaseSeeded(): Promise<void> {
       },
     });
 
-    // Ensure Field Engineer
     await prisma.user.upsert({
       where: { email: 'engineer@proactivedata.in' },
       update: { password: hashedEng, isActive: true },
@@ -63,7 +65,6 @@ export async function ensureDatabaseSeeded(): Promise<void> {
       },
     });
 
-    // Ensure Read Only Viewer
     await prisma.user.upsert({
       where: { email: 'viewer@proactivedata.in' },
       update: { password: hashedView, isActive: true },
@@ -76,7 +77,114 @@ export async function ensureDatabaseSeeded(): Promise<void> {
       },
     });
 
-    logger.info('✅ Default users verified & ready (Admin@2026, Inv@2026, Eng@2026, View@2026)');
+    logger.info('✅ Default users verified & ready (Admin@123, Inv@123, Eng@123, View@123)');
+
+    // 2. Check if Inventory Data exists
+    const inventoryCount = await prisma.inventoryItem.count();
+    if (inventoryCount === 0) {
+      logger.info('🌱 Empty database detected. Auto-seeding Excel inventory & site data...');
+
+      const possibleRoots = [
+        process.cwd(),
+        path.resolve(process.cwd(), '..'),
+        path.resolve(__dirname, '../../..'),
+        '/opt/render/project/src',
+      ];
+
+      const projectRoot = possibleRoots.find((p) => fs.existsSync(path.join(p, 'Delhi Spare_Parts_Inventory.xlsx'))) || process.cwd();
+      const delhiExcelPath = path.join(projectRoot, 'Delhi Spare_Parts_Inventory.xlsx');
+      const spocExcelPath = path.join(projectRoot, 'SPOC details.xlsx');
+
+      // Import SPOC details
+      if (fs.existsSync(spocExcelPath)) {
+        logger.info('📄 Reading SPOC details.xlsx...');
+        const wb = xlsx.readFile(spocExcelPath);
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const sitesRaw = xlsx.utils.sheet_to_json<any>(sheet);
+
+        for (let i = 0; i < sitesRaw.length; i++) {
+          const row = sitesRaw[i];
+          const unitDivision = getRowValue(row, 'Unit/ Division', 'Unit Division') || '';
+          const subLocation = getRowValue(row, 'Sub-Location/Sub-Unit', 'Sub Location') || '';
+          const siteName = subLocation ? `${unitDivision} - ${subLocation}` : unitDivision || `Site ${i + 1}`;
+          if (!siteName || siteName.trim() === '') continue;
+
+          await prisma.site.create({
+            data: {
+              siteName: siteName.trim(),
+              unitDivision,
+              subLocation,
+              locationClass: getRowValue(row, 'Location Class') || '',
+              spareStore: getRowValue(row, 'Spare Stores') || '',
+              addressLine1: getRowValue(row, 'Address') || '',
+              fullAddress: getRowValue(row, 'Address') || '',
+              city: getRowValue(row, 'City') || '',
+              state: getRowValue(row, 'State') || '',
+              contactPerson: getRowValue(row, 'Contact Person Name') || '',
+              phone: (getRowValue(row, 'Contact Number', 'Phone') || '').toString(),
+              email: getRowValue(row, 'Email') || '',
+            },
+          });
+        }
+        logger.info(`✅ Loaded ${sitesRaw.length} BHEL Sites`);
+      }
+
+      // Import Delhi Inventory
+      if (fs.existsSync(delhiExcelPath)) {
+        logger.info('📄 Reading Delhi Spare_Parts_Inventory.xlsx...');
+        const wb = xlsx.readFile(delhiExcelPath);
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const inventoryRaw = xlsx.utils.sheet_to_json<any>(sheet);
+
+        let count = 0;
+        for (const row of inventoryRaw) {
+          const productName = getRowValue(row, 'Spare Item', 'Part Name', 'Product Name');
+          const rawOemName = (getRowValue(row, 'OEM', 'Manufacturer') || 'Generic').toString().trim();
+          const partCode = (getRowValue(row, 'Spare Part Code', 'Part Code') || '').toString().trim();
+          const rawSerial = getRowValue(row, 'Serial Number', 'Serial No', 'S/N', 'Serial Number ');
+          const qtyRaw = parseInt(getRowValue(row, 'Quantity', 'Qty') || '1', 10);
+          const quantity = isNaN(qtyRaw) ? 1 : qtyRaw;
+
+          if (!productName || productName.toString().trim() === '') continue;
+
+          let oem = await prisma.oEM.findFirst({ where: { name: { equals: rawOemName } } });
+          if (!oem) {
+            oem = await prisma.oEM.create({ data: { name: rawOemName } });
+          }
+
+          let category = await prisma.category.findFirst({ where: { name: 'General', oemId: oem.id } });
+          if (!category) {
+            category = await prisma.category.create({ data: { name: 'General', oemId: oem.id } });
+          }
+
+          count++;
+          const spareId = `PDS-DEL-2026-${String(count).padStart(5, '0')}`;
+          const cleanSerial = rawSerial ? String(rawSerial).trim() : null;
+          const isSerialized = Boolean(cleanSerial && cleanSerial !== 'null' && cleanSerial !== 'undefined' && cleanSerial !== '');
+
+          await prisma.inventoryItem.create({
+            data: {
+              spareId,
+              oemId: oem.id,
+              categoryId: category.id,
+              productName: productName.toString().trim(),
+              partCode,
+              serialNumber: isSerialized ? cleanSerial : null,
+              isSerialized,
+              quantity,
+              availableQuantity: quantity,
+              unit: 'PCS',
+              store: getRowValue(row, 'Warehouse Location', 'Location') || 'Delhi',
+              rack: (getRowValue(row, 'Rack', 'Rack No') || '').toString() || null,
+              bin: (getRowValue(row, 'Bin', 'Bin No') || '').toString() || null,
+              status: 'AVAILABLE',
+              createdById: superAdmin.id,
+            },
+          });
+        }
+        logger.info(`✅ Successfully loaded ${count} Spare Parts into database`);
+      }
+    }
   } catch (error) {
     logger.error('Error during auto database seeding:', error);
   }

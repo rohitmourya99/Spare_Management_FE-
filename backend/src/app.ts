@@ -63,30 +63,35 @@ app.get('/health', (_req, res) => {
 app.use('/api', routes);
 
 // Serve frontend static build files (Single-Site Deployment)
-const possibleFrontendPaths = [
-  path.resolve(process.cwd(), 'frontend/dist'),
-  path.resolve(process.cwd(), '../frontend/dist'),
-  path.resolve(__dirname, '../../frontend/dist'),
-  path.resolve(__dirname, '../../../frontend/dist'),
-  '/opt/render/project/src/frontend/dist',
-];
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api') || req.path.startsWith('/health') || req.path.startsWith('/uploads')) {
+    return next();
+  }
 
-const activeDistPath = possibleFrontendPaths.find((p) => fs.existsSync(p)) || null;
+  const possibleFrontendPaths = [
+    path.resolve(process.cwd(), 'frontend/dist'),
+    path.resolve(process.cwd(), '../frontend/dist'),
+    path.resolve(__dirname, '../../frontend/dist'),
+    path.resolve(__dirname, '../../../frontend/dist'),
+    '/opt/render/project/src/frontend/dist',
+  ];
 
-if (activeDistPath) {
-  logger.info(`Serving static frontend UI from: ${activeDistPath}`);
-  app.use(express.static(activeDistPath));
+  const activeDistPath = possibleFrontendPaths.find((p) => fs.existsSync(p));
 
-  // SPA fallback for client-side routing
-  app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/api') || req.path.startsWith('/health') || req.path.startsWith('/uploads')) {
-      return next();
+  if (activeDistPath) {
+    const filePath = path.join(activeDistPath, req.path);
+    if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+      return res.sendFile(filePath);
     }
-    res.sendFile(path.join(activeDistPath, 'index.html'));
-  });
-} else {
-  logger.warn('⚠️ Static frontend dist folder not found. API mode only.');
-}
+
+    const indexPath = path.join(activeDistPath, 'index.html');
+    if (fs.existsSync(indexPath)) {
+      return res.sendFile(indexPath);
+    }
+  }
+
+  next();
+});
 
 // 404 & Error handlers
 app.use(notFoundHandler);

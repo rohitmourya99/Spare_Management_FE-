@@ -94,15 +94,10 @@ export const UserListPage: React.FC = () => {
   // Create User
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!createForm.name || !createForm.email || !createForm.password) {
-      showNotification('Please fill in all required fields.', true);
-      return;
-    }
-
     setIsSubmitting(true);
     try {
       await api.post('/users', createForm);
-      showNotification(`User "${createForm.name}" created successfully!`);
+      showNotification(`User ${createForm.name} created successfully!`);
       setCreateModalOpen(false);
       setCreateForm({ name: '', email: '', password: '', phone: '', role: 'ENGINEER' });
       queryClient.invalidateQueries({ queryKey: ['users'] });
@@ -113,25 +108,14 @@ export const UserListPage: React.FC = () => {
     }
   };
 
-  // Edit User
-  const openEditModal = (user: User) => {
-    setSelectedUser(user);
-    setEditForm({
-      name: user.name,
-      phone: user.phone || '',
-      role: user.role,
-    });
-    setEditModalOpen(true);
-  };
-
-  const handleEditUser = async (e: React.FormEvent) => {
+  // Update User Details
+  const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedUser) return;
-
     setIsSubmitting(true);
     try {
       await api.patch(`/users/${selectedUser.id}`, editForm);
-      showNotification(`User "${editForm.name}" updated successfully!`);
+      showNotification(`User ${selectedUser.name} updated successfully!`);
       setEditModalOpen(false);
       setSelectedUser(null);
       queryClient.invalidateQueries({ queryKey: ['users'] });
@@ -142,41 +126,37 @@ export const UserListPage: React.FC = () => {
     }
   };
 
-  // Toggle Active / Freeze / Inactive status
-  const handleSetStatus = async (user: User, targetActive: boolean, actionLabel: string) => {
-    if (!window.confirm(`Are you sure you want to ${actionLabel.toLowerCase()} account for "${user.name}"?`)) {
-      return;
-    }
-
+  // Account Status Control: Freeze / Inactivate / Activate
+  const handleToggleStatus = async (user: User, newStatus: boolean) => {
     try {
-      await api.patch(`/users/${user.id}/status`, { isActive: targetActive });
-      showNotification(`Account for ${user.name} is now ${actionLabel}.`);
+      await api.patch(`/users/${user.id}/status`, { isActive: newStatus });
+      const statusLabel = newStatus ? 'Activated' : 'Frozen / Inactivated';
+      showNotification(`Account for ${user.name} has been ${statusLabel}.`);
       queryClient.invalidateQueries({ queryKey: ['users'] });
     } catch (err: any) {
-      showNotification(err.response?.data?.message || `Failed to update status`, true);
+      showNotification(err.response?.data?.message || 'Failed to update account status', true);
     }
   };
 
-  // Reset Password
-  const openResetModal = (user: User) => {
-    setSelectedUser(user);
-    setResetPasswordValue('');
-    setConfirmPasswordValue('');
-    setResetModalOpen(true);
+  // Role Assignment Update
+  const handleRoleChange = async (user: User, newRole: UserRole) => {
+    try {
+      await api.patch(`/users/${user.id}/role`, { role: newRole });
+      showNotification(`Role for ${user.name} changed to ${newRole}.`);
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    } catch (err: any) {
+      showNotification(err.response?.data?.message || 'Failed to update role', true);
+    }
   };
 
+  // Password Reset
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedUser) return;
-    if (resetPasswordValue.length < 6) {
-      showNotification('Password must be at least 6 characters long.', true);
-      return;
-    }
     if (resetPasswordValue !== confirmPasswordValue) {
-      showNotification('Passwords do not match.', true);
+      showNotification('Passwords do not match', true);
       return;
     }
-
     setIsSubmitting(true);
     try {
       await api.patch(`/users/${selectedUser.id}/reset-password`, {
@@ -208,12 +188,12 @@ export const UserListPage: React.FC = () => {
   };
 
   const formatLastLogin = (lastLoginAt?: string | Date | null) => {
-    if (!lastLoginAt) return <span className="text-slate-500 text-xs italic">Never</span>;
+    if (!lastLoginAt) return <span className="text-slate-500 text-xs italic font-medium">Never</span>;
     const d = new Date(lastLoginAt);
     return (
-      <span className="text-xs text-slate-300 font-mono">
+      <span className="text-xs text-slate-800 font-mono font-semibold">
         {d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}{' '}
-        <span className="text-slate-500">{d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
+        <span className="text-slate-500 font-normal">{d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
       </span>
     );
   };
@@ -222,21 +202,21 @@ export const UserListPage: React.FC = () => {
     <Layout title="User Management System">
       {/* Toast Notifications */}
       {actionSuccess && (
-        <div className="mb-4 p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-sm flex items-center justify-between">
+        <div className="mb-4 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-bold flex items-center justify-between shadow-sm">
           <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
             <span>{actionSuccess}</span>
           </div>
-          <button onClick={() => setActionSuccess(null)} className="text-emerald-400 hover:text-white">✕</button>
+          <button onClick={() => setActionSuccess(null)} className="text-emerald-700 hover:text-emerald-950 font-bold">✕</button>
         </div>
       )}
       {actionError && (
-        <div className="mb-4 p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-sm flex items-center justify-between">
+        <div className="mb-4 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm font-bold flex items-center justify-between shadow-sm">
           <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0" />
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
             <span>{actionError}</span>
           </div>
-          <button onClick={() => setActionError(null)} className="text-rose-400 hover:text-white">✕</button>
+          <button onClick={() => setActionError(null)} className="text-rose-700 hover:text-rose-950 font-bold">✕</button>
         </div>
       )}
 
@@ -246,52 +226,56 @@ export const UserListPage: React.FC = () => {
           title="Total Registered Users"
           value={totalCount}
           icon={Users}
-          color="text-indigo-400"
-          bg="linear-gradient(135deg,rgba(99,102,241,0.1) 0%,rgba(79,70,229,0.05) 100%)"
+          color="text-indigo-600"
         />
         <StatCard
           title="Super Administrators"
           value={superAdminCount}
           icon={ShieldCheck}
-          color="text-purple-400"
-          bg="linear-gradient(135deg,rgba(139,92,246,0.1) 0%,rgba(124,58,237,0.05) 100%)"
+          color="text-purple-600"
         />
         <StatCard
           title="Active Accounts"
           value={activeCount}
           icon={UserCheck}
-          color="text-emerald-400"
-          bg="linear-gradient(135deg,rgba(16,185,129,0.1) 0%,rgba(5,150,105,0.05) 100%)"
+          color="text-emerald-600"
         />
         <StatCard
           title="Frozen / Inactive Accounts"
           value={frozenCount}
           icon={UserX}
-          color="text-rose-400"
-          bg="linear-gradient(135deg,rgba(239,68,68,0.1) 0%,rgba(220,38,38,0.05) 100%)"
+          color="text-rose-600"
         />
       </div>
 
-      {/* Control bar */}
-      <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-6">
-        <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto flex-1">
-          {/* Search box */}
-          <div className="relative w-full sm:w-72">
-            <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+      {/* Control Bar: Search & Action */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+        <div className="flex flex-col sm:flex-row items-center gap-3 flex-1 max-w-2xl">
+          {/* Search Box */}
+          <div className="relative w-full">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
             <input
               type="text"
-              placeholder="Search by name or email..."
+              placeholder="Search user by name, email, or mobile..."
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              className="w-full pl-10 pr-4 py-2 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+              className="w-full pl-10 pr-4 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-600 font-medium"
             />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-700"
+              >
+                ✕
+              </button>
+            )}
           </div>
 
           {/* Role Filter */}
           <select
             value={roleFilter}
             onChange={(e) => { setRoleFilter(e.target.value); setPage(1); }}
-            className="w-full sm:w-48 px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-sm text-slate-300 focus:outline-none focus:border-indigo-500"
+            className="w-full sm:w-48 px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 font-bold focus:outline-none focus:border-indigo-600"
           >
             <option value="ALL">All Roles</option>
             <option value="SUPER_ADMIN">Super Admin</option>
@@ -304,7 +288,7 @@ export const UserListPage: React.FC = () => {
           <select
             value={statusFilter}
             onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-            className="w-full sm:w-40 px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-sm text-slate-300 focus:outline-none focus:border-indigo-500"
+            className="w-full sm:w-40 px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 font-bold focus:outline-none focus:border-indigo-600"
           >
             <option value="ALL">All Statuses</option>
             <option value="ACTIVE">Active Only</option>
@@ -328,8 +312,8 @@ export const UserListPage: React.FC = () => {
       <Card noPadding className="overflow-hidden">
         {isLoading ? (
           <div className="p-12 text-center text-slate-500">
-            <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-500" />
-            Loading system users...
+            <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-600" />
+            <span className="font-semibold text-slate-700">Loading system users...</span>
           </div>
         ) : isError ? (
           <EmptyState
@@ -355,8 +339,8 @@ export const UserListPage: React.FC = () => {
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-slate-300">
-              <thead className="bg-slate-900/80 text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800/80">
+            <table className="w-full text-left text-sm data-table">
+              <thead>
                 <tr>
                   <th className="px-5 py-3.5">Full Name</th>
                   <th className="px-4 py-3.5">Email / Username</th>
@@ -367,59 +351,72 @@ export const UserListPage: React.FC = () => {
                   <th className="px-5 py-3.5 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60">
+              <tbody className="divide-y divide-slate-200 text-slate-900">
                 {users.map((u) => {
                   const initials = u.name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2) || 'U';
                   const isFrozen = u.isActive === false;
 
                   return (
-                    <tr key={u.id} className="hover:bg-slate-800/30 transition-colors group">
+                    <tr key={u.id} className="hover:bg-slate-50 transition-colors group">
                       {/* Name */}
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">
                           <div
-                            className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-white text-xs shrink-0"
+                            className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-white text-xs shrink-0 shadow-sm"
                             style={{
                               background: isFrozen
                                 ? 'linear-gradient(135deg,#64748b,#475569)'
-                                : 'linear-gradient(135deg,#6366f1,#8b5cf6)',
+                                : 'linear-gradient(135deg,#4f46e5,#7c3aed)',
                             }}
                           >
                             {initials}
                           </div>
-                          <p className="font-semibold text-slate-100 flex items-center gap-1.5">
+                          <p className="font-bold text-slate-900 flex items-center gap-1.5 text-sm">
                             {u.name}
                           </p>
                         </div>
                       </td>
 
                       {/* Email */}
-                      <td className="px-4 py-3.5 text-xs text-slate-300 font-mono">
+                      <td className="px-4 py-3.5 text-xs text-slate-900 font-mono font-bold">
                         <span className="flex items-center gap-1.5">
-                          <Mail className="w-3.5 h-3.5 text-slate-500" />
+                          <Mail className="w-3.5 h-3.5 text-slate-400" />
                           {u.email}
                         </span>
                       </td>
 
-                      {/* Role */}
-                      <td className="px-4 py-3.5 whitespace-nowrap">
-                        {formatRoleBadge(u.role)}
+                      {/* Role Dropdown */}
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-2">
+                          {formatRoleBadge(u.role)}
+                          <select
+                            value={u.role}
+                            onChange={(e) => handleRoleChange(u, e.target.value as UserRole)}
+                            className="text-[10px] bg-white border border-slate-300 rounded px-1.5 py-0.5 text-slate-800 font-bold focus:outline-none focus:border-indigo-600 cursor-pointer"
+                            title="Change User Role"
+                          >
+                            <option value="SUPER_ADMIN">Super Admin</option>
+                            <option value="INVENTORY_ADMIN">Inventory Manager</option>
+                            <option value="ENGINEER">Engineer</option>
+                            <option value="READ_ONLY">Read Only</option>
+                          </select>
+                        </div>
                       </td>
 
-                      {/* Mobile Number */}
-                      <td className="px-4 py-3.5 whitespace-nowrap text-xs text-slate-400">
+                      {/* Phone */}
+                      <td className="px-4 py-3.5 text-xs text-slate-800 font-mono font-semibold">
                         {u.phone ? (
-                          <span className="flex items-center gap-1">
-                            <Phone className="w-3 h-3 text-slate-500" />
+                          <span className="flex items-center gap-1.5">
+                            <Phone className="w-3.5 h-3.5 text-slate-400" />
                             {u.phone}
                           </span>
                         ) : (
-                          <span className="text-slate-600">—</span>
+                          <span className="text-slate-400 italic">Unspecified</span>
                         )}
                       </td>
 
-                      {/* Status */}
-                      <td className="px-4 py-3.5 whitespace-nowrap">
+                      {/* Account Status Badge */}
+                      <td className="px-4 py-3.5">
                         {isFrozen ? (
                           <Badge variant="danger" dot>Frozen / Inactive</Badge>
                         ) : (
@@ -433,51 +430,54 @@ export const UserListPage: React.FC = () => {
                       </td>
 
                       {/* Actions */}
-                      <td className="px-5 py-3.5 whitespace-nowrap text-right">
+                      <td className="px-5 py-3.5 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          {/* Edit User Button */}
-                          <Button
-                            variant="ghost"
-                            size="xs"
-                            onClick={() => openEditModal(u)}
+                          {/* Edit Details */}
+                          <button
+                            onClick={() => {
+                              setSelectedUser(u);
+                              setEditForm({ name: u.name, phone: u.phone || '', role: u.role });
+                              setEditModalOpen(true);
+                            }}
+                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-indigo-600 text-slate-700 hover:text-white border border-slate-200 transition-colors"
                             title="Edit User Details"
                           >
-                            <Edit className="w-3.5 h-3.5 text-indigo-400" />
-                            <span className="hidden sm:inline">Edit</span>
-                          </Button>
+                            <Edit className="w-3.5 h-3.5" />
+                          </button>
 
-                          {/* Reset Password Button */}
-                          <Button
-                            variant="ghost"
-                            size="xs"
-                            onClick={() => openResetModal(u)}
-                            title="Reset Password"
+                          {/* Reset Password */}
+                          <button
+                            onClick={() => {
+                              setSelectedUser(u);
+                              setResetPasswordValue('');
+                              setConfirmPasswordValue('');
+                              setResetModalOpen(true);
+                            }}
+                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-amber-600 text-slate-700 hover:text-white border border-slate-200 transition-colors"
+                            title="Reset User Password"
                           >
-                            <KeyRound className="w-3.5 h-3.5 text-amber-400" />
-                            <span className="hidden sm:inline">Reset Pass</span>
-                          </Button>
+                            <KeyRound className="w-3.5 h-3.5" />
+                          </button>
 
-                          {/* Account Status Control: Freeze / Activate */}
+                          {/* Freeze / Activate Button */}
                           {isFrozen ? (
-                            <Button
-                              variant="success"
-                              size="xs"
-                              onClick={() => handleSetStatus(u, true, 'Active')}
+                            <button
+                              onClick={() => handleToggleStatus(u, true)}
+                              className="px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-200 text-xs font-bold transition-colors flex items-center gap-1"
                               title="Activate Account"
                             >
-                              <UserCheck className="w-3.5 h-3.5" />
-                              <span>Activate</span>
-                            </Button>
+                              <UserCheck className="w-3 h-3" />
+                              Activate
+                            </button>
                           ) : (
-                            <Button
-                              variant="danger"
-                              size="xs"
-                              onClick={() => handleSetStatus(u, false, 'Frozen')}
-                              title="Freeze / Inactivate Account"
+                            <button
+                              onClick={() => handleToggleStatus(u, false)}
+                              className="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200 text-xs font-bold transition-colors flex items-center gap-1"
+                              title="Freeze Account"
                             >
-                              <Ban className="w-3.5 h-3.5" />
-                              <span>Freeze</span>
-                            </Button>
+                              <Ban className="w-3 h-3" />
+                              Freeze
+                            </button>
                           )}
                         </div>
                       </td>
@@ -489,24 +489,27 @@ export const UserListPage: React.FC = () => {
           </div>
         )}
 
-        {/* Pagination Footer */}
-        {pagination.totalPages > 1 && (
-          <div className="px-5 py-3.5 border-t border-slate-800/80 flex items-center justify-between bg-slate-900/40">
-            <span className="text-xs text-slate-400">
-              Showing page <strong className="text-white">{pagination.page}</strong> of <strong className="text-white">{pagination.totalPages}</strong> ({pagination.total} users)
-            </span>
+        {/* Pagination */}
+        {pagination && pagination.totalPages > 1 && (
+          <div className="flex items-center justify-between px-5 py-3 border-t border-slate-200 bg-slate-50">
+            <p className="text-xs text-slate-600 font-semibold">
+              Showing {((page - 1) * limit) + 1} to {Math.min(page * limit, pagination.total)} of {pagination.total} users
+            </p>
             <div className="flex items-center gap-2">
               <Button
                 variant="secondary"
-                size="xs"
-                disabled={pagination.page <= 1}
+                size="sm"
+                disabled={!pagination.hasPrev}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
               >
                 Previous
               </Button>
+              <span className="text-xs text-slate-800 font-bold">
+                Page {pagination.page} of {pagination.totalPages}
+              </span>
               <Button
                 variant="secondary"
-                size="xs"
+                size="sm"
                 disabled={!pagination.hasNext}
                 onClick={() => setPage((p) => p + 1)}
               >
@@ -517,133 +520,120 @@ export const UserListPage: React.FC = () => {
         )}
       </Card>
 
-      {/* CREATE NEW USER MODAL */}
-      <Modal
-        isOpen={createModalOpen}
-        onClose={() => setCreateModalOpen(false)}
-        title="+ Add New User Account"
-        subtitle="Add a new member to the Spare Management System."
-        maxWidth="md"
-      >
+      {/* + Add New User Modal */}
+      <Modal isOpen={createModalOpen} onClose={() => setCreateModalOpen(false)} title="Add New User Account" maxWidth="md">
         <form onSubmit={handleCreateUser} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">Full Name *</label>
+            <label className="block text-xs font-bold text-slate-800 mb-1">Full Name *</label>
             <input
               type="text"
               required
-              placeholder="e.g. Rahul Sharma"
               value={createForm.name}
               onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
-              className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500"
+              placeholder="e.g. Ramesh Kumar"
+              className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 font-semibold focus:outline-none focus:border-indigo-600"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">Email Address *</label>
+            <label className="block text-xs font-bold text-slate-800 mb-1">Email / Username *</label>
             <input
               type="email"
               required
-              placeholder="user@proactivedata.in"
               value={createForm.email}
               onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
-              className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500"
+              placeholder="ramesh@proactivedata.in"
+              className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 font-semibold focus:outline-none focus:border-indigo-600"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">Mobile Number</label>
-            <input
-              type="text"
-              placeholder="+91-9876543210"
-              value={createForm.phone}
-              onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })}
-              className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">Password *</label>
+            <label className="block text-xs font-bold text-slate-800 mb-1">Password *</label>
             <input
               type="password"
               required
-              minLength={6}
-              placeholder="Minimum 6 characters"
               value={createForm.password}
               onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
-              className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500"
+              placeholder="••••••••"
+              className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 font-semibold focus:outline-none focus:border-indigo-600"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">Role Assignment *</label>
+            <label className="block text-xs font-bold text-slate-800 mb-1">Mobile Number</label>
+            <input
+              type="text"
+              value={createForm.phone}
+              onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })}
+              placeholder="+91 9876543210"
+              className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 font-semibold focus:outline-none focus:border-indigo-600"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-800 mb-1">Role Assignment *</label>
             <select
               value={createForm.role}
               onChange={(e) => setCreateForm({ ...createForm, role: e.target.value as UserRole })}
-              className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+              className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 font-bold focus:outline-none focus:border-indigo-600"
             >
-              <option value="SUPER_ADMIN">1. Super Admin (Full Control & Admin Access)</option>
-              <option value="INVENTORY_ADMIN">2. Inventory Manager / Admin</option>
-              <option value="ENGINEER">2. Field Engineer (Dispatch / Pickup Operations)</option>
-              <option value="READ_ONLY">3. Read Only User (View Only Access)</option>
+              <option value="SUPER_ADMIN">Super Admin (Full Permission)</option>
+              <option value="INVENTORY_ADMIN">Inventory Manager (Add/Edit Inventory)</option>
+              <option value="ENGINEER">Engineer (Dispatch &amp; Pickups)</option>
+              <option value="READ_ONLY">Read Only User (View Only)</option>
             </select>
           </div>
 
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800/80">
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200">
             <Button variant="ghost" size="sm" type="button" onClick={() => setCreateModalOpen(false)}>
               Cancel
             </Button>
             <Button variant="primary" size="sm" type="submit" isLoading={isSubmitting}>
-              + Add User
+              Create Account
             </Button>
           </div>
         </form>
       </Modal>
 
-      {/* EDIT USER MODAL */}
-      <Modal
-        isOpen={editModalOpen}
-        onClose={() => setEditModalOpen(false)}
-        title={`Edit User: ${selectedUser?.name}`}
-        subtitle="Update user profile, phone number, or system role."
-        maxWidth="md"
-      >
-        <form onSubmit={handleEditUser} className="space-y-4">
+      {/* Edit User Modal */}
+      <Modal isOpen={editModalOpen} onClose={() => setEditModalOpen(false)} title={`Edit User: ${selectedUser?.name}`} maxWidth="md">
+        <form onSubmit={handleUpdateUser} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">Full Name</label>
+            <label className="block text-xs font-bold text-slate-800 mb-1">Full Name *</label>
             <input
               type="text"
               required
               value={editForm.name}
               onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-              className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500"
+              className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 font-semibold focus:outline-none focus:border-indigo-600"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">Mobile Number</label>
+            <label className="block text-xs font-bold text-slate-800 mb-1">Mobile Number</label>
             <input
               type="text"
               value={editForm.phone}
               onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
-              className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500"
+              className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 font-semibold focus:outline-none focus:border-indigo-600"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">Role Assignment</label>
+            <label className="block text-xs font-bold text-slate-800 mb-1">Role Assignment *</label>
             <select
               value={editForm.role}
               onChange={(e) => setEditForm({ ...editForm, role: e.target.value as UserRole })}
-              className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+              className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 font-bold focus:outline-none focus:border-indigo-600"
             >
               <option value="SUPER_ADMIN">Super Admin</option>
               <option value="INVENTORY_ADMIN">Inventory Manager</option>
-              <option value="ENGINEER">Field Engineer</option>
+              <option value="ENGINEER">Engineer</option>
               <option value="READ_ONLY">Read Only User</option>
             </select>
           </div>
 
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800/80">
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200">
             <Button variant="ghost" size="sm" type="button" onClick={() => setEditModalOpen(false)}>
               Cancel
             </Button>
@@ -654,41 +644,32 @@ export const UserListPage: React.FC = () => {
         </form>
       </Modal>
 
-      {/* RESET PASSWORD MODAL */}
-      <Modal
-        isOpen={resetModalOpen}
-        onClose={() => setResetModalOpen(false)}
-        title={`Reset Password for ${selectedUser?.name}`}
-        subtitle="Generate or set a new password for this user."
-        maxWidth="md"
-      >
+      {/* Reset Password Modal */}
+      <Modal isOpen={resetModalOpen} onClose={() => setResetModalOpen(false)} title={`Reset Password: ${selectedUser?.name}`} maxWidth="sm">
         <form onSubmit={handleResetPassword} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">New Password *</label>
+            <label className="block text-xs font-bold text-slate-800 mb-1">New Password *</label>
             <input
               type="password"
               required
-              minLength={6}
-              placeholder="Enter new password (min 6 characters)"
               value={resetPasswordValue}
               onChange={(e) => setResetPasswordValue(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-amber-500"
+              className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 font-semibold focus:outline-none focus:border-indigo-600"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">Confirm New Password *</label>
+            <label className="block text-xs font-bold text-slate-800 mb-1">Confirm New Password *</label>
             <input
               type="password"
               required
-              placeholder="Re-enter new password"
               value={confirmPasswordValue}
               onChange={(e) => setConfirmPasswordValue(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-amber-500"
+              className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 font-semibold focus:outline-none focus:border-indigo-600"
             />
           </div>
 
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800/80">
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200">
             <Button variant="ghost" size="sm" type="button" onClick={() => setResetModalOpen(false)}>
               Cancel
             </Button>

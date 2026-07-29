@@ -16,7 +16,6 @@ const statusVariant = (s: string): 'success' | 'danger' | 'warning' | 'info' | '
 // Helper function to format live Date & Time
 const formatDateTime = (dispatchDateVal?: string | Date, createdAtVal?: string | Date) => {
   let d = dispatchDateVal ? new Date(dispatchDateVal) : null;
-  // If dispatchDate is midnight (from HTML date picker 00:00:00), use createdAt for live time
   if (!d || isNaN(d.getTime()) || (d.getHours() === 0 && d.getMinutes() === 0 && createdAtVal)) {
     if (createdAtVal) d = new Date(createdAtVal);
   }
@@ -121,62 +120,78 @@ export const DispatchListPage: React.FC = () => {
     setItemSearch('');
   };
 
-  const handleItemSelect = (item: InventoryItem) => {
-    setSelectedItem(item);
-    setForm(f => ({ ...f, inventoryItemId: item.id }));
-    setItemSearch('');
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.inventoryItemId || !form.siteId) return;
+    createMutation.mutate(form);
+  };
+
+  const handleSelectSite = (siteId: string) => {
+    setForm(f => ({ ...f, siteId }));
+    const found = (sitesData || []).find(s => s.id === siteId) || null;
+    setSelectedSite(found);
   };
 
   const dispatches: any[] = data?.data || [];
 
   return (
-    <Layout title="Dispatch Module">
-      {/* Top Search & New Dispatch Action Header */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mb-5">
+    <Layout title="Outbound Dispatches">
+      {/* Top Header & Search */}
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <div className="relative w-full sm:w-80">
-          <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
           <input
             type="text"
-            placeholder="Search Dispatch #, Site, Serial No, OEM..."
+            placeholder="Search dispatch no, site, courier, AWB..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-500"
+            className="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-600 font-medium"
           />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-700">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
+
         <Button variant="primary" size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setIsModalOpen(true)}>
-          New Dispatch
+          Create New Dispatch
         </Button>
       </div>
 
-      {/* Dispatches Main Table */}
+      {/* Dispatches Table */}
       <Card noPadding>
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm data-table border-collapse">
+          <table className="w-full text-left text-sm data-table">
             <thead>
               <tr>
-                <th className="p-3.5 w-32">Dispatch #</th>
-                <th className="p-3.5">Spare Item &amp; OEM</th>
+                <th className="p-3.5">Dispatch No</th>
+                <th className="p-3.5">Spare Item</th>
                 <th className="p-3.5">Serial Number</th>
                 <th className="p-3.5">BHEL Site &amp; Class</th>
                 <th className="p-3.5">SPOC Contact</th>
-                <th className="p-3.5 text-center w-16">Qty</th>
-                <th className="p-3.5">Courier / AWB</th>
-                <th className="p-3.5">Date &amp; Time</th>
+                <th className="p-3.5 text-center">Qty</th>
+                <th className="p-3.5">Courier / Tracking</th>
+                <th className="p-3.5">Dispatch Date &amp; Time</th>
                 <th className="p-3.5">Status</th>
-                <th className="p-3.5 text-right w-24">Action</th>
+                <th className="p-3.5 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60 text-slate-300">
+            <tbody className="divide-y divide-slate-200 text-slate-900">
               {isLoading ? (
-                <tr><td colSpan={10} className="p-10 text-center text-slate-500">
-                  <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-brand-500" />
-                  Loading dispatches...
-                </td></tr>
+                <tr>
+                  <td colSpan={10} className="p-10 text-center text-slate-500">
+                    <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-600" />
+                    <span className="text-sm font-semibold">Loading dispatches...</span>
+                  </td>
+                </tr>
               ) : dispatches.length === 0 ? (
-                <tr><td colSpan={10} className="p-10 text-center text-slate-500">
-                  <Truck className="w-8 h-8 mx-auto mb-2 text-slate-700" />
-                  No dispatch records found.
-                </td></tr>
+                <tr>
+                  <td colSpan={10} className="p-10 text-center text-slate-500 font-semibold">
+                    <Truck className="w-8 h-8 mx-auto mb-2 text-slate-400" />
+                    No dispatch records found.
+                  </td>
+                </tr>
               ) : (
                 dispatches.map((d) => {
                   const { date, time } = formatDateTime(d.dispatchDate, d.createdAt);
@@ -184,19 +199,19 @@ export const DispatchListPage: React.FC = () => {
                   return (
                     <tr
                       key={d.id}
-                      className="hover:bg-slate-800/40 transition-colors cursor-pointer"
+                      className="hover:bg-slate-50 transition-colors cursor-pointer"
                       onClick={() => setDetailsDispatch(d)}
                     >
                       {/* Dispatch No */}
-                      <td className="p-3.5 font-mono text-xs text-cyan-400 font-extrabold whitespace-nowrap">
+                      <td className="p-3.5 font-mono text-xs text-indigo-600 font-black whitespace-nowrap">
                         {d.dispatchNo}
                       </td>
 
                       {/* Spare Item & OEM */}
                       <td className="p-3.5">
-                        <p className="font-bold text-white text-xs">{d.inventoryItem?.productName || 'Spare Item'}</p>
-                        <p className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1">
-                          <Cpu className="w-3 h-3 text-slate-500 shrink-0" />
+                        <p className="font-bold text-slate-900 text-xs">{d.inventoryItem?.productName || 'Spare Item'}</p>
+                        <p className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1 font-medium">
+                          <Cpu className="w-3 h-3 text-slate-400 shrink-0" />
                           <span>{d.inventoryItem?.oem?.name || 'Standard OEM'}</span>
                         </p>
                       </td>
@@ -204,11 +219,11 @@ export const DispatchListPage: React.FC = () => {
                       {/* Serial Number */}
                       <td className="p-3.5 font-mono text-xs whitespace-nowrap">
                         {d.inventoryItem?.serialNumber ? (
-                          <span className="bg-brand-500/10 text-brand-400 px-2 py-0.5 rounded-md border border-brand-500/20 font-bold">
+                          <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded border border-indigo-200 font-bold">
                             {d.inventoryItem?.serialNumber}
                           </span>
                         ) : (
-                          <span className="text-slate-500 italic text-[11px] bg-slate-900 px-2 py-0.5 rounded">
+                          <span className="text-slate-600 italic text-[11px] bg-slate-100 px-2 py-0.5 rounded border border-slate-200 font-medium">
                             Bulk Item
                           </span>
                         )}
@@ -216,15 +231,15 @@ export const DispatchListPage: React.FC = () => {
 
                       {/* BHEL Site & Location Class */}
                       <td className="p-3.5">
-                        <p className="font-semibold text-slate-200 text-xs">{d.site?.siteName || 'Destination Site'}</p>
+                        <p className="font-bold text-slate-900 text-xs">{d.site?.siteName || 'Destination Site'}</p>
                         <div className="flex items-center gap-1.5 mt-0.5">
                           {d.site?.city && (
-                            <span className="text-[10px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-400 font-medium">
+                            <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 font-bold border border-slate-200">
                               {d.site?.city}
                             </span>
                           )}
                           {d.site?.locationClass && (
-                            <span className="text-[10px] bg-indigo-500/15 text-indigo-300 px-1.5 py-0.5 rounded border border-indigo-500/25 font-bold">
+                            <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-200 font-bold">
                               Class {d.site?.locationClass}
                             </span>
                           )}
@@ -233,35 +248,35 @@ export const DispatchListPage: React.FC = () => {
 
                       {/* SPOC Contact */}
                       <td className="p-3.5 text-xs">
-                        <p className="font-semibold text-slate-200">{d.site?.contactPerson || 'Site SPOC'}</p>
-                        {d.site?.phone && <p className="text-slate-400 font-mono text-[11px] mt-0.5">{d.site?.phone}</p>}
+                        <p className="font-bold text-slate-900">{d.site?.contactPerson || 'Site SPOC'}</p>
+                        {d.site?.phone && <p className="text-slate-600 font-mono text-[11px] font-semibold mt-0.5">{d.site?.phone}</p>}
                       </td>
 
                       {/* Qty */}
                       <td className="p-3.5 text-center">
-                        <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-black bg-slate-800 text-white border border-slate-700">
+                        <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-black bg-slate-100 text-slate-900 border border-slate-300">
                           {d.quantity}
                         </span>
                       </td>
 
                       {/* Courier / Tracking AWB */}
                       <td className="p-3.5 text-xs">
-                        <p className="text-slate-200 font-semibold">{d.courierName || 'Courier Direct'}</p>
+                        <p className="text-slate-900 font-bold">{d.courierName || 'Courier Direct'}</p>
                         {d.trackingNo ? (
-                          <p className="font-mono text-[11px] text-cyan-400 font-semibold">#{d.trackingNo}</p>
+                          <p className="font-mono text-[11px] text-indigo-600 font-bold">#{d.trackingNo}</p>
                         ) : (
-                          <p className="text-[10px] text-slate-500 italic">No AWB logged</p>
+                          <p className="text-[10px] text-slate-400 italic">No AWB logged</p>
                         )}
                       </td>
 
                       {/* Dispatch Date & Time (Stacked) */}
                       <td className="p-3.5 text-xs whitespace-nowrap">
-                        <p className="font-bold text-slate-200 flex items-center gap-1">
-                          <Calendar className="w-3 h-3 text-indigo-400 shrink-0" />
+                        <p className="font-bold text-slate-900 flex items-center gap-1">
+                          <Calendar className="w-3 h-3 text-indigo-600 shrink-0" />
                           {date}
                         </p>
-                        <p className="text-[11px] text-slate-400 font-mono flex items-center gap-1 mt-0.5">
-                          <Clock className="w-3 h-3 text-amber-400 shrink-0" />
+                        <p className="text-[11px] text-slate-600 font-mono font-semibold flex items-center gap-1 mt-0.5">
+                          <Clock className="w-3 h-3 text-amber-600 shrink-0" />
                           {time}
                         </p>
                       </td>
@@ -276,7 +291,7 @@ export const DispatchListPage: React.FC = () => {
                         <div className="flex items-center justify-end gap-1.5">
                           <button
                             onClick={() => setDetailsDispatch(d)}
-                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-brand-600 text-slate-300 hover:text-white transition-colors"
+                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-indigo-600 text-slate-700 hover:text-white border border-slate-200 transition-colors"
                             title="View Full Location, Date/Time & SPOC Details"
                           >
                             <Eye className="w-3.5 h-3.5" />
@@ -302,303 +317,191 @@ export const DispatchListPage: React.FC = () => {
         </div>
       </Card>
 
-      {/* Dispatch Full Details Modal */}
-      <Modal
-        isOpen={!!detailsDispatch}
-        onClose={() => setDetailsDispatch(null)}
-        title={`Dispatch Details — ${detailsDispatch?.dispatchNo}`}
-        maxWidth="lg"
-      >
-        {detailsDispatch && (() => {
-          const { date, time } = formatDateTime(detailsDispatch.dispatchDate, detailsDispatch.createdAt);
-
-          return (
-            <div className="space-y-4">
-              {/* Top Header Banner */}
-              <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-slate-400 font-medium">Dispatch Reference</p>
-                  <p className="text-lg font-mono font-extrabold text-cyan-400 mt-0.5">{detailsDispatch.dispatchNo}</p>
-                </div>
-                <Badge variant={statusVariant(detailsDispatch.status)} size="md">{detailsDispatch.status}</Badge>
-              </div>
-
-              {/* Date & Time Highlight Box */}
-              <div className="p-3.5 bg-slate-950/80 border border-indigo-500/20 rounded-xl flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-indigo-400 shrink-0" />
-                  <span className="text-slate-400 font-medium">Dispatch Date:</span>
-                  <span className="font-bold text-white">{date}</span>
-                </div>
-                <div className="flex items-center gap-2 border-l border-slate-800 pl-4">
-                  <Clock className="w-4 h-4 text-amber-400 shrink-0" />
-                  <span className="text-slate-400 font-medium">Time:</span>
-                  <span className="font-mono font-bold text-amber-300">{time}</span>
-                </div>
-              </div>
-
-              {/* Spare Part Details */}
-              <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-2xl space-y-2">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <Tag className="w-3.5 h-3.5 text-brand-400" />
-                  Dispatched Spare Item Details
+      {/* Full Location, Date/Time & SPOC Details Modal */}
+      <Modal isOpen={!!detailsDispatch} onClose={() => setDetailsDispatch(null)} title="Dispatch Log Details" maxWidth="lg">
+        {detailsDispatch && (
+          <div className="space-y-4">
+            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
+              <div>
+                <p className="text-sm font-bold text-slate-900">{detailsDispatch.inventoryItem?.productName}</p>
+                <p className="text-xs text-indigo-600 font-mono font-bold mt-0.5">
+                  SN: {detailsDispatch.inventoryItem?.serialNumber || 'Bulk Unit'} · OEM: {detailsDispatch.inventoryItem?.oem?.name || 'Standard OEM'}
                 </p>
-                <div className="grid grid-cols-2 gap-3 text-xs pt-1">
-                  <div>
-                    <p className="text-slate-500">Part Name</p>
-                    <p className="font-semibold text-white">{detailsDispatch.inventoryItem?.productName}</p>
-                  </div>
-                  <div>
-                    <p className="text-slate-500">OEM</p>
-                    <p className="font-semibold text-white">{detailsDispatch.inventoryItem?.oem?.name || 'Standard OEM'}</p>
-                  </div>
-                  <div>
-                    <p className="text-slate-500">Serial Number</p>
-                    <p className="font-mono text-brand-400 font-bold">{detailsDispatch.inventoryItem?.serialNumber || 'Bulk / Non-Serial'}</p>
-                  </div>
-                  <div>
-                    <p className="text-slate-500">Quantity Dispatched</p>
-                    <p className="font-extrabold text-white">{detailsDispatch.quantity} Pcs</p>
-                  </div>
-                </div>
+              </div>
+              <Badge variant={statusVariant(detailsDispatch.status)}>{detailsDispatch.status}</Badge>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <p className="text-slate-500 font-semibold text-[10px]">Dispatch Reference No</p>
+                <p className="font-mono font-extrabold text-indigo-600 text-sm mt-0.5">{detailsDispatch.dispatchNo}</p>
               </div>
 
-              {/* Destination Site & Location Class & SPOC Details */}
-              <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-2xl space-y-3">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <Building2 className="w-3.5 h-3.5 text-emerald-400" />
-                  Destination BHEL Site &amp; SPOC Info
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <p className="text-slate-500 font-semibold text-[10px]">Dispatch Date &amp; Live Time</p>
+                <p className="font-bold text-slate-900 mt-0.5 flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5 text-indigo-600" />
+                  {formatDateTime(detailsDispatch.dispatchDate, detailsDispatch.createdAt).date}{' '}
+                  <span className="text-slate-500 font-mono font-semibold">({formatDateTime(detailsDispatch.dispatchDate, detailsDispatch.createdAt).time})</span>
                 </p>
-                <div className="space-y-2.5 text-xs text-slate-300">
-                  <div className="flex items-center justify-between bg-slate-950/60 p-3 rounded-xl border border-slate-800">
-                    <div>
-                      <p className="font-bold text-white text-sm">{detailsDispatch.site?.siteName}</p>
-                      {detailsDispatch.site?.unitDivision && (
-                        <p className="text-[11px] text-slate-400 mt-0.5">Division: {detailsDispatch.site?.unitDivision}</p>
-                      )}
-                    </div>
-                    {detailsDispatch.site?.locationClass && (
-                      <span className="px-3 py-1 rounded-full text-xs font-bold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
-                        Class {detailsDispatch.site?.locationClass}
-                      </span>
-                    )}
-                  </div>
-
-                  {detailsDispatch.site?.fullAddress && (
-                    <div className="flex items-start gap-2 pt-1">
-                      <MapPin className="w-3.5 h-3.5 text-slate-500 shrink-0 mt-0.5" />
-                      <span className="text-slate-300">
-                        {detailsDispatch.site?.fullAddress}
-                      </span>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-800/80">
-                    {detailsDispatch.site?.contactPerson && (
-                      <div className="flex items-center gap-2">
-                        <User className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                        <div>
-                          <p className="text-[10px] text-slate-500">Site SPOC</p>
-                          <p className="font-semibold text-slate-200">{detailsDispatch.site.contactPerson}</p>
-                        </div>
-                      </div>
-                    )}
-                    {detailsDispatch.site?.phone && (
-                      <div className="flex items-center gap-2">
-                        <Phone className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                        <div>
-                          <p className="text-[10px] text-slate-500">Phone</p>
-                          <p className="font-mono text-slate-300">{detailsDispatch.site.phone}</p>
-                        </div>
-                      </div>
-                    )}
-                    {detailsDispatch.site?.email && (
-                      <div className="flex items-center gap-2 col-span-2">
-                        <Mail className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                        <p className="text-slate-300">{detailsDispatch.site.email}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
               </div>
 
-              {/* Shipping & Courier Details */}
-              <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-2xl space-y-2">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <Truck className="w-3.5 h-3.5 text-cyan-400" />
-                  Courier Shipping Details
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 col-span-2">
+                <p className="text-slate-500 font-semibold text-[10px] uppercase tracking-wider flex items-center gap-1 mb-1">
+                  <Building2 className="w-3.5 h-3.5 text-indigo-600" /> Destination BHEL Site Location
                 </p>
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div>
-                    <p className="text-slate-500">Courier Partner</p>
-                    <p className="font-semibold text-white">{detailsDispatch.courierName || 'Direct Dispatch'}</p>
-                  </div>
-                  <div>
-                    <p className="text-slate-500">AWB / Tracking Number</p>
-                    <p className="font-mono text-cyan-300 font-bold">{detailsDispatch.trackingNo || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <p className="text-slate-500">Dispatched By</p>
-                    <p className="text-slate-300">{detailsDispatch.createdBy?.name || 'Administrator'}</p>
-                  </div>
+                <p className="font-bold text-slate-900 text-sm">{detailsDispatch.site?.siteName}</p>
+                <p className="text-slate-600 mt-0.5 font-medium">{detailsDispatch.site?.fullAddress || `${detailsDispatch.site?.city}, ${detailsDispatch.site?.state}`}</p>
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-[10px] font-bold border border-indigo-200">
+                    Location Class {detailsDispatch.site?.locationClass}
+                  </span>
+                  <span className="bg-slate-200 text-slate-800 px-2 py-0.5 rounded text-[10px] font-bold">
+                    {detailsDispatch.site?.city}, {detailsDispatch.site?.state}
+                  </span>
                 </div>
               </div>
 
-              <div className="flex justify-end pt-2 border-t border-slate-800">
-                <Button variant="secondary" size="sm" onClick={() => setDetailsDispatch(null)}>
-                  Close Details
-                </Button>
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <p className="text-slate-500 font-semibold text-[10px]">Site SPOC Contact</p>
+                <p className="font-bold text-slate-900 mt-0.5">{detailsDispatch.site?.contactPerson || 'N/A'}</p>
+                <p className="text-slate-600 font-mono font-semibold mt-0.5">{detailsDispatch.site?.phone || 'N/A'}</p>
+              </div>
+
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <p className="text-slate-500 font-semibold text-[10px]">Courier &amp; AWB Tracking</p>
+                <p className="font-bold text-slate-900 mt-0.5">{detailsDispatch.courierName || 'Courier Direct'}</p>
+                <p className="font-mono text-indigo-600 font-bold mt-0.5">#{detailsDispatch.trackingNo || 'No AWB'}</p>
               </div>
             </div>
-          );
-        })()}
+
+            <div className="flex justify-end pt-2 border-t border-slate-200">
+              <Button variant="secondary" size="sm" onClick={() => setDetailsDispatch(null)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
 
-      {/* Create Dispatch Form Modal */}
-      <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); resetForm(); }} title="Create New Dispatch" maxWidth="xl">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">Select Spare Part *</label>
-              {selectedItem ? (
-                <div className="p-3 rounded-xl bg-slate-900 border border-brand-500/30 flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-white">{selectedItem.productName}</p>
-                    <p className="text-xs text-slate-400">SN: {selectedItem.serialNumber || selectedItem.spareId} · OEM: {selectedItem.oem?.name}</p>
-                    <p className="text-xs text-emerald-400">Available Qty: {selectedItem.availableQuantity} {selectedItem.unit}</p>
-                  </div>
-                  <button onClick={() => { setSelectedItem(null); setForm(f => ({ ...f, inventoryItemId: '' })); }} className="text-slate-500 hover:text-rose-400">
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              ) : (
+      {/* Create New Dispatch Modal */}
+      <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); resetForm(); }} title="Create Outbound Dispatch" maxWidth="lg">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-800 mb-1">Select Spare Item to Dispatch *</label>
+            {selectedItem ? (
+              <div className="flex items-center justify-between p-3 bg-indigo-50 border border-indigo-200 rounded-xl">
                 <div>
-                  <input
-                    type="text"
-                    placeholder="Search spare by name, part code, serial..."
-                    value={itemSearch}
-                    onChange={(e) => setItemSearch(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-500"
-                  />
-                  {itemsData && itemsData.length > 0 && itemSearch && (
-                    <div className="mt-1 bg-slate-900 border border-slate-700 rounded-xl overflow-hidden shadow-xl">
-                      {itemsData.map((item) => (
-                        <button
-                          key={item.id}
-                          onClick={() => handleItemSelect(item)}
-                          className="w-full text-left px-3 py-2.5 hover:bg-slate-800 transition-colors border-b border-slate-800 last:border-0"
-                        >
-                          <p className="text-sm font-medium text-white">{item.productName}</p>
-                          <p className="text-xs text-slate-400">SN: {item.serialNumber || 'Bulk'} · {item.oem?.name} · Avail: {item.availableQuantity}</p>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  <p className="text-xs font-bold text-indigo-950">{selectedItem.productName}</p>
+                  <p className="text-[11px] text-indigo-700 font-mono font-bold mt-0.5">
+                    SN: {selectedItem.serialNumber || 'Bulk Unit'} · Avail Qty: {selectedItem.availableQuantity}
+                  </p>
                 </div>
-              )}
-            </div>
+                <button type="button" onClick={() => setSelectedItem(null)} className="text-slate-400 hover:text-slate-700">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  placeholder="Type product name or serial number..."
+                  value={itemSearch}
+                  onChange={(e) => setItemSearch(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 font-medium focus:outline-none focus:border-indigo-600"
+                />
+                {itemsData && itemsData.length > 0 && (
+                  <div className="max-h-40 overflow-y-auto bg-white border border-slate-300 rounded-xl divide-y divide-slate-100 shadow-md">
+                    {itemsData.map(item => (
+                      <div
+                        key={item.id}
+                        onClick={() => { setSelectedItem(item); setForm(f => ({ ...f, inventoryItemId: item.id })); }}
+                        className="p-2.5 hover:bg-indigo-50 cursor-pointer flex items-center justify-between text-xs"
+                      >
+                        <div>
+                          <p className="font-bold text-slate-900">{item.productName}</p>
+                          <p className="text-[10px] text-slate-500 font-mono">SN: {item.serialNumber || 'Bulk'}</p>
+                        </div>
+                        <Badge variant="info">Avail: {item.availableQuantity}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">Destination BHEL Site *</label>
-              <select
-                value={form.siteId}
-                onChange={(e) => {
-                  const site = sitesData?.find(s => s.id === e.target.value);
-                  setSelectedSite(site || null);
-                  setForm(f => ({ ...f, siteId: e.target.value }));
-                }}
-                className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:border-brand-500"
-              >
-                <option value="">— Select BHEL Site —</option>
-                {sitesData?.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.siteName} ({s.city}) {s.locationClass ? `[Class ${s.locationClass}]` : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-800 mb-1">Destination BHEL Site *</label>
+            <select
+              required
+              value={form.siteId}
+              onChange={(e) => handleSelectSite(e.target.value)}
+              className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 font-bold focus:outline-none focus:border-indigo-600"
+            >
+              <option value="">Select Destination Site...</option>
+              {(sitesData || []).map(s => (
+                <option key={s.id} value={s.id}>{s.siteName} ({s.city}) - Class {s.locationClass}</option>
+              ))}
+            </select>
+          </div>
 
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">Dispatch Quantity *</label>
+              <label className="block text-xs font-bold text-slate-800 mb-1">Dispatch Date *</label>
+              <input
+                type="date"
+                required
+                value={form.dispatchDate}
+                onChange={(e) => setForm(f => ({ ...f, dispatchDate: e.target.value }))}
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 font-bold focus:outline-none focus:border-indigo-600"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-1">Quantity *</label>
               <input
                 type="number"
                 min={1}
-                max={selectedItem?.availableQuantity || 1}
+                required
                 value={form.quantity}
-                onChange={(e) => setForm(f => ({ ...f, quantity: parseInt(e.target.value) || 1 }))}
-                className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:border-brand-500"
+                onChange={(e) => setForm(f => ({ ...f, quantity: parseInt(e.target.value, 10) }))}
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 font-bold focus:outline-none focus:border-indigo-600"
               />
             </div>
           </div>
 
-          <div className="space-y-4">
-            {selectedSite && (
-              <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1 text-xs">
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Selected Site Details</p>
-                <p className="font-bold text-white text-sm">{selectedSite.siteName}</p>
-                <p className="text-slate-400">Class: <span className="text-indigo-300 font-semibold">{selectedSite.locationClass || 'Standard'}</span> · SPOC: <span className="text-white">{selectedSite.contactPerson || 'N/A'}</span></p>
-                <p className="text-slate-500">{selectedSite.fullAddress || `${selectedSite.city}, ${selectedSite.state}`}</p>
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Dispatch Date</label>
-                <input
-                  type="date"
-                  value={form.dispatchDate}
-                  onChange={(e) => setForm(f => ({ ...f, dispatchDate: e.target.value }))}
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:border-brand-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Courier Name</label>
-                <input
-                  type="text"
-                  placeholder="e.g. DHL, BlueDart"
-                  value={form.courierName}
-                  onChange={(e) => setForm(f => ({ ...f, courierName: e.target.value }))}
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-500"
-                />
-              </div>
-            </div>
-
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">Tracking Number / AWB</label>
+              <label className="block text-xs font-bold text-slate-800 mb-1">Courier Partner</label>
               <input
                 type="text"
-                placeholder="AWB / Tracking ID"
-                value={form.trackingNo}
-                onChange={(e) => setForm(f => ({ ...f, trackingNo: e.target.value }))}
-                className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-500"
+                placeholder="e.g. Blue Dart / DTDC"
+                value={form.courierName}
+                onChange={(e) => setForm(f => ({ ...f, courierName: e.target.value }))}
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 font-medium focus:outline-none focus:border-indigo-600"
               />
             </div>
-
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">Remarks / Instructions</label>
-              <textarea
-                rows={2}
-                placeholder="Additional notes..."
-                value={form.remarks}
-                onChange={(e) => setForm(f => ({ ...f, remarks: e.target.value }))}
-                className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 resize-none"
+              <label className="block text-xs font-bold text-slate-800 mb-1">Tracking AWB No</label>
+              <input
+                type="text"
+                placeholder="e.g. AWB-998877"
+                value={form.trackingNo}
+                onChange={(e) => setForm(f => ({ ...f, trackingNo: e.target.value }))}
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 font-mono font-bold focus:outline-none focus:border-indigo-600"
               />
             </div>
           </div>
-        </div>
 
-        <div className="flex justify-end gap-3 mt-5 pt-4 border-t border-slate-800">
-          <Button variant="secondary" onClick={() => { setIsModalOpen(false); resetForm(); }}>Cancel</Button>
-          <Button
-            variant="primary"
-            icon={<Truck className="w-4 h-4" />}
-            onClick={() => createMutation.mutate(form)}
-            isLoading={createMutation.isPending}
-            disabled={!form.inventoryItemId || !form.siteId}
-          >
-            Confirm Dispatch
-          </Button>
-        </div>
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+            <Button variant="ghost" size="sm" type="button" onClick={() => { setIsModalOpen(false); resetForm(); }}>
+              Cancel
+            </Button>
+            <Button variant="primary" size="sm" type="submit" isLoading={createMutation.isPending}>
+              Confirm Dispatch
+            </Button>
+          </div>
+        </form>
       </Modal>
     </Layout>
   );

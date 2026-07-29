@@ -1,0 +1,433 @@
+// ==============================================
+// Enterprise Spare IMS - Prisma Schema (SQLite for Zero-Config Local Run)
+// Can be changed to postgresql in production by setting provider = "postgresql"
+// ==============================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// ==============================================
+// USER & AUTH
+// ==============================================
+
+model User {
+  id            String    @id @default(uuid())
+  name          String
+  email         String    @unique
+  password      String
+  role          String    @default("ENGINEER") // SUPER_ADMIN | INVENTORY_ADMIN | ENGINEER | READ_ONLY
+  phone         String?
+  isActive      Boolean   @default(true)
+  lastLoginAt   DateTime?
+  refreshTokens RefreshToken[]
+
+  // Relations
+  createdInventory     InventoryItem[] @relation("CreatedByUser")
+  updatedInventory     InventoryItem[] @relation("UpdatedByUser")
+  approvedDispatches   Dispatch[]      @relation("ApprovedByUser")
+  createdDispatches    Dispatch[]      @relation("CreatedByUser")
+  createdPickups       Pickup[]        @relation("CreatedByUser")
+  approvedReservations Reservation[]   @relation("ApprovedByUser")
+  createdReservations  Reservation[]   @relation("CreatedByUser")
+  activityLogs         ActivityLog[]
+  fileUploads          FileUpload[]
+  comments             Comment[]
+  movements            InventoryMovement[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  isRevoked Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("refresh_tokens")
+}
+
+// ==============================================
+// MASTER DATA
+// ==============================================
+
+model OEM {
+  id         String          @id @default(uuid())
+  name       String          @unique
+  isActive   Boolean         @default(true)
+  categories Category[]
+  items      InventoryItem[]
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  @@map("oems")
+}
+
+model Category {
+  id        String          @id @default(uuid())
+  name      String
+  oemId     String
+  oem       OEM             @relation(fields: [oemId], references: [id])
+  isActive  Boolean         @default(true)
+  items     InventoryItem[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@unique([name, oemId])
+  @@map("categories")
+}
+
+model Location {
+  id        String          @id @default(uuid())
+  name      String          @unique
+  city      String?
+  isActive  Boolean         @default(true)
+  items     InventoryItem[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@map("locations")
+}
+
+model Site {
+  id            String     @id @default(uuid())
+  siteName      String     @unique
+  unitDivision  String?
+  subLocation   String?
+  locationClass String?
+  spareStore    String?
+  addressLine1  String?
+  addressLine2  String?
+  fullAddress   String?
+  city          String?
+  state         String?
+  pin           String?
+  contactPerson String?
+  phone         String?
+  email         String?
+  remarks       String?
+  isActive      Boolean    @default(true)
+  dispatches    Dispatch[]
+  pickups       Pickup[]
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@map("sites")
+}
+
+// ==============================================
+// INVENTORY
+// ==============================================
+
+model InventoryItem {
+  id                String    @id @default(uuid())
+  spareId           String    @unique  // Auto-generated: PDS-DEL-2026-00001
+  oemId             String
+  oem               OEM       @relation(fields: [oemId], references: [id])
+  categoryId        String
+  category          Category  @relation(fields: [categoryId], references: [id])
+  productName       String
+  description       String?
+  model             String?
+  partId            String?
+  partCode          String?
+  serialNumber      String?   @unique
+  isSerialized      Boolean   @default(false)
+  quantity          Int       @default(1)
+  availableQuantity Int       @default(1)
+  unit              String    @default("PCS")
+  store             String    @default("Delhi") // "Delhi" | "Bengaluru"
+  locationId        String?
+  location          Location? @relation(fields: [locationId], references: [id])
+  rack              String?
+  bin               String?
+  condition         String    @default("NEW") // "NEW" | "GOOD" | "DEFECTIVE" | "REFURBISHED"
+  warrantyStart     DateTime?
+  warrantyEnd       DateTime?
+  purchaseDate      DateTime?
+  status            String    @default("AVAILABLE")
+  reservedFor       String?
+  remarks           String?
+  qrCode            String?   // Base64 QR image
+  barcode           String?
+  isDeleted         Boolean   @default(false)
+
+  // Relations
+  dispatches   Dispatch[]
+  pickups      Pickup[]
+  receives     Receive[]
+  rmas         RMA[]
+  reservations Reservation[]
+  comments     Comment[]
+  movements    InventoryMovement[]
+
+  createdById String
+  createdBy   User     @relation("CreatedByUser", fields: [createdById], references: [id])
+  updatedById String?
+  updatedBy   User?    @relation("UpdatedByUser", fields: [updatedById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("inventory_items")
+}
+
+// ==============================================
+// COMMENTS MODULE (Mandatory Spare Comments)
+// ==============================================
+
+model Comment {
+  id              String        @id @default(uuid())
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User          @relation(fields: [userId], references: [id])
+  comment         String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@map("comments")
+}
+
+// ==============================================
+// INVENTORY MOVEMENT AUDIT TRAIL
+// ==============================================
+
+model InventoryMovement {
+  id              String        @id @default(uuid())
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  type            String        // IMPORT, DISPATCH, PICKUP, RECEIVE, ADJUSTMENT
+  quantity        Int
+  previousStock   Int
+  newStock        Int
+  referenceId     String?
+  performedById   String
+  performedBy     User          @relation(fields: [performedById], references: [id])
+  remarks         String?
+  createdAt       DateTime      @default(now())
+
+  @@map("inventory_movements")
+}
+
+// ==============================================
+// SYSTEM SETTINGS
+// ==============================================
+
+model Setting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
+
+// ==============================================
+// DISPATCH MODULE
+// ==============================================
+
+model Dispatch {
+  id               String    @id @default(uuid())
+  dispatchNo       String    @unique  // DS-2026-00001
+  inventoryItemId  String
+  inventoryItem    InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  siteId           String
+  site             Site      @relation(fields: [siteId], references: [id])
+  quantity         Int       @default(1)
+  courierName      String?
+  trackingNo       String?
+  dispatchDate     DateTime?
+  expectedDelivery DateTime?
+  podUrl           String?
+  status           String    @default("DRAFT")
+  remarks          String?
+
+  createdById  String
+  createdBy    User         @relation("CreatedByUser", fields: [createdById], references: [id])
+  approvedById String?
+  approvedBy   User?        @relation("ApprovedByUser", fields: [approvedById], references: [id])
+  approvedAt   DateTime?
+
+  fileUploads FileUpload[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@map("dispatches")
+}
+
+// ==============================================
+// PICKUP MODULE
+// ==============================================
+
+model Pickup {
+  id                String        @id @default(uuid())
+  pickupNo          String        @unique  // PU-2026-00001
+  inventoryItemId   String
+  inventoryItem     InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  siteId            String
+  site              Site          @relation(fields: [siteId], references: [id])
+  quantity          Int           @default(1)
+  courierName       String?
+  trackingNo        String?
+  faultDescription  String?
+  pickupDate        DateTime?
+  receivedDate      DateTime?
+  receivedConfirmed Boolean       @default(false)
+  status            String        @default("DRAFT")
+  remarks           String?
+
+  createdById String
+  createdBy   User   @relation("CreatedByUser", fields: [createdById], references: [id])
+
+  receives    Receive[]
+  fileUploads FileUpload[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@map("pickups")
+}
+
+// ==============================================
+// RECEIVE MODULE
+// ==============================================
+
+model Receive {
+  id              String        @id @default(uuid())
+  receiveNo       String        @unique  // RC-2026-00001
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  pickupId        String?
+  pickup          Pickup?       @relation(fields: [pickupId], references: [id])
+  quantity        Int           @default(1)
+  condition       String        @default("GOOD")
+  action          String        @default("RETURN_TO_STOCK")
+  inspectionNotes String?
+  remarks         String?
+
+  createdById String
+  rmas        RMA[]
+  fileUploads FileUpload[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@map("receives")
+}
+
+// ==============================================
+// RMA MODULE
+// ==============================================
+
+model RMA {
+  id              String        @id @default(uuid())
+  rmaNo           String        @unique  // RMA-2026-00001
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  receiveId       String?
+  receive         Receive?      @relation(fields: [receiveId], references: [id])
+  status          String        @default("RAISED")
+  rmaRaisedDate   DateTime      @default(now())
+  rmaApprovedDate DateTime?
+  rmaSentDate     DateTime?
+  rmaReceivedDate DateTime?
+  replacementDate DateTime?
+  closedDate      DateTime?
+  oemTicketNo     String?
+  remarks         String?
+  timeline        String?       // JSON stringified timeline
+
+  fileUploads FileUpload[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@map("rmas")
+}
+
+// ==============================================
+// RESERVATION
+// ==============================================
+
+model Reservation {
+  id              String        @id @default(uuid())
+  reservationNo   String        @unique  // RSV-2026-00001
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  quantity        Int           @default(1)
+  purpose         String?
+  reservedForName String?
+  expiryDate      DateTime
+  status          String        @default("ACTIVE")
+  remarks         String?
+
+  createdById  String
+  createdBy    User      @relation("CreatedByUser", fields: [createdById], references: [id])
+  approvedById String?
+  approvedBy   User?     @relation("ApprovedByUser", fields: [approvedById], references: [id])
+  approvedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("reservations")
+}
+
+// ==============================================
+// ACTIVITY LOG
+// ==============================================
+
+model ActivityLog {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  action      String
+  entity      String
+  entityId    String?
+  entityLabel String?
+  oldValue    String?
+  newValue    String?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  @@map("activity_logs")
+}
+
+// ==============================================
+// FILE UPLOADS
+// ==============================================
+
+model FileUpload {
+  id           String    @id @default(uuid())
+  fileName     String
+  originalName String
+  fileType     String    @default("OTHER")
+  mimeType     String
+  fileSize     Int
+  filePath     String
+  url          String
+
+  dispatchId String?
+  dispatch   Dispatch? @relation(fields: [dispatchId], references: [id])
+  pickupId   String?
+  pickup     Pickup?   @relation(fields: [pickupId], references: [id])
+  receiveId  String?
+  receive    Receive?  @relation(fields: [receiveId], references: [id])
+  rmaId      String?
+  rma        RMA?      @relation(fields: [rmaId], references: [id])
+
+  uploadedById String
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+  createdAt    DateTime @default(now())
+
+  @@map("file_uploads")
+}

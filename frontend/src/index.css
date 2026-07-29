@@ -1,0 +1,352 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ──────────────────────────────────────────────────
+   BASE
+────────────────────────────────────────────────── */
+@layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  body {
+    @apply bg-[#080c14] text-slate-100 antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-feature-settings: "cv02","cv03","cv04","cv11";
+  }
+
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* Force dark color scheme for native inputs */
+  input, select, textarea {
+    color-scheme: dark !important;
+    color: #f8fafc;
+  }
+
+  /* Date Input Custom Styling — bright white text, matching font, aligned padding */
+  input[type="date"] {
+    color-scheme: dark !important;
+    color: #ffffff !important;
+    font-family: 'Inter', system-ui, sans-serif !important;
+    font-size: 0.875rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.025em;
+  }
+
+  input[type="date"]::-webkit-datetime-edit-text,
+  input[type="date"]::-webkit-datetime-edit-month-field,
+  input[type="date"]::-webkit-datetime-edit-day-field,
+  input[type="date"]::-webkit-datetime-edit-year-field {
+    color: #ffffff !important;
+    font-weight: 600 !important;
+  }
+
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1) sepia(1) saturate(5) hue-rotate(190deg) brightness(2);
+    cursor: pointer;
+    padding: 4px;
+    margin-left: auto;
+    border-radius: 6px;
+    opacity: 0.95;
+    transition: all 0.15s ease;
+  }
+
+  input[type="date"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+    background: rgba(99, 102, 241, 0.3);
+    transform: scale(1.08);
+  }
+}
+
+/* ──────────────────────────────────────────────────
+   CUSTOM SCROLLBAR
+────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.25);
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.5);
+}
+
+/* ──────────────────────────────────────────────────
+   ANIMATED BACKGROUND MESH
+────────────────────────────────────────────────── */
+.app-bg {
+  background-color: #080c14;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 20% 0%, rgba(99, 102, 241, 0.08) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 80% 100%, rgba(16, 185, 129, 0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 50% at 50% 50%, rgba(139, 92, 246, 0.04) 0%, transparent 70%);
+  min-height: 100vh;
+}
+
+/* ──────────────────────────────────────────────────
+   GLASSMORPHISM PANELS
+────────────────────────────────────────────────── */
+.glass-panel {
+  background: rgba(12, 18, 32, 0.72);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+.glass-card {
+  background: rgba(15, 23, 40, 0.55);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.06);
+  transition: all 0.2s ease;
+}
+
+.glass-card:hover {
+  background: rgba(20, 30, 52, 0.7);
+  border-color: rgba(99, 102, 241, 0.25);
+  box-shadow: 0 8px 32px rgba(99,102,241,0.08);
+}
+
+/* ──────────────────────────────────────────────────
+   SIDEBAR GLOW NAV ITEM
+────────────────────────────────────────────────── */
+.nav-item-active {
+  background: linear-gradient(135deg, rgba(99,102,241,0.25) 0%, rgba(139,92,246,0.15) 100%);
+  border: 1px solid rgba(99,102,241,0.35);
+  color: #c7d2fe;
+  box-shadow: 0 0 20px rgba(99,102,241,0.15), inset 0 1px 0 rgba(255,255,255,0.08);
+}
+
+.nav-item-inactive {
+  color: #64748b;
+  border: 1px solid transparent;
+  transition: all 0.18s ease;
+}
+
+.nav-item-inactive:hover {
+  background: rgba(30, 41, 70, 0.5);
+  color: #cbd5e1;
+  border-color: rgba(99,102,241,0.15);
+}
+
+/* ──────────────────────────────────────────────────
+   KPI STAT CARDS
+────────────────────────────────────────────────── */
+.stat-card {
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.4);
+}
+
+/* ──────────────────────────────────────────────────
+   ANIMATED GRADIENT BORDER
+────────────────────────────────────────────────── */
+.gradient-border {
+  position: relative;
+  background: rgba(12, 18, 32, 0.8);
+}
+
+.gradient-border::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(99,102,241,0.5), rgba(139,92,246,0.3), rgba(16,185,129,0.3));
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.gradient-border:hover::before {
+  opacity: 1;
+}
+
+/* ──────────────────────────────────────────────────
+   PULSING GLOW DOT
+────────────────────────────────────────────────── */
+.pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 0 0 rgba(16,185,129,0.5);
+  animation: pulse-glow 2s infinite;
+}
+
+@keyframes pulse-glow {
+  0%   { box-shadow: 0 0 0 0 rgba(16,185,129,0.5); }
+  70%  { box-shadow: 0 0 0 6px rgba(16,185,129,0); }
+  100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
+}
+
+/* ──────────────────────────────────────────────────
+   TABLE ENHANCEMENTS
+────────────────────────────────────────────────── */
+.data-table thead th {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: #475569;
+  background: rgba(8,12,20,0.6);
+  backdrop-filter: blur(4px);
+}
+
+.data-table tbody tr {
+  border-bottom: 1px solid rgba(30,41,59,0.4);
+  transition: background 0.15s ease;
+}
+
+.data-table tbody tr:hover {
+  background: rgba(99,102,241,0.04);
+}
+
+/* ──────────────────────────────────────────────────
+   INPUT FOCUS GLOW
+────────────────────────────────────────────────── */
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(99,102,241,0.3);
+}
+
+/* ──────────────────────────────────────────────────
+   BUTTON ANIMATIONS
+────────────────────────────────────────────────── */
+.btn-primary {
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  box-shadow: 0 4px 14px rgba(99,102,241,0.35);
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, #818cf8, #6366f1);
+  box-shadow: 0 6px 20px rgba(99,102,241,0.5);
+  transform: translateY(-1px);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+/* ──────────────────────────────────────────────────
+   BADGE SHIMMER
+────────────────────────────────────────────────── */
+.badge-available {
+  background: linear-gradient(135deg, rgba(16,185,129,0.15), rgba(5,150,105,0.1));
+  border: 1px solid rgba(16,185,129,0.3);
+  color: #34d399;
+}
+
+.badge-reserved {
+  background: linear-gradient(135deg, rgba(245,158,11,0.15), rgba(217,119,6,0.1));
+  border: 1px solid rgba(245,158,11,0.3);
+  color: #fbbf24;
+}
+
+.badge-dispatched {
+  background: linear-gradient(135deg, rgba(239,68,68,0.15), rgba(220,38,38,0.1));
+  border: 1px solid rgba(239,68,68,0.3);
+  color: #f87171;
+}
+
+/* ──────────────────────────────────────────────────
+   SHIMMER LOADING SKELETON
+────────────────────────────────────────────────── */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, rgba(30,41,59,0.4) 25%, rgba(51,65,85,0.4) 50%, rgba(30,41,59,0.4) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 6px;
+}
+
+/* ──────────────────────────────────────────────────
+   SIDEBAR BRAND GRADIENT TEXT
+────────────────────────────────────────────────── */
+.brand-text {
+  background: linear-gradient(135deg, #818cf8, #a78bfa, #67e8f9);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ──────────────────────────────────────────────────
+   MODAL ENTRANCE ANIMATION
+────────────────────────────────────────────────── */
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.95) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.modal-enter {
+  animation: modalIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ──────────────────────────────────────────────────
+   TOAST / NOTIFICATION
+────────────────────────────────────────────────── */
+@keyframes slideIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+
+.toast {
+  animation: slideIn 0.3s cubic-bezier(0.16,1,0.3,1) forwards;
+}
+
+/* ──────────────────────────────────────────────────
+   MISC UTILITIES
+────────────────────────────────────────────────── */
+.text-gradient {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6, #06b6d4);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.glow-brand {
+  box-shadow: 0 0 20px rgba(99,102,241,0.25);
+}
+
+.glow-emerald {
+  box-shadow: 0 0 20px rgba(16,185,129,0.2);
+}
+
+.border-gradient {
+  border-image: linear-gradient(135deg, rgba(99,102,241,0.4), rgba(139,92,246,0.4)) 1;
+}
+
+/* ──────────────────────────────────────────────────
+   PAGE FADE-IN
+────────────────────────────────────────────────── */
+@keyframes pageIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.page-enter {
+  animation: pageIn 0.25s ease-out forwards;
+}

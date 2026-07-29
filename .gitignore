@@ -79,6 +79,8 @@ desktop.ini
 # Excel/sensitive data files
 # ===========================
 *.xlsx
+!Delhi Spare_Parts_Inventory.xlsx
+!SPOC details.xlsx
 *.xls
 *.csv
 

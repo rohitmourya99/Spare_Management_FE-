@@ -9,8 +9,8 @@ services:
     name: spare-ims-backend
     runtime: node
     rootDir: backend
-    buildCommand: npm install && npm run build:render
-    startCommand: npm start
+    buildCommand: cd backend && npm install && npm run build:render
+    startCommand: cd backend && npm start
     plan: free
     envVars:
       - key: NODE_ENV
@@ -47,8 +47,8 @@ services:
     name: spare-ims-frontend
     runtime: static
     rootDir: frontend
-    buildCommand: npm install && npm run build
-    staticPublishPath: dist
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: frontend/dist
     plan: free
     envVars:
       - key: VITE_API_URL

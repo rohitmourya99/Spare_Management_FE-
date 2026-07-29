@@ -35,7 +35,7 @@ export const DashboardPage: React.FC = () => {
       <Layout title="Dashboard & Analytics">
         <div className="flex flex-col items-center justify-center h-80 gap-4 text-slate-400">
           <div className="w-10 h-10 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-          <span className="text-xs font-semibold tracking-wide text-indigo-600">Loading enterprise metrics...</span>
+          <span className="text-xs font-bold tracking-wide text-indigo-600">Loading enterprise metrics...</span>
         </div>
       </Layout>
     );
@@ -44,7 +44,7 @@ export const DashboardPage: React.FC = () => {
   if (error) {
     return (
       <Layout title="Dashboard & Analytics">
-        <div className="p-5 bg-rose-50 border border-rose-200 rounded-2xl text-rose-700 text-sm font-semibold">
+        <div className="p-5 bg-rose-50 border border-rose-200 rounded-2xl text-rose-700 text-sm font-bold">
           ⚠️ Failed to load dashboard. Please verify backend server connectivity.
         </div>
       </Layout>
@@ -56,11 +56,11 @@ export const DashboardPage: React.FC = () => {
   const blr = data?.bengaluruStoreSummary || {};
 
   const quickActions = [
-    { label: 'Import Excel', icon: Upload, gradient: 'from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800', onClick: () => navigate('/inventory?action=import') },
-    { label: 'Dispatch Spare', icon: Truck, gradient: 'from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800', onClick: () => navigate('/dispatch') },
-    { label: 'Pickup Spare', icon: RotateCcw, gradient: 'from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800', onClick: () => navigate('/pickup') },
-    { label: 'Reports', icon: FileSpreadsheet, gradient: 'from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800', onClick: () => navigate('/reports') },
-    { label: 'Search Inventory', icon: Search, gradient: 'from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800', onClick: () => navigate('/inventory') },
+    { label: 'Import Excel', icon: Upload, gradient: 'from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 border-b-2 border-indigo-900/30', onClick: () => navigate('/inventory?action=import') },
+    { label: 'Dispatch Spare', icon: Truck, gradient: 'from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 border-b-2 border-rose-900/30', onClick: () => navigate('/dispatch') },
+    { label: 'Pickup Spare', icon: RotateCcw, gradient: 'from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 border-b-2 border-emerald-900/30', onClick: () => navigate('/pickup') },
+    { label: 'Reports', icon: FileSpreadsheet, gradient: 'from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 border-b-2 border-amber-900/30', onClick: () => navigate('/reports') },
+    { label: 'Search Inventory', icon: Search, gradient: 'from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 border-b-2 border-blue-900/30', onClick: () => navigate('/inventory') },
   ];
 
   const topSummaryCards = [
@@ -76,13 +76,16 @@ export const DashboardPage: React.FC = () => {
 
   return (
     <Layout title="Dashboard & Overview">
-      {/* Hero Welcome Banner */}
-      <div className="relative overflow-hidden rounded-2xl p-6 mb-6 border border-indigo-100 bg-gradient-to-r from-indigo-50/90 via-purple-50/40 to-slate-50">
+      {/* Hero Welcome Banner with 3D Depth */}
+      <div
+        className="relative overflow-hidden rounded-2xl p-6 mb-6 border border-indigo-100 bg-gradient-to-br from-indigo-50/90 via-purple-50/40 to-white shadow-lg transition-transform"
+        style={{ boxShadow: '0 10px 30px -5px rgba(99,102,241,0.08), inset 0 1px 0 0 rgba(255,255,255,1)' }}
+      >
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
           <div>
             <div className="flex items-center gap-2 mb-1">
               <Sparkles className="w-4 h-4 text-indigo-600" />
-              <span className="text-xs font-bold uppercase tracking-wider text-indigo-600">Proactive Spare IMS</span>
+              <span className="text-xs font-extrabold uppercase tracking-wider text-indigo-600">Proactive Spare IMS</span>
             </div>
             <h1 className="text-xl font-black text-slate-900 tracking-tight">Enterprise Inventory Dashboard</h1>
             <p className="text-xs text-slate-600 mt-1 max-w-xl font-medium">
@@ -93,7 +96,7 @@ export const DashboardPage: React.FC = () => {
           <div className="flex items-center gap-2">
             <button
               onClick={() => navigate('/inventory')}
-              className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md flex items-center gap-1.5 transition-all"
+              className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-500/20 border-b-2 border-indigo-800 flex items-center gap-1.5 transition-all hover:-translate-y-0.5"
             >
               <Package className="w-3.5 h-3.5" />
               Manage Inventory
@@ -122,7 +125,7 @@ export const DashboardPage: React.FC = () => {
         <Card className="border-l-4 border-l-blue-600">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center border border-blue-200">
+              <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center border border-blue-200 shadow-inner">
                 <MapPin className="w-5 h-5 text-blue-600" />
               </div>
               <div>
@@ -133,17 +136,17 @@ export const DashboardPage: React.FC = () => {
             <Badge variant="info">Primary</Badge>
           </div>
           <div className="grid grid-cols-3 gap-2.5">
-            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 text-center">
+            <div className="bg-gradient-to-b from-slate-50 to-slate-100/70 border border-slate-200/80 rounded-xl p-3 text-center shadow-inner">
               <p className="text-xl font-extrabold text-slate-900">{delhi.totalItems ?? 0}</p>
-              <p className="text-[10px] font-bold text-slate-500 mt-0.5">Total Spares</p>
+              <p className="text-[10px] font-bold text-slate-600 mt-0.5">Total Spares</p>
             </div>
-            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 text-center">
+            <div className="bg-gradient-to-b from-slate-50 to-slate-100/70 border border-slate-200/80 rounded-xl p-3 text-center shadow-inner">
               <p className="text-xl font-extrabold text-emerald-600">{delhi.availableQuantity ?? 0}</p>
-              <p className="text-[10px] font-bold text-slate-500 mt-0.5">Available</p>
+              <p className="text-[10px] font-bold text-slate-600 mt-0.5">Available</p>
             </div>
-            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 text-center">
+            <div className="bg-gradient-to-b from-slate-50 to-slate-100/70 border border-slate-200/80 rounded-xl p-3 text-center shadow-inner">
               <p className="text-xl font-extrabold text-amber-600">{inv.lowStockCount ?? 0}</p>
-              <p className="text-[10px] font-bold text-slate-500 mt-0.5">Low Stock</p>
+              <p className="text-[10px] font-bold text-slate-600 mt-0.5">Low Stock</p>
             </div>
           </div>
         </Card>
@@ -152,7 +155,7 @@ export const DashboardPage: React.FC = () => {
         <Card className="border-l-4 border-l-orange-500">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-orange-50 flex items-center justify-center border border-orange-200">
+              <div className="w-9 h-9 rounded-xl bg-orange-50 flex items-center justify-center border border-orange-200 shadow-inner">
                 <MapPin className="w-5 h-5 text-orange-600" />
               </div>
               <div>
@@ -163,17 +166,17 @@ export const DashboardPage: React.FC = () => {
             <Badge variant="warning">Regional</Badge>
           </div>
           <div className="grid grid-cols-3 gap-2.5">
-            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 text-center">
+            <div className="bg-gradient-to-b from-slate-50 to-slate-100/70 border border-slate-200/80 rounded-xl p-3 text-center shadow-inner">
               <p className="text-xl font-extrabold text-slate-900">{blr.totalItems ?? 0}</p>
-              <p className="text-[10px] font-bold text-slate-500 mt-0.5">Total Spares</p>
+              <p className="text-[10px] font-bold text-slate-600 mt-0.5">Total Spares</p>
             </div>
-            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 text-center">
+            <div className="bg-gradient-to-b from-slate-50 to-slate-100/70 border border-slate-200/80 rounded-xl p-3 text-center shadow-inner">
               <p className="text-xl font-extrabold text-emerald-600">{blr.availableQuantity ?? 0}</p>
-              <p className="text-[10px] font-bold text-slate-500 mt-0.5">Available</p>
+              <p className="text-[10px] font-bold text-slate-600 mt-0.5">Available</p>
             </div>
-            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 text-center">
+            <div className="bg-gradient-to-b from-slate-50 to-slate-100/70 border border-slate-200/80 rounded-xl p-3 text-center shadow-inner">
               <p className="text-xl font-extrabold text-slate-400">0</p>
-              <p className="text-[10px] font-bold text-slate-500 mt-0.5">Low Stock</p>
+              <p className="text-[10px] font-bold text-slate-600 mt-0.5">Low Stock</p>
             </div>
           </div>
         </Card>
@@ -187,7 +190,7 @@ export const DashboardPage: React.FC = () => {
                 <button
                   key={idx}
                   onClick={action.onClick}
-                  className={`bg-gradient-to-r ${action.gradient} text-white rounded-xl px-3 py-2.5 flex items-center gap-2 text-xs font-bold shadow-sm transition-all hover:scale-102 active:scale-98`}
+                  className={`bg-gradient-to-r ${action.gradient} text-white rounded-xl px-3 py-2.5 flex items-center gap-2 text-xs font-bold shadow-md transition-all hover:-translate-y-0.5 active:translate-y-0`}
                 >
                   <Icon className="w-3.5 h-3.5 shrink-0" />
                   <span className="truncate">{action.label}</span>
@@ -200,9 +203,9 @@ export const DashboardPage: React.FC = () => {
 
       {/* Low Stock Alert Bar */}
       {inv.lowStockCount > 0 && (
-        <div className="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-between shadow-sm">
+        <div className="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-between shadow-md" style={{ boxShadow: '0 4px 18px -2px rgba(245, 158, 11, 0.1)' }}>
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+            <div className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center shrink-0 border border-amber-200">
               <AlertTriangle className="w-4 h-4 text-amber-600" />
             </div>
             <div>
@@ -214,7 +217,7 @@ export const DashboardPage: React.FC = () => {
           </div>
           <button
             onClick={() => navigate('/inventory')}
-            className="px-3 py-1.5 rounded-xl bg-amber-600 text-white hover:bg-amber-700 text-xs font-bold flex items-center gap-1 shrink-0 transition-colors shadow-sm"
+            className="px-3 py-1.5 rounded-xl bg-amber-600 text-white hover:bg-amber-700 text-xs font-bold flex items-center gap-1 shrink-0 transition-all hover:-translate-y-0.5 border-b-2 border-amber-800 shadow-md"
           >
             Review Stock <ChevronRight className="w-3.5 h-3.5" />
           </button>
@@ -235,7 +238,7 @@ export const DashboardPage: React.FC = () => {
                 </defs>
                 <XAxis dataKey="month" stroke="#64748b" fontSize={11} tickLine={false} />
                 <YAxis stroke="#64748b" fontSize={11} tickLine={false} />
-                <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: '12px', color: '#0f172a', fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} />
+                <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: '12px', color: '#0f172a', fontSize: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.08)' }} />
                 <Area type="monotone" dataKey="count" name="Dispatches" stroke="#4f46e5" strokeWidth={3} fillOpacity={1} fill="url(#dispatchGrad)" />
               </AreaChart>
             </ResponsiveContainer>
@@ -254,7 +257,7 @@ export const DashboardPage: React.FC = () => {
                 </defs>
                 <XAxis dataKey="month" stroke="#64748b" fontSize={11} tickLine={false} />
                 <YAxis stroke="#64748b" fontSize={11} tickLine={false} />
-                <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: '12px', color: '#0f172a', fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} />
+                <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: '12px', color: '#0f172a', fontSize: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.08)' }} />
                 <Area type="monotone" dataKey="count" name="Pickups" stroke="#059669" strokeWidth={3} fillOpacity={1} fill="url(#pickupGrad)" />
               </AreaChart>
             </ResponsiveContainer>
@@ -285,7 +288,7 @@ export const DashboardPage: React.FC = () => {
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: '12px', color: '#0f172a', fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} />
+                <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: '12px', color: '#0f172a', fontSize: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.08)' }} />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -303,7 +306,7 @@ export const DashboardPage: React.FC = () => {
                 <p className="text-xs text-slate-500 text-center py-6 font-medium">No recent activity recorded</p>
               ) : (
                 (data?.recentActivities || []).map((log: any, i: number) => (
-                  <div key={i} className="flex items-start gap-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 hover:border-slate-300 transition-colors">
+                  <div key={i} className="flex items-start gap-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 hover:border-slate-300 transition-colors shadow-2xs">
                     <Activity className="w-3.5 h-3.5 text-indigo-600 mt-0.5 shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs text-slate-800 truncate">

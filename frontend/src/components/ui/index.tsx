@@ -2,7 +2,7 @@ import React from 'react';
 import { X, Loader2 } from 'lucide-react';
 
 /* ──────────────────────────────────────────────────
-   CARD (Light Theme Modern Enterprise UI)
+   CARD (Light Theme Modern Enterprise UI with 3D Depth)
 ────────────────────────────────────────────────── */
 export interface CardProps {
   title?: string;
@@ -17,7 +17,7 @@ export const Card: React.FC<CardProps> = ({ title, subtitle, children, className
   return (
     <div
       className={`bg-white rounded-2xl border border-slate-200/90 ${noPadding ? '' : 'p-5'} ${className}`}
-      style={{ boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05)' }}
+      style={{ boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.03), inset 0 1px 0 0 rgba(255, 255, 255, 0.9)' }}
     >
       {(title || action) && (
         <div className={`flex items-center justify-between ${noPadding ? 'px-5 pt-4 pb-3' : 'mb-4 pb-3'}`}
@@ -54,15 +54,15 @@ export const Button: React.FC<ButtonProps> = ({
   disabled,
   ...props
 }) => {
-  const base = 'inline-flex items-center justify-center font-semibold rounded-xl transition-all focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed select-none shadow-sm';
+  const base = 'inline-flex items-center justify-center font-semibold rounded-xl transition-all focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed select-none shadow-sm active:translate-y-0.5';
 
   const variants: Record<string, string> = {
-    primary: 'bg-indigo-600 hover:bg-indigo-700 text-white border border-indigo-700/20',
-    secondary: 'bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200',
+    primary: 'bg-indigo-600 hover:bg-indigo-700 text-white border-b-2 border-indigo-800 shadow-md shadow-indigo-500/20',
+    secondary: 'bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200/90',
     outline: 'bg-white hover:bg-indigo-50/50 text-indigo-600 border border-indigo-200',
-    danger: 'bg-rose-600 hover:bg-rose-700 text-white border border-rose-700/20',
+    danger: 'bg-rose-600 hover:bg-rose-700 text-white border-b-2 border-rose-800 shadow-md shadow-rose-500/20',
     ghost: 'bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900 shadow-none',
-    success: 'bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-700/20',
+    success: 'bg-emerald-600 hover:bg-emerald-700 text-white border-b-2 border-emerald-800 shadow-md shadow-emerald-500/20',
   };
 
   const sizes: Record<string, string> = {
@@ -100,12 +100,12 @@ export interface BadgeProps {
 
 export const Badge: React.FC<BadgeProps> = ({ children, variant = 'default', size = 'sm', dot }) => {
   const styles: Record<string, string> = {
-    success: 'bg-emerald-50 border border-emerald-200/80 text-emerald-700',
-    warning: 'bg-amber-50 border border-amber-200/80 text-amber-700',
-    danger: 'bg-rose-50 border border-rose-200/80 text-rose-700',
-    info: 'bg-blue-50 border border-blue-200/80 text-blue-700',
-    default: 'bg-slate-100 border border-slate-200 text-slate-700',
-    purple: 'bg-purple-50 border border-purple-200/80 text-purple-700',
+    success: 'bg-emerald-50 border border-emerald-200 text-emerald-800',
+    warning: 'bg-amber-50 border border-amber-200 text-amber-800',
+    danger: 'bg-rose-50 border border-rose-200 text-rose-800',
+    info: 'bg-blue-50 border border-blue-200 text-blue-800',
+    default: 'bg-slate-100 border border-slate-200 text-slate-800',
+    purple: 'bg-purple-50 border border-purple-200 text-purple-800',
   };
 
   const sizes: Record<string, string> = {
@@ -125,7 +125,7 @@ export const Badge: React.FC<BadgeProps> = ({ children, variant = 'default', siz
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 font-bold rounded-full ${styles[variant]} ${sizes[size]}`}
+      className={`inline-flex items-center gap-1.5 font-bold rounded-full shadow-2xs ${styles[variant]} ${sizes[size]}`}
     >
       {dot && (
         <span className="w-1.5 h-1.5 rounded-full shrink-0"
@@ -184,10 +184,10 @@ export const Modal: React.FC<ModalProps> = ({
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
             <div>
               <div className="flex items-center gap-2.5">
-                <div className="w-1 h-5 rounded-full bg-indigo-600" />
+                <div className="w-1.5 h-5 rounded-full bg-indigo-600" />
                 <h3 className="text-base font-bold text-slate-900 tracking-tight">{title}</h3>
               </div>
-              {subtitle && <p className="text-xs text-slate-500 mt-1 ml-3.5 font-medium">{subtitle}</p>}
+              {subtitle && <p className="text-xs text-slate-500 mt-1 ml-4 font-medium">{subtitle}</p>}
             </div>
             <button
               onClick={onClose}
@@ -208,7 +208,7 @@ export const Modal: React.FC<ModalProps> = ({
 };
 
 /* ──────────────────────────────────────────────────
-   STAT CARD (Enterprise Row of 8)
+   STAT CARD (3D Tactile Light Depth)
 ────────────────────────────────────────────────── */
 export interface StatCardProps {
   title: string;
@@ -223,13 +223,15 @@ export interface StatCardProps {
 export const StatCard: React.FC<StatCardProps> = ({ title, value, icon: Icon, color, trend, onClick }) => {
   return (
     <div
-      className={`bg-white rounded-2xl p-4 border border-slate-200/90 cursor-default transition-all hover:border-indigo-300 hover:shadow-md ${onClick ? 'cursor-pointer' : ''}`}
-      style={{ boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.05)' }}
+      className={`bg-white rounded-2xl p-4 border border-slate-200/90 cursor-default transition-all duration-200 hover:-translate-y-1 hover:border-indigo-300 hover:shadow-xl ${onClick ? 'cursor-pointer' : ''}`}
+      style={{
+        boxShadow: '0 4px 18px -2px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.03), inset 0 1px 0 0 rgba(255, 255, 255, 0.8)',
+      }}
       onClick={onClick}
     >
       <div className="flex items-start justify-between mb-2.5">
         <p className="text-[11px] font-bold text-slate-600 leading-tight max-w-[80%]">{title}</p>
-        <div className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center shrink-0 border border-slate-200/60">
+        <div className="w-8 h-8 rounded-xl bg-gradient-to-b from-slate-50 to-slate-100 flex items-center justify-center shrink-0 border border-slate-200/80 shadow-inner">
           <Icon className={`w-4 h-4 ${color}`} />
         </div>
       </div>
@@ -258,7 +260,7 @@ export const EmptyState: React.FC<{
   action?: React.ReactNode;
 }> = ({ icon: Icon, title, description, action }) => (
   <div className="flex flex-col items-center justify-center py-16 gap-3">
-    <div className="w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mb-1">
+    <div className="w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mb-1 shadow-sm">
       <Icon className="w-6 h-6 text-indigo-600" />
     </div>
     <p className="text-sm font-bold text-slate-800">{title}</p>

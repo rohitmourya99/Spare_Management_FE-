@@ -23,7 +23,7 @@ export const SettingsPage: React.FC = () => {
           <div className="flex flex-wrap gap-2 mt-2">
             {(oems || []).map((oem: any) => (
               <Badge key={oem.id} variant="info" size="md">
-                <Cpu className="w-3.5 h-3.5 mr-1.5 inline" />
+                <Cpu className="w-3.5 h-3.5 mr-1.5 inline text-indigo-600" />
                 {oem.name}
               </Badge>
             ))}
@@ -33,12 +33,12 @@ export const SettingsPage: React.FC = () => {
         <Card title="Warehouse Locations" subtitle="Configured storage hubs">
           <div className="space-y-2 mt-2">
             {(locations || []).map((loc: any) => (
-              <div key={loc.id} className="p-3 bg-slate-900/60 rounded-lg border border-slate-800 flex items-center justify-between">
+              <div key={loc.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between shadow-2xs">
                 <div className="flex items-center gap-2">
-                  <MapPin className="w-4 h-4 text-brand-400" />
-                  <span className="font-semibold text-slate-200 text-sm">{loc.name}</span>
+                  <MapPin className="w-4 h-4 text-indigo-600" />
+                  <span className="font-bold text-slate-900 text-sm">{loc.name}</span>
                 </div>
-                <span className="text-xs text-slate-400">{loc.city}</span>
+                <span className="text-xs text-slate-600 font-semibold">{loc.city}</span>
               </div>
             ))}
           </div>

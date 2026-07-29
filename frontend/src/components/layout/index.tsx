@@ -18,32 +18,28 @@ export const Sidebar: React.FC = () => {
   };
 
   const navItems = [
-    { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, color: 'text-indigo-400' },
-    { label: 'Inventory', path: '/inventory', icon: Package, color: 'text-blue-400' },
-    { label: 'Dispatch', path: '/dispatch', icon: Truck, color: 'text-rose-400' },
-    { label: 'Pickup & OEM', path: '/pickup', icon: RotateCcw, color: 'text-emerald-400' },
-    { label: 'Site Master', path: '/sites', icon: Building2, color: 'text-cyan-400' },
-    { label: 'Reports', path: '/reports', icon: FileSpreadsheet, color: 'text-amber-400' },
-    { label: 'Users', path: '/users', icon: Users, color: 'text-pink-400' },
-    { label: 'Activity Log', path: '/activity', icon: History, color: 'text-purple-400' },
-    { label: 'Settings', path: '/settings', icon: Settings, color: 'text-slate-400' },
+    { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, color: 'text-indigo-600' },
+    { label: 'Inventory', path: '/inventory', icon: Package, color: 'text-blue-600' },
+    { label: 'Dispatch', path: '/dispatch', icon: Truck, color: 'text-rose-600' },
+    { label: 'Pickup & OEM', path: '/pickup', icon: RotateCcw, color: 'text-emerald-600' },
+    { label: 'Site Master', path: '/sites', icon: Building2, color: 'text-cyan-600' },
+    { label: 'Reports', path: '/reports', icon: FileSpreadsheet, color: 'text-amber-600' },
+    { label: 'Users', path: '/users', icon: Users, color: 'text-pink-600' },
+    { label: 'Activity Log', path: '/activity', icon: History, color: 'text-purple-600' },
+    { label: 'Settings', path: '/settings', icon: Settings, color: 'text-slate-600' },
   ];
 
   const initials = user?.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'U';
 
   return (
-    <aside className="w-[220px] flex flex-col h-screen sticky top-0 z-50 shrink-0" style={{
-      background: 'linear-gradient(180deg, rgba(8,10,20,0.98) 0%, rgba(10,13,26,0.98) 100%)',
-      borderRight: '1px solid rgba(255,255,255,0.06)',
-      backdropFilter: 'blur(20px)',
-    }}>
-      {/* Brand — Proactive Logo in a Square box with thin light black border */}
-      <div className="px-4 pt-5 pb-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <div className="flex flex-col items-center gap-2">
-          {/* Square Logo Box */}
+    <aside className="w-[240px] flex flex-col h-screen sticky top-0 z-50 shrink-0 bg-[#f8fafc] border-r border-[#e2e8f0]">
+      {/* Brand — Substantially Larger Proactive Logo Box (~90px x 90px) */}
+      <div className="px-4 pt-6 pb-5 border-b border-[#e2e8f0]">
+        <div className="flex flex-col items-center gap-2.5 text-center">
+          {/* Square Logo Box (~90px x 90px) */}
           <div
-            className="w-14 h-14 aspect-square bg-white rounded-xl flex items-center justify-center p-2 shadow-sm"
-            style={{ border: '1px solid #9CA3AF' }}
+            className="w-[90px] h-[90px] aspect-square bg-white rounded-2xl flex items-center justify-center p-3 shadow-md mx-auto transition-transform hover:scale-102"
+            style={{ border: '1.5px solid #334155' }}
           >
             <img
               src={pdsLogo}
@@ -53,14 +49,14 @@ export const Sidebar: React.FC = () => {
           </div>
           {/* App subtitle */}
           <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            <p className="text-[10px] text-slate-400 tracking-wide font-medium">Spare IMS · Live</p>
+            <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-sm" />
+            <p className="text-[11px] text-slate-600 tracking-wide font-bold">Spare IMS · Live</p>
           </div>
         </div>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
+      {/* Navigation Links */}
+      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
         {navItems.map((item) => {
           const Icon = item.icon;
           return (
@@ -68,19 +64,21 @@ export const Sidebar: React.FC = () => {
               key={item.path}
               to={item.path}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group ${
-                  isActive ? 'nav-item-active' : 'nav-item-inactive'
+                `flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all group ${
+                  isActive
+                    ? 'bg-[#4f46e5] text-white shadow-md shadow-indigo-500/25 border-l-4 border-l-[#2563eb]'
+                    : 'text-slate-700 hover:bg-slate-200/70 hover:text-slate-900 border-l-4 border-l-transparent'
                 }`
               }
             >
               {({ isActive }) => (
                 <>
-                  <span className={`shrink-0 w-4 h-4 transition-colors ${isActive ? 'text-indigo-300' : item.color}`}>
+                  <span className={`shrink-0 w-4 h-4 transition-colors ${isActive ? 'text-white' : item.color}`}>
                     <Icon className="w-4 h-4" />
                   </span>
-                  <span className={`truncate ${isActive ? 'text-indigo-100' : 'text-slate-400'}`}>{item.label}</span>
+                  <span className={`truncate ${isActive ? 'text-white font-bold' : 'text-slate-700 font-semibold'}`}>{item.label}</span>
                   {isActive && (
-                    <ChevronRight className="w-3 h-3 text-indigo-400 ml-auto shrink-0 opacity-60" />
+                    <ChevronRight className="w-3.5 h-3.5 text-white ml-auto shrink-0 opacity-90" />
                   )}
                 </>
               )}
@@ -90,21 +88,18 @@ export const Sidebar: React.FC = () => {
       </nav>
 
       {/* User Footer */}
-      <div className="px-3 pb-4 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-        <div className="flex items-center gap-2.5 px-2 py-2 rounded-xl" style={{
-          background: 'rgba(99,102,241,0.06)',
-          border: '1px solid rgba(99,102,241,0.12)',
-        }}>
+      <div className="px-3 pb-4 pt-3 border-t border-[#e2e8f0]">
+        <div className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl bg-white border border-[#e2e8f0] shadow-sm">
           {/* Avatar */}
-          <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold text-white"
-            style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', boxShadow: '0 2px 8px rgba(99,102,241,0.35)' }}>
+          <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold text-white shadow-sm"
+            style={{ background: 'linear-gradient(135deg,#4f46e5,#7c3aed)' }}>
             {initials}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold text-slate-200 truncate">{user?.name}</p>
+            <p className="text-xs font-bold text-slate-900 truncate">{user?.name}</p>
             <div className="flex items-center gap-1 mt-0.5">
-              <ShieldCheck className="w-2.5 h-2.5 text-indigo-400" />
-              <span className="text-[10px] text-slate-500 capitalize truncate">
+              <ShieldCheck className="w-2.5 h-2.5 text-indigo-600" />
+              <span className="text-[10px] text-slate-500 font-semibold capitalize truncate">
                 {user?.role?.replace(/_/g, ' ').toLowerCase()}
               </span>
             </div>
@@ -112,7 +107,7 @@ export const Sidebar: React.FC = () => {
           <button
             onClick={handleLogout}
             title="Logout"
-            className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all shrink-0"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all shrink-0"
           >
             <LogOut className="w-3.5 h-3.5" />
           </button>
@@ -130,25 +125,25 @@ export const Header: React.FC<{ title: string }> = ({ title }) => {
   const dateStr = now.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
 
   return (
-    <header className="h-14 px-6 flex items-center justify-between sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200">
+    <header className="h-14 px-6 flex items-center justify-between sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-[#e2e8f0]">
       {/* Page Title */}
       <div className="flex items-center gap-3">
-        <div className="w-1 h-5 rounded-full" style={{ background: 'linear-gradient(180deg,#6366f1,#8b5cf6)' }} />
-        <h2 className="text-base font-bold text-slate-900 tracking-tight">{title}</h2>
+        <div className="w-1.5 h-5 rounded-full bg-indigo-600" />
+        <h2 className="text-base font-black text-slate-900 tracking-tight">{title}</h2>
       </div>
 
       {/* Right side */}
       <div className="flex items-center gap-3">
         {/* Live pill */}
-        <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-emerald-50 border border-emerald-200 text-emerald-700">
+        <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-50 border border-emerald-200 text-emerald-700">
           <span className="pulse-dot" style={{ width: 6, height: 6 }} />
-          Live
+          Live System
         </div>
 
         {/* Date/Time (Date on top, Time on bottom) */}
         <div className="hidden md:flex flex-col items-end">
-          <span className="text-xs font-semibold text-slate-800">{dateStr}</span>
-          <span className="text-[10px] text-slate-500 font-mono">{timeStr}</span>
+          <span className="text-xs font-bold text-slate-800">{dateStr}</span>
+          <span className="text-[10px] text-slate-500 font-mono font-semibold">{timeStr}</span>
         </div>
 
         {/* Divider */}
@@ -156,11 +151,10 @@ export const Header: React.FC<{ title: string }> = ({ title }) => {
 
         {/* User avatar */}
         <Link to="/users" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-          <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm"
-            style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}>
+          <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm bg-indigo-600">
             {user?.name?.[0] || 'U'}
           </div>
-          <span className="hidden md:block text-xs font-semibold text-slate-800 max-w-[100px] truncate">{user?.name}</span>
+          <span className="hidden md:block text-xs font-bold text-slate-800 max-w-[110px] truncate">{user?.name}</span>
         </Link>
       </div>
     </header>

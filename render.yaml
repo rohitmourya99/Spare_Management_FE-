@@ -1,16 +1,15 @@
 # ==============================================
-# Render Infrastructure as Code
+# Render Infrastructure as Code - Single Site Deployment
 # Enterprise Spare Inventory Management System
 # ==============================================
 
 services:
-  # ── Backend API (Node.js + Express + Prisma) ──────────────────────────────
+  # ── Unified Web Service (Express API + React Frontend on 1 Single URL) ──────
   - type: web
-    name: spare-ims-backend
+    name: spare-inventory-system
     runtime: node
-    rootDir: backend
-    buildCommand: cd backend && npm install && npm run build:render
-    startCommand: cd backend && npm start
+    buildCommand: npm run build
+    startCommand: npm start
     plan: free
     envVars:
       - key: NODE_ENV
@@ -27,10 +26,6 @@ services:
         value: 15m
       - key: JWT_REFRESH_EXPIRES_IN
         value: 7d
-      - key: PORT
-        value: 5000
-      - key: FRONTEND_URL
-        value: https://spare-ims-frontend.onrender.com
       - key: UPLOAD_DIR
         value: ./uploads
       - key: MAX_FILE_SIZE_MB
@@ -42,27 +37,7 @@ services:
       - key: RATE_LIMIT_MAX_REQUESTS
         value: 100
 
-  # ── Frontend Static Site (Vite + React) ──────────────────────────────────
-  - type: web
-    name: spare-ims-frontend
-    runtime: static
-    rootDir: frontend
-    buildCommand: cd frontend && npm install && npm run build
-    staticPublishPath: frontend/dist
-    plan: free
-    envVars:
-      - key: VITE_API_URL
-        value: https://spare-ims-backend.onrender.com/api
-    headers:
-      - path: /*
-        name: Cache-Control
-        value: no-cache
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
-
-# ── PostgreSQL Database ────────────────────────────────────────────────────
+# ── Free PostgreSQL Database ────────────────────────────────────────────────────
 databases:
   - name: spare-ims-db
     plan: free

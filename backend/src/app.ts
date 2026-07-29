@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
+import fs from 'fs';
 import { env } from './config/env';
 import routes from './routes';
 import { errorHandler, notFoundHandler } from './middleware/error.middleware';
@@ -60,6 +61,28 @@ app.get('/health', (_req, res) => {
 
 // API Routes
 app.use('/api', routes);
+
+// Serve frontend static build files (Single-Site Deployment)
+const frontendDistPath = path.resolve(process.cwd(), 'frontend/dist');
+const altFrontendDistPath = path.resolve(process.cwd(), '../frontend/dist');
+const activeDistPath = fs.existsSync(frontendDistPath)
+  ? frontendDistPath
+  : fs.existsSync(altFrontendDistPath)
+  ? altFrontendDistPath
+  : null;
+
+if (activeDistPath) {
+  logger.info(`Serving static frontend UI from: ${activeDistPath}`);
+  app.use(express.static(activeDistPath));
+
+  // SPA fallback for client-side routing
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/health') || req.path.startsWith('/uploads')) {
+      return next();
+    }
+    res.sendFile(path.join(activeDistPath, 'index.html'));
+  });
+}
 
 // 404 & Error handlers
 app.use(notFoundHandler);

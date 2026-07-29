@@ -41,7 +41,10 @@ export const Sidebar: React.FC = () => {
       <div className="px-4 pt-5 pb-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
         <div className="flex flex-col items-center gap-2">
           {/* Square Logo Box */}
-          <div className="w-14 h-14 aspect-square bg-white rounded-xl flex items-center justify-center p-2 border border-black shadow-sm">
+          <div
+            className="w-14 h-14 aspect-square bg-white rounded-xl flex items-center justify-center p-2 shadow-sm"
+            style={{ border: '1px solid #9CA3AF' }}
+          >
             <img
               src={pdsLogo}
               alt="Proactive Data Systems"

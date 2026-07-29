@@ -14,7 +14,7 @@ import api from '../../api';
 import { Layout } from '../../components/layout';
 import { Card, Badge, StatCard } from '../../components/ui';
 
-const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#f97316'];
+const COLORS = ['#2563eb', '#059669', '#d97706', '#dc2626', '#7c3aed', '#db2777', '#0891b2', '#65a30d', '#ea580c'];
 
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
@@ -34,8 +34,8 @@ export const DashboardPage: React.FC = () => {
     return (
       <Layout title="Dashboard & Analytics">
         <div className="flex flex-col items-center justify-center h-80 gap-4 text-slate-400">
-          <div className="w-10 h-10 border-3 border-brand-500 border-t-transparent rounded-full animate-spin glow-brand" />
-          <span className="text-xs font-semibold tracking-wide text-indigo-300">Loading enterprise metrics...</span>
+          <div className="w-10 h-10 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs font-semibold tracking-wide text-indigo-600">Loading enterprise metrics...</span>
         </div>
       </Layout>
     );
@@ -44,7 +44,7 @@ export const DashboardPage: React.FC = () => {
   if (error) {
     return (
       <Layout title="Dashboard & Analytics">
-        <div className="p-5 bg-rose-500/10 border border-rose-500/20 rounded-2xl text-rose-400 text-sm">
+        <div className="p-5 bg-rose-50 border border-rose-200 rounded-2xl text-rose-700 text-sm font-semibold">
           ⚠️ Failed to load dashboard. Please verify backend server connectivity.
         </div>
       </Layout>
@@ -56,40 +56,36 @@ export const DashboardPage: React.FC = () => {
   const blr = data?.bengaluruStoreSummary || {};
 
   const quickActions = [
-    { label: 'Import Excel', icon: Upload, gradient: 'from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600', onClick: () => navigate('/inventory?action=import') },
-    { label: 'Dispatch Spare', icon: Truck, gradient: 'from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600', onClick: () => navigate('/dispatch') },
-    { label: 'Pickup Spare', icon: RotateCcw, gradient: 'from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600', onClick: () => navigate('/pickup') },
-    { label: 'Reports', icon: FileSpreadsheet, gradient: 'from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600', onClick: () => navigate('/reports') },
-    { label: 'Search Inventory', icon: Search, gradient: 'from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600', onClick: () => navigate('/inventory') },
+    { label: 'Import Excel', icon: Upload, gradient: 'from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800', onClick: () => navigate('/inventory?action=import') },
+    { label: 'Dispatch Spare', icon: Truck, gradient: 'from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800', onClick: () => navigate('/dispatch') },
+    { label: 'Pickup Spare', icon: RotateCcw, gradient: 'from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800', onClick: () => navigate('/pickup') },
+    { label: 'Reports', icon: FileSpreadsheet, gradient: 'from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800', onClick: () => navigate('/reports') },
+    { label: 'Search Inventory', icon: Search, gradient: 'from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800', onClick: () => navigate('/inventory') },
   ];
 
   const topSummaryCards = [
-    { title: 'Total Spare Parts', value: inv.totalSpareParts ?? 0, icon: Package, color: 'text-blue-400', bg: 'rgba(59, 130, 246, 0.08)' },
-    { title: 'Serialized Parts', value: inv.totalSerializedParts ?? 0, icon: Archive, color: 'text-indigo-400', bg: 'rgba(99, 102, 241, 0.08)' },
-    { title: 'Non-Serialized', value: inv.totalNonSerializedParts ?? 0, icon: Layers, color: 'text-purple-400', bg: 'rgba(139, 92, 246, 0.08)' },
-    { title: 'Total OEMs', value: inv.totalOEMs ?? 0, icon: Cpu, color: 'text-cyan-400', bg: 'rgba(6, 182, 212, 0.08)' },
-    { title: 'Delhi Store Stock', value: inv.delhiTotalStock ?? 0, icon: MapPin, color: 'text-emerald-400', bg: 'rgba(16, 185, 129, 0.08)' },
-    { title: 'Bengaluru Stock', value: inv.bengaluruTotalStock ?? 0, icon: MapPin, color: 'text-orange-400', bg: 'rgba(249, 115, 22, 0.08)' },
-    { title: 'Low Stock Items', value: inv.lowStockCount ?? 0, icon: AlertTriangle, color: 'text-amber-400', bg: 'rgba(245, 158, 11, 0.08)' },
-    { title: 'Out of Stock', value: inv.outOfStockCount ?? 0, icon: XCircle, color: 'text-rose-400', bg: 'rgba(239, 68, 68, 0.08)' },
+    { title: 'Total Spare Parts', value: inv.totalSpareParts ?? 0, icon: Package, color: 'text-blue-600' },
+    { title: 'Serialized Parts', value: inv.totalSerializedParts ?? 0, icon: Archive, color: 'text-indigo-600' },
+    { title: 'Non-Serialized', value: inv.totalNonSerializedParts ?? 0, icon: Layers, color: 'text-purple-600' },
+    { title: 'Total OEMs', value: inv.totalOEMs ?? 0, icon: Cpu, color: 'text-cyan-600' },
+    { title: 'Delhi Store Stock', value: inv.delhiTotalStock ?? 0, icon: MapPin, color: 'text-emerald-600' },
+    { title: 'Bengaluru Stock', value: inv.bengaluruTotalStock ?? 0, icon: MapPin, color: 'text-orange-600' },
+    { title: 'Low Stock Items', value: inv.lowStockCount ?? 0, icon: AlertTriangle, color: 'text-amber-600' },
+    { title: 'Out of Stock', value: inv.outOfStockCount ?? 0, icon: XCircle, color: 'text-rose-600' },
   ];
 
   return (
     <Layout title="Dashboard & Overview">
       {/* Hero Welcome Banner */}
-      <div className="relative overflow-hidden rounded-2xl p-6 mb-6 border border-indigo-500/20"
-        style={{
-          background: 'linear-gradient(135deg, rgba(99,102,241,0.12) 0%, rgba(139,92,246,0.06) 50%, rgba(16,185,129,0.04) 100%)',
-        }}>
-        <div className="absolute right-0 top-0 w-96 h-full bg-gradient-to-l from-indigo-500/10 to-transparent pointer-events-none" />
+      <div className="relative overflow-hidden rounded-2xl p-6 mb-6 border border-indigo-100 bg-gradient-to-r from-indigo-50/90 via-purple-50/40 to-slate-50">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <Sparkles className="w-4 h-4 text-indigo-400" />
-              <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">Proactive Spare IMS</span>
+              <Sparkles className="w-4 h-4 text-indigo-600" />
+              <span className="text-xs font-bold uppercase tracking-wider text-indigo-600">Proactive Spare IMS</span>
             </div>
-            <h1 className="text-xl font-extrabold text-white tracking-tight">Enterprise Inventory Dashboard</h1>
-            <p className="text-xs text-slate-400 mt-1 max-w-xl">
+            <h1 className="text-xl font-black text-slate-900 tracking-tight">Enterprise Inventory Dashboard</h1>
+            <p className="text-xs text-slate-600 mt-1 max-w-xl font-medium">
               Real-time spare parts monitoring across Delhi &amp; Bengaluru warehouses, BHEL dispatch tracking, and OEM replacements.
             </p>
           </div>
@@ -97,7 +93,7 @@ export const DashboardPage: React.FC = () => {
           <div className="flex items-center gap-2">
             <button
               onClick={() => navigate('/inventory')}
-              className="px-4 py-2 rounded-xl text-xs font-bold text-white btn-primary flex items-center gap-1.5"
+              className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md flex items-center gap-1.5 transition-all"
             >
               <Package className="w-3.5 h-3.5" />
               Manage Inventory
@@ -115,7 +111,6 @@ export const DashboardPage: React.FC = () => {
             value={card.value}
             icon={card.icon}
             color={card.color}
-            bg={card.bg}
             onClick={() => navigate('/inventory')}
           />
         ))}
@@ -124,31 +119,31 @@ export const DashboardPage: React.FC = () => {
       {/* Store Distribution Cards & Quick Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
         {/* Delhi Store */}
-        <Card className="border-l-4 border-l-blue-500">
+        <Card className="border-l-4 border-l-blue-600">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-blue-500/15 flex items-center justify-center border border-blue-500/20">
-                <MapPin className="w-5 h-5 text-blue-400" />
+              <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center border border-blue-200">
+                <MapPin className="w-5 h-5 text-blue-600" />
               </div>
               <div>
-                <p className="font-bold text-white text-sm">Delhi Spare Store</p>
-                <p className="text-[11px] text-slate-400">Proactive Delhi Warehouse</p>
+                <p className="font-bold text-slate-900 text-sm">Delhi Spare Store</p>
+                <p className="text-[11px] text-slate-500 font-medium">Proactive Delhi Warehouse</p>
               </div>
             </div>
             <Badge variant="info">Primary</Badge>
           </div>
           <div className="grid grid-cols-3 gap-2.5">
-            <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-3 text-center">
-              <p className="text-xl font-extrabold text-white">{delhi.totalItems ?? 0}</p>
-              <p className="text-[10px] font-semibold text-slate-500 mt-0.5">Total Spares</p>
+            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 text-center">
+              <p className="text-xl font-extrabold text-slate-900">{delhi.totalItems ?? 0}</p>
+              <p className="text-[10px] font-bold text-slate-500 mt-0.5">Total Spares</p>
             </div>
-            <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-3 text-center">
-              <p className="text-xl font-extrabold text-emerald-400">{delhi.availableQuantity ?? 0}</p>
-              <p className="text-[10px] font-semibold text-slate-500 mt-0.5">Available</p>
+            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 text-center">
+              <p className="text-xl font-extrabold text-emerald-600">{delhi.availableQuantity ?? 0}</p>
+              <p className="text-[10px] font-bold text-slate-500 mt-0.5">Available</p>
             </div>
-            <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-3 text-center">
-              <p className="text-xl font-extrabold text-amber-400">{inv.lowStockCount ?? 0}</p>
-              <p className="text-[10px] font-semibold text-slate-500 mt-0.5">Low Stock</p>
+            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 text-center">
+              <p className="text-xl font-extrabold text-amber-600">{inv.lowStockCount ?? 0}</p>
+              <p className="text-[10px] font-bold text-slate-500 mt-0.5">Low Stock</p>
             </div>
           </div>
         </Card>
@@ -157,28 +152,28 @@ export const DashboardPage: React.FC = () => {
         <Card className="border-l-4 border-l-orange-500">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-orange-500/15 flex items-center justify-center border border-orange-500/20">
-                <MapPin className="w-5 h-5 text-orange-400" />
+              <div className="w-9 h-9 rounded-xl bg-orange-50 flex items-center justify-center border border-orange-200">
+                <MapPin className="w-5 h-5 text-orange-600" />
               </div>
               <div>
-                <p className="font-bold text-white text-sm">Bengaluru Spare Store</p>
-                <p className="text-[11px] text-slate-400">Proactive South Warehouse</p>
+                <p className="font-bold text-slate-900 text-sm">Bengaluru Spare Store</p>
+                <p className="text-[11px] text-slate-500 font-medium">Proactive South Warehouse</p>
               </div>
             </div>
             <Badge variant="warning">Regional</Badge>
           </div>
           <div className="grid grid-cols-3 gap-2.5">
-            <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-3 text-center">
-              <p className="text-xl font-extrabold text-white">{blr.totalItems ?? 0}</p>
-              <p className="text-[10px] font-semibold text-slate-500 mt-0.5">Total Spares</p>
+            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 text-center">
+              <p className="text-xl font-extrabold text-slate-900">{blr.totalItems ?? 0}</p>
+              <p className="text-[10px] font-bold text-slate-500 mt-0.5">Total Spares</p>
             </div>
-            <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-3 text-center">
-              <p className="text-xl font-extrabold text-emerald-400">{blr.availableQuantity ?? 0}</p>
-              <p className="text-[10px] font-semibold text-slate-500 mt-0.5">Available</p>
+            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 text-center">
+              <p className="text-xl font-extrabold text-emerald-600">{blr.availableQuantity ?? 0}</p>
+              <p className="text-[10px] font-bold text-slate-500 mt-0.5">Available</p>
             </div>
-            <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-3 text-center">
+            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 text-center">
               <p className="text-xl font-extrabold text-slate-400">0</p>
-              <p className="text-[10px] font-semibold text-slate-500 mt-0.5">Low Stock</p>
+              <p className="text-[10px] font-bold text-slate-500 mt-0.5">Low Stock</p>
             </div>
           </div>
         </Card>
@@ -192,7 +187,7 @@ export const DashboardPage: React.FC = () => {
                 <button
                   key={idx}
                   onClick={action.onClick}
-                  className={`bg-gradient-to-r ${action.gradient} text-white rounded-xl px-3 py-2.5 flex items-center gap-2 text-xs font-semibold shadow-md transition-all hover:scale-102 active:scale-98`}
+                  className={`bg-gradient-to-r ${action.gradient} text-white rounded-xl px-3 py-2.5 flex items-center gap-2 text-xs font-bold shadow-sm transition-all hover:scale-102 active:scale-98`}
                 >
                   <Icon className="w-3.5 h-3.5 shrink-0" />
                   <span className="truncate">{action.label}</span>
@@ -205,21 +200,21 @@ export const DashboardPage: React.FC = () => {
 
       {/* Low Stock Alert Bar */}
       {inv.lowStockCount > 0 && (
-        <div className="mb-6 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between shadow-lg">
+        <div className="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-between shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-amber-500/20 flex items-center justify-center shrink-0">
-              <AlertTriangle className="w-4 h-4 text-amber-400" />
+            <div className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-4 h-4 text-amber-600" />
             </div>
             <div>
-              <p className="text-xs font-bold text-amber-300">Inventory Reorder Warning</p>
-              <p className="text-[11px] text-amber-400/90 mt-0.5">
+              <p className="text-xs font-bold text-amber-900">Inventory Reorder Warning</p>
+              <p className="text-[11px] text-amber-700 font-medium mt-0.5">
                 {inv.lowStockCount} item(s) are running low. {inv.outOfStockCount > 0 && `${inv.outOfStockCount} item(s) are completely out of stock.`}
               </p>
             </div>
           </div>
           <button
             onClick={() => navigate('/inventory')}
-            className="px-3 py-1.5 rounded-xl bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 text-xs font-bold flex items-center gap-1 shrink-0 transition-colors"
+            className="px-3 py-1.5 rounded-xl bg-amber-600 text-white hover:bg-amber-700 text-xs font-bold flex items-center gap-1 shrink-0 transition-colors shadow-sm"
           >
             Review Stock <ChevronRight className="w-3.5 h-3.5" />
           </button>
@@ -234,14 +229,14 @@ export const DashboardPage: React.FC = () => {
               <AreaChart data={data?.monthlyDispatches || []}>
                 <defs>
                   <linearGradient id="dispatchGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4}/>
-                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
-                <XAxis dataKey="month" stroke="#475569" fontSize={11} tickLine={false} />
-                <YAxis stroke="#475569" fontSize={11} tickLine={false} />
-                <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff', fontSize: 12 }} />
-                <Area type="monotone" dataKey="count" name="Dispatches" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#dispatchGrad)" />
+                <XAxis dataKey="month" stroke="#64748b" fontSize={11} tickLine={false} />
+                <YAxis stroke="#64748b" fontSize={11} tickLine={false} />
+                <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: '12px', color: '#0f172a', fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} />
+                <Area type="monotone" dataKey="count" name="Dispatches" stroke="#4f46e5" strokeWidth={3} fillOpacity={1} fill="url(#dispatchGrad)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -253,14 +248,14 @@ export const DashboardPage: React.FC = () => {
               <AreaChart data={data?.monthlyPickups || []}>
                 <defs>
                   <linearGradient id="pickupGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.4}/>
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#059669" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#059669" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
-                <XAxis dataKey="month" stroke="#475569" fontSize={11} tickLine={false} />
-                <YAxis stroke="#475569" fontSize={11} tickLine={false} />
-                <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff', fontSize: 12 }} />
-                <Area type="monotone" dataKey="count" name="Pickups" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#pickupGrad)" />
+                <XAxis dataKey="month" stroke="#64748b" fontSize={11} tickLine={false} />
+                <YAxis stroke="#64748b" fontSize={11} tickLine={false} />
+                <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: '12px', color: '#0f172a', fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} />
+                <Area type="monotone" dataKey="count" name="Pickups" stroke="#059669" strokeWidth={3} fillOpacity={1} fill="url(#pickupGrad)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -290,7 +285,7 @@ export const DashboardPage: React.FC = () => {
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff', fontSize: 12 }} />
+                <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: '12px', color: '#0f172a', fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -299,23 +294,23 @@ export const DashboardPage: React.FC = () => {
         {/* Live Activity Feed */}
         <div className="lg:col-span-2">
           <Card title="Real-Time System Log" subtitle="Recent stock activities" action={
-            <button onClick={() => navigate('/activity')} className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1">
+            <button onClick={() => navigate('/activity')} className="text-xs text-indigo-600 hover:text-indigo-700 font-bold flex items-center gap-1">
               Full Log <ChevronRight className="w-3 h-3" />
             </button>
           }>
             <div className="space-y-2 mt-1 max-h-56 overflow-y-auto pr-1">
               {(data?.recentActivities || []).length === 0 ? (
-                <p className="text-xs text-slate-500 text-center py-6">No recent activity recorded</p>
+                <p className="text-xs text-slate-500 text-center py-6 font-medium">No recent activity recorded</p>
               ) : (
                 (data?.recentActivities || []).map((log: any, i: number) => (
-                  <div key={i} className="flex items-start gap-3 p-2.5 rounded-xl bg-slate-900/50 border border-slate-800/80 hover:border-slate-700 transition-colors">
-                    <Activity className="w-3.5 h-3.5 text-indigo-400 mt-0.5 shrink-0" />
+                  <div key={i} className="flex items-start gap-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 hover:border-slate-300 transition-colors">
+                    <Activity className="w-3.5 h-3.5 text-indigo-600 mt-0.5 shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs text-slate-200 truncate">
-                        <span className="font-semibold text-white">{log.user?.name}</span>
+                      <p className="text-xs text-slate-800 truncate">
+                        <span className="font-bold text-slate-900">{log.user?.name}</span>
                         {' · '}
-                        <span className="text-indigo-400 font-bold">{log.action}</span>
-                        {log.entityLabel && <span className="text-slate-400"> — {log.entityLabel}</span>}
+                        <span className="text-indigo-600 font-bold">{log.action}</span>
+                        {log.entityLabel && <span className="text-slate-600 font-medium"> — {log.entityLabel}</span>}
                       </p>
                       <p className="text-[10px] text-slate-500 mt-0.5 font-mono">{new Date(log.createdAt).toLocaleString('en-IN')}</p>
                     </div>
@@ -331,16 +326,16 @@ export const DashboardPage: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Recent Dispatches */}
         <Card title="Recent Dispatches" action={
-          <button onClick={() => navigate('/dispatch')} className="text-xs text-indigo-400 font-semibold flex items-center gap-1">View All <ChevronRight className="w-3 h-3" /></button>
+          <button onClick={() => navigate('/dispatch')} className="text-xs text-indigo-600 font-bold flex items-center gap-1">View All <ChevronRight className="w-3 h-3" /></button>
         }>
           <div className="space-y-2 mt-1">
             {(data?.recentDispatches || []).length === 0
-              ? <p className="text-xs text-slate-500 text-center py-6">No dispatch records found</p>
+              ? <p className="text-xs text-slate-500 text-center py-6 font-medium">No dispatch records found</p>
               : (data?.recentDispatches || []).map((d: any, i: number) => (
-                <div key={i} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-900/50 border border-slate-800/80">
+                <div key={i} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold text-slate-200 truncate">{d.inventoryItem?.productName}</p>
-                    <p className="text-[10px] text-slate-500">{d.site?.siteName} · {d.dispatchNo}</p>
+                    <p className="text-xs font-bold text-slate-900 truncate">{d.inventoryItem?.productName}</p>
+                    <p className="text-[10px] text-slate-500 font-medium">{d.site?.siteName} · {d.dispatchNo}</p>
                   </div>
                   <Badge variant="warning">RESERVED</Badge>
                 </div>
@@ -350,16 +345,16 @@ export const DashboardPage: React.FC = () => {
 
         {/* Recent Pickups */}
         <Card title="Recent Pickups" action={
-          <button onClick={() => navigate('/pickup')} className="text-xs text-indigo-400 font-semibold flex items-center gap-1">View All <ChevronRight className="w-3 h-3" /></button>
+          <button onClick={() => navigate('/pickup')} className="text-xs text-indigo-600 font-bold flex items-center gap-1">View All <ChevronRight className="w-3 h-3" /></button>
         }>
           <div className="space-y-2 mt-1">
             {(data?.recentPickups || []).length === 0
-              ? <p className="text-xs text-slate-500 text-center py-6">No pickup records found</p>
+              ? <p className="text-xs text-slate-500 text-center py-6 font-medium">No pickup records found</p>
               : (data?.recentPickups || []).map((p: any, i: number) => (
-                <div key={i} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-900/50 border border-slate-800/80">
+                <div key={i} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold text-slate-200 truncate">{p.inventoryItem?.productName}</p>
-                    <p className="text-[10px] text-slate-500">{p.site?.siteName} · {p.pickupNo}</p>
+                    <p className="text-xs font-bold text-slate-900 truncate">{p.inventoryItem?.productName}</p>
+                    <p className="text-[10px] text-slate-500 font-medium">{p.site?.siteName} · {p.pickupNo}</p>
                   </div>
                   <Badge variant="success">IN</Badge>
                 </div>
@@ -372,16 +367,16 @@ export const DashboardPage: React.FC = () => {
           <div className="space-y-2 mt-1">
             {(data?.lowStockAlerts || []).length === 0
               ? <div className="flex flex-col items-center py-6 gap-2">
-                  <CheckCircle2 className="w-8 h-8 text-emerald-400" />
-                  <p className="text-xs font-semibold text-slate-400">All inventory levels healthy</p>
+                  <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+                  <p className="text-xs font-bold text-slate-700">All inventory levels healthy</p>
                 </div>
               : (data?.lowStockAlerts || []).map((item: any, i: number) => (
-                <div key={i} className="flex items-center justify-between p-2.5 rounded-xl bg-amber-500/5 border border-amber-500/20">
+                <div key={i} className="flex items-center justify-between p-2.5 rounded-xl bg-amber-50 border border-amber-200/80">
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold text-slate-200 truncate">{item.productName}</p>
-                    <p className="text-[10px] text-slate-500">{item.oem?.name}</p>
+                    <p className="text-xs font-bold text-slate-900 truncate">{item.productName}</p>
+                    <p className="text-[10px] text-slate-500 font-medium">{item.oem?.name}</p>
                   </div>
-                  <span className={`text-xs font-extrabold px-2 py-0.5 rounded-lg ${item.availableQuantity === 0 ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'}`}>
+                  <span className={`text-xs font-extrabold px-2.5 py-0.5 rounded-lg ${item.availableQuantity === 0 ? 'bg-rose-100 text-rose-700 border border-rose-200' : 'bg-amber-100 text-amber-700 border border-amber-200'}`}>
                     {item.availableQuantity} left
                   </span>
                 </div>

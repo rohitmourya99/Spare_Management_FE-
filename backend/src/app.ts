@@ -63,13 +63,15 @@ app.get('/health', (_req, res) => {
 app.use('/api', routes);
 
 // Serve frontend static build files (Single-Site Deployment)
-const frontendDistPath = path.resolve(process.cwd(), 'frontend/dist');
-const altFrontendDistPath = path.resolve(process.cwd(), '../frontend/dist');
-const activeDistPath = fs.existsSync(frontendDistPath)
-  ? frontendDistPath
-  : fs.existsSync(altFrontendDistPath)
-  ? altFrontendDistPath
-  : null;
+const possibleFrontendPaths = [
+  path.resolve(process.cwd(), 'frontend/dist'),
+  path.resolve(process.cwd(), '../frontend/dist'),
+  path.resolve(__dirname, '../../frontend/dist'),
+  path.resolve(__dirname, '../../../frontend/dist'),
+  '/opt/render/project/src/frontend/dist',
+];
+
+const activeDistPath = possibleFrontendPaths.find((p) => fs.existsSync(p)) || null;
 
 if (activeDistPath) {
   logger.info(`Serving static frontend UI from: ${activeDistPath}`);
@@ -82,6 +84,8 @@ if (activeDistPath) {
     }
     res.sendFile(path.join(activeDistPath, 'index.html'));
   });
+} else {
+  logger.warn('⚠️ Static frontend dist folder not found. API mode only.');
 }
 
 // 404 & Error handlers

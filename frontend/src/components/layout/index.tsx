@@ -135,8 +135,8 @@ export const Header: React.FC<{ title: string }> = ({ title }) => {
         <h2 className="text-base font-black text-slate-900 tracking-tight">{title}</h2>
       </div>
 
-      {/* Right side: Real-time Live Date & Clock display */}
-      <div className="flex items-center gap-4">
+      {/* Right side: Real-time Live Date & Clock + Super Admin User Badge */}
+      <div className="flex items-center gap-3">
         {/* Real-time Clock Card with 3D subtle depth */}
         <div className="flex items-center gap-2.5 px-3 py-1 bg-slate-50 border border-slate-200 rounded-xl shadow-2xs">
           <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
@@ -153,12 +153,21 @@ export const Header: React.FC<{ title: string }> = ({ title }) => {
         {/* Divider */}
         <div className="w-px h-6 bg-slate-200" />
 
-        {/* User avatar */}
-        <Link to="/users" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-          <div className="w-7.5 h-7.5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm bg-indigo-600">
+        {/* User Profile Pill with 3D Depth & Super Admin Badge */}
+        <Link
+          to="/users"
+          className="flex items-center gap-2.5 px-3 py-1 bg-gradient-to-r from-slate-50 to-indigo-50/60 border border-slate-200 rounded-xl shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all duration-200 group"
+          style={{ boxShadow: '0 2px 6px rgba(0,0,0,0.03), inset 0 1px 0 rgba(255,255,255,1)' }}
+        >
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black text-white shadow-sm bg-gradient-to-tr from-indigo-600 to-indigo-700 shrink-0 group-hover:scale-105 transition-transform">
             {user?.name?.[0] || 'U'}
           </div>
-          <span className="hidden md:block text-xs font-bold text-slate-900 max-w-[110px] truncate">{user?.name}</span>
+          <div className="hidden sm:flex flex-col text-left">
+            <span className="text-xs font-black text-slate-900 leading-tight max-w-[120px] truncate">{user?.name || 'User'}</span>
+            <span className="text-[9px] font-extrabold text-indigo-700 uppercase tracking-wider leading-none mt-0.5">
+              {user?.role?.replace(/_/g, ' ') || 'SUPER ADMIN'}
+            </span>
+          </div>
         </Link>
       </div>
     </header>

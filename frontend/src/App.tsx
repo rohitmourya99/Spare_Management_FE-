@@ -12,6 +12,7 @@ import { SiteListPage } from './pages/sites/SiteListPage';
 import { ReportsPage } from './pages/reports/ReportsPage';
 import { SettingsPage } from './pages/settings/SettingsPage';
 import { ActivityLogPage } from './pages/activity/ActivityLogPage';
+import { UserListPage } from './pages/users/UserListPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -103,6 +104,14 @@ export const App: React.FC = () => {
             element={
               <ProtectedRoute>
                 <ActivityLogPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/users"
+            element={
+              <ProtectedRoute>
+                <UserListPage />
               </ProtectedRoute>
             }
           />

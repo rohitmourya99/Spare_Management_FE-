@@ -126,15 +126,19 @@ reportsRoutes.get('/warranty-expiry',   (req, res, next) => reportsController.ge
 reportsRoutes.get('/activity',          (req, res, next) => reportsController.generateNamedReport(req, res, 'activity').catch(next));
 
 // ==============================================
-// USER ROUTES (Super Admin only)
+// USER ROUTES
 // ==============================================
 const userRoutes = Router();
-userRoutes.use(authenticate, authorize(UserRole.SUPER_ADMIN));
+userRoutes.use(authenticate);
 userRoutes.get('/', (req, res, next) => userController.getAll(req, res).catch(next));
 userRoutes.get('/:id', (req, res, next) => userController.getById(req, res).catch(next));
-userRoutes.post('/', (req, res, next) => userController.create(req, res).catch(next));
-userRoutes.put('/:id', (req, res, next) => userController.update(req, res).catch(next));
-userRoutes.post('/:id/reset-password', (req, res, next) => userController.resetPassword(req, res).catch(next));
+userRoutes.post('/', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN), (req, res, next) => userController.create(req, res).catch(next));
+userRoutes.put('/:id', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN), (req, res, next) => userController.update(req, res).catch(next));
+userRoutes.patch('/:id', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN), (req, res, next) => userController.update(req, res).catch(next));
+userRoutes.patch('/:id/status', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN), (req, res, next) => userController.updateStatus(req, res).catch(next));
+userRoutes.patch('/:id/role', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN), (req, res, next) => userController.updateRole(req, res).catch(next));
+userRoutes.patch('/:id/reset-password', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN), (req, res, next) => userController.resetPassword(req, res).catch(next));
+userRoutes.post('/:id/reset-password', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN), (req, res, next) => userController.resetPassword(req, res).catch(next));
 
 // ==============================================
 // ACTIVITY LOG ROUTES

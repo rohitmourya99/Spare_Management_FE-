@@ -25,7 +25,9 @@ export const DashboardPage: React.FC = () => {
       const res = await api.get('/inventory/dashboard-stats');
       return res.data.data;
     },
-    refetchInterval: 30000,
+    refetchInterval: false,
+    refetchOnWindowFocus: false,
+    retry: false,
   });
 
   if (isLoading) {

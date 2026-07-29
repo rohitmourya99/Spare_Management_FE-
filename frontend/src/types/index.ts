@@ -38,6 +38,8 @@ export interface User {
   role: UserRole;
   phone?: string;
   isActive?: boolean;
+  lastLoginAt?: string | Date;
+  createdAt?: string | Date;
 }
 
 export interface OEM {

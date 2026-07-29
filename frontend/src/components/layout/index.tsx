@@ -25,13 +25,10 @@ export const Sidebar: React.FC = () => {
     { label: 'Pickup & OEM', path: '/pickup', icon: RotateCcw, color: 'text-emerald-400' },
     { label: 'Site Master', path: '/sites', icon: Building2, color: 'text-cyan-400' },
     { label: 'Reports', path: '/reports', icon: FileSpreadsheet, color: 'text-amber-400' },
+    { label: 'Users', path: '/users', icon: Users, color: 'text-pink-400' },
     { label: 'Activity Log', path: '/activity', icon: History, color: 'text-purple-400' },
+    { label: 'Settings', path: '/settings', icon: Settings, color: 'text-slate-400' },
   ];
-
-  if (user?.role === 'SUPER_ADMIN') {
-    navItems.push({ label: 'Users', path: '/users', icon: Users, color: 'text-pink-400' });
-  }
-  navItems.push({ label: 'Settings', path: '/settings', icon: Settings, color: 'text-slate-400' });
 
   const initials = user?.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'U';
 

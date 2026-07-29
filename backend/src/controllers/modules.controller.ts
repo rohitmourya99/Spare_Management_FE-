@@ -194,8 +194,25 @@ export class UserController {
     ApiResponse.success(res, user, 'User updated');
   }
 
+  async updateStatus(req: Request, res: Response) {
+    const { status, isActive } = req.body;
+    let activeState: boolean | undefined = isActive;
+    if (activeState === undefined && status !== undefined) {
+      activeState = status === 'ACTIVE';
+    }
+    const user = await userService.update(req.params.id, { isActive: activeState });
+    ApiResponse.success(res, user, 'User status updated');
+  }
+
+  async updateRole(req: Request, res: Response) {
+    const { role } = req.body;
+    const user = await userService.update(req.params.id, { role });
+    ApiResponse.success(res, user, 'User role updated');
+  }
+
   async resetPassword(req: Request, res: Response) {
-    await userService.resetPassword(req.params.id, req.body.newPassword);
+    const password = req.body.newPassword || req.body.password;
+    await userService.resetPassword(req.params.id, password);
     ApiResponse.success(res, null, 'Password reset successfully');
   }
 }

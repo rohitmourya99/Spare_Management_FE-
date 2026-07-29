@@ -702,4 +702,5 @@ export const UserListPage: React.FC = () => {
   );
 };
 
+export const UsersPage = UserListPage;
 export default UserListPage;

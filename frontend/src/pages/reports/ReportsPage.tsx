@@ -85,6 +85,15 @@ const REPORTS: ReportDef[] = [
     category: 'Movements',
     hasDateFilter: true,
   },
+  {
+    key: 'swap-tracking',
+    title: 'Swap Tracking / Audit History',
+    desc: 'Audit log of replaced faulty serial numbers, assigned spare serial numbers, state, building, room, swap date, user details, and OEM turnaround duration.',
+    icon: RotateCcw,
+    color: 'text-emerald-800 bg-emerald-50 border-emerald-300',
+    category: 'Movements',
+    hasDateFilter: true,
+  },
   // Site / BHEL Reports
   {
     key: 'site-wise-dispatch',
@@ -122,6 +131,9 @@ export const ReportsPage: React.FC = () => {
   const [filterStore, setFilterStore] = useState('');
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
+  const [filterState, setFilterState] = useState('');
+  const [filterBuilding, setFilterBuilding] = useState('');
+  const [filterPartId, setFilterPartId] = useState('');
   const [warrantyDays, setWarrantyDays] = useState('30');
 
   const download = async (reportKey: string, format: 'excel' | 'pdf' | 'csv') => {
@@ -131,6 +143,9 @@ export const ReportsPage: React.FC = () => {
       if (filterStore) params.store = filterStore;
       if (filterDateFrom) params.from = filterDateFrom;
       if (filterDateTo) params.to = filterDateTo;
+      if (filterState) params.state = filterState;
+      if (filterBuilding) params.building = filterBuilding;
+      if (filterPartId) params.partId = filterPartId;
       if (reportKey === 'warranty-expiry') params.days = warrantyDays;
 
       const res = await api.get(`/reports/${reportKey}`, {
@@ -175,6 +190,21 @@ export const ReportsPage: React.FC = () => {
             <label className="block text-xs font-bold text-slate-800 uppercase tracking-wide mb-1">Date To</label>
             <input type="date" value={filterDateTo} onChange={(e) => setFilterDateTo(e.target.value)}
               className="px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 font-bold focus:outline-none focus:border-indigo-600" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-800 uppercase tracking-wide mb-1">State / Location</label>
+            <input type="text" placeholder="e.g. KA, MH" value={filterState} onChange={(e) => setFilterState(e.target.value)}
+              className="px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 font-bold focus:outline-none focus:border-indigo-600 w-32" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-800 uppercase tracking-wide mb-1">Building</label>
+            <input type="text" placeholder="Building Name" value={filterBuilding} onChange={(e) => setFilterBuilding(e.target.value)}
+              className="px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 font-bold focus:outline-none focus:border-indigo-600 w-36" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-800 uppercase tracking-wide mb-1">Part ID</label>
+            <input type="text" placeholder="Part ID" value={filterPartId} onChange={(e) => setFilterPartId(e.target.value)}
+              className="px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 font-bold focus:outline-none focus:border-indigo-600 w-32" />
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-800 uppercase tracking-wide mb-1">Warranty Window (Days)</label>

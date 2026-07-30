@@ -50,8 +50,10 @@ inventoryRoutes.get('/dashboard-stats', (req, res, next) => inventoryController.
 inventoryRoutes.get('/', (req, res, next) => inventoryController.getAll(req, res).catch(next));
 inventoryRoutes.post('/import', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN), upload.single('file'), (req, res, next) => inventoryController.importExcel(req, res).catch(next));
 inventoryRoutes.post('/location-inventory/import', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN), upload.single('file'), (req, res, next) => inventoryController.importLocationInventory(req, res).catch(next));
+inventoryRoutes.post('/upload-location-excel', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN), upload.single('file'), (req, res, next) => inventoryController.importLocationInventory(req, res).catch(next));
 inventoryRoutes.get('/location-inventory', (req, res, next) => inventoryController.getLocationInventories(req, res).catch(next));
 inventoryRoutes.get('/replacement-audit-logs', (req, res, next) => inventoryController.getReplacementAuditLogs(req, res).catch(next));
+inventoryRoutes.get('/replacement-history', (req, res, next) => inventoryController.getReplacementAuditLogs(req, res).catch(next));
 inventoryRoutes.post('/new-serial', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.ENGINEER), (req, res, next) => inventoryController.createReplacementSerialItem(req, res).catch(next));
 
 // Manual Inventory Form & Draft Handlers (/new & /new/comments)
@@ -154,7 +156,8 @@ reportsRoutes.get('/pickup-activity',   (req, res, next) => reportsController.ge
 reportsRoutes.get('/movement-history',  (req, res, next) => reportsController.generateNamedReport(req, res, 'movement').catch(next));
 reportsRoutes.get('/site-wise-dispatch',(req, res, next) => reportsController.generateNamedReport(req, res, 'site_wise').catch(next));
 reportsRoutes.get('/site-master',       (req, res, next) => reportsController.generateNamedReport(req, res, 'site_master').catch(next));
-reportsRoutes.get('/warranty-expiry',   (req, res, next) => reportsController.generateNamedReport(req, res, 'warranty_expiry').catch(next));
+reportsRoutes.get('/swap-tracking/export', (req, res, next) => reportsController.generateNamedReport(req, res, 'swap_tracking').catch(next));
+reportsRoutes.get('/swap-tracking',        (req, res, next) => reportsController.generateNamedReport(req, res, 'swap_tracking').catch(next));
 reportsRoutes.get('/activity',          (req, res, next) => reportsController.generateNamedReport(req, res, 'activity').catch(next));
 
 // ==============================================

@@ -17,8 +17,16 @@ const getStoredToken = (): string | null => {
   return localStorage.getItem('token') || localStorage.getItem('accessToken');
 };
 
+const getApiBaseUrl = (): string => {
+  return (
+    import.meta.env.VITE_API_BASE_URL ||
+    import.meta.env.VITE_API_URL ||
+    'https://spare-ims-backend.onrender.com/api'
+  );
+};
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api',
+  baseURL: getApiBaseUrl(),
   headers: {
     'Content-Type': 'application/json',
   },
@@ -55,7 +63,7 @@ api.interceptors.response.use(
 
         if (refreshToken) {
           try {
-            const baseURL = import.meta.env.VITE_API_URL || '/api';
+            const baseURL = getApiBaseUrl();
             const res = await axios.post(`${baseURL}/auth/refresh-token`, { refreshToken });
             const { accessToken, refreshToken: newRefreshToken } = res.data.data;
 

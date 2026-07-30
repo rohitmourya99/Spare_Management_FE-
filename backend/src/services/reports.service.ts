@@ -185,6 +185,33 @@ export class ReportsService {
         }));
       }
 
+      case 'swap_tracking': {
+        const where: any = {};
+        if (startDate || endDate) where.swapDate = dateFilter;
+        if (filters.state) where.state = { contains: filters.state, mode: 'insensitive' };
+        if (filters.building) where.buildingName = { contains: filters.building, mode: 'insensitive' };
+        if (filters.partId) where.partId = { contains: filters.partId, mode: 'insensitive' };
+
+        const auditLogs = await prisma.replacementAuditLog.findMany({
+          where,
+          include: { dispatchedBy: true },
+          orderBy: { swapDate: 'desc' },
+        });
+
+        return auditLogs.map((log) => ({
+          'Part ID': log.partId,
+          'Replaced Faulty Serial No': log.oldFaultySerialNo,
+          'New Spare Serial No': log.newSpareSerialNo,
+          'State / Location': log.state,
+          'Building Name': log.buildingName,
+          'Room ID': log.roomId,
+          'Room Name': log.roomName || '—',
+          'Swap Date': new Date(log.swapDate).toISOString().replace('T', ' ').substring(0, 19),
+          'Dispatched By': log.dispatchedByName || log.dispatchedBy?.name || 'System Dispatcher',
+          'OEM Turnaround Duration (Days)': log.turnaroundDays !== null && log.turnaroundDays !== undefined ? `${log.turnaroundDays} Days` : 'N/A',
+        }));
+      }
+
       case 'comments': {
         const comments = await prisma.comment.findMany({
           include: {

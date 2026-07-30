@@ -41,51 +41,8 @@ export const DashboardPage: React.FC = () => {
     refetchInterval: false,
   });
 
-  if (isLoading) {
-    return (
-      <Layout title="Dashboard & Analytics">
-        <div className="flex flex-col items-center justify-center h-80 gap-4 text-slate-400">
-          <div className="w-10 h-10 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-          <span className="text-xs font-bold tracking-wide text-indigo-600">Loading enterprise metrics...</span>
-        </div>
-      </Layout>
-    );
-  }
-
-  if (error) {
-    return (
-      <Layout title="Dashboard & Analytics">
-        <div className="p-5 bg-rose-50 border border-rose-200 rounded-2xl text-rose-700 text-sm font-bold">
-          ⚠️ Failed to load dashboard. Please verify backend server connectivity.
-        </div>
-      </Layout>
-    );
-  }
-
-  const inv = data?.inventorySummary || {};
-  const delhi = data?.delhiStoreSummary || {};
-  const blr = data?.bengaluruStoreSummary || {};
-
-  const quickActions = [
-    { label: 'Import Excel', icon: Upload, gradient: 'from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 border-b-2 border-indigo-900/30', onClick: () => navigate('/inventory?action=import') },
-    { label: 'Dispatch Spare', icon: Truck, gradient: 'from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 border-b-2 border-rose-900/30', onClick: () => navigate('/dispatch') },
-    { label: 'Pickup Spare', icon: RotateCcw, gradient: 'from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 border-b-2 border-emerald-900/30', onClick: () => navigate('/pickup') },
-    { label: 'Reports', icon: FileSpreadsheet, gradient: 'from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 border-b-2 border-amber-900/30', onClick: () => navigate('/reports') },
-    { label: 'Search Inventory', icon: Search, gradient: 'from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 border-b-2 border-blue-900/30', onClick: () => navigate('/inventory') },
-  ];
-
-  const topSummaryCards = [
-    { id: 'ALL', title: 'Total Spare Parts', value: inv.totalSpareParts ?? 0, icon: Package, color: 'text-blue-600' },
-    { id: 'SERIALIZED', title: 'Serialized Parts', value: inv.totalSerializedParts ?? 0, icon: Archive, color: 'text-indigo-600' },
-    { id: 'NON_SERIALIZED', title: 'Non-Serialized', value: inv.totalNonSerializedParts ?? 0, icon: Layers, color: 'text-purple-600' },
-    { id: 'OEM', title: 'Total OEMs', value: inv.totalOEMs ?? 0, icon: Cpu, color: 'text-cyan-600' },
-    { id: 'DELHI', title: 'Delhi Store Stock', value: inv.delhiTotalStock ?? 0, icon: MapPin, color: 'text-emerald-600' },
-    { id: 'BENGALURU', title: 'Bengaluru Stock', value: inv.bengaluruTotalStock ?? 0, icon: MapPin, color: 'text-orange-600' },
-    { id: 'LOW_STOCK', title: 'Low Stock Items', value: inv.lowStockCount ?? 0, icon: AlertTriangle, color: 'text-amber-600' },
-    { id: 'OUT_OF_STOCK', title: 'Out of Stock', value: inv.outOfStockCount ?? 0, icon: XCircle, color: 'text-rose-600' },
-  ];
-
   // Filter items based on selected card filter & search input using useMemo
+  // (Called unconditionally at top level to obey React Rule of Hooks)
   const displayedItems = useMemo(() => {
     if (!inventoryItemsData || !Array.isArray(inventoryItemsData)) return [];
     let items = [...inventoryItemsData];
@@ -139,6 +96,50 @@ export const DashboardPage: React.FC = () => {
 
     return items;
   }, [inventoryItemsData, selectedFilter, searchQuery]);
+
+  if (isLoading) {
+    return (
+      <Layout title="Dashboard & Analytics">
+        <div className="flex flex-col items-center justify-center h-80 gap-4 text-slate-400">
+          <div className="w-10 h-10 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs font-bold tracking-wide text-indigo-600">Loading enterprise metrics...</span>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (error) {
+    return (
+      <Layout title="Dashboard & Analytics">
+        <div className="p-5 bg-rose-50 border border-rose-200 rounded-2xl text-rose-700 text-sm font-bold">
+          ⚠️ Failed to load dashboard. Please verify backend server connectivity.
+        </div>
+      </Layout>
+    );
+  }
+
+  const inv = data?.inventorySummary || {};
+  const delhi = data?.delhiStoreSummary || {};
+  const blr = data?.bengaluruStoreSummary || {};
+
+  const quickActions = [
+    { label: 'Import Excel', icon: Upload, gradient: 'from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 border-b-2 border-indigo-900/30', onClick: () => navigate('/inventory?action=import') },
+    { label: 'Dispatch Spare', icon: Truck, gradient: 'from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 border-b-2 border-rose-900/30', onClick: () => navigate('/dispatch') },
+    { label: 'Pickup Spare', icon: RotateCcw, gradient: 'from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 border-b-2 border-emerald-900/30', onClick: () => navigate('/pickup') },
+    { label: 'Reports', icon: FileSpreadsheet, gradient: 'from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 border-b-2 border-amber-900/30', onClick: () => navigate('/reports') },
+    { label: 'Search Inventory', icon: Search, gradient: 'from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 border-b-2 border-blue-900/30', onClick: () => navigate('/inventory') },
+  ];
+
+  const topSummaryCards = [
+    { id: 'ALL', title: 'Total Spare Parts', value: inv.totalSpareParts ?? 0, icon: Package, color: 'text-blue-600' },
+    { id: 'SERIALIZED', title: 'Serialized Parts', value: inv.totalSerializedParts ?? 0, icon: Archive, color: 'text-indigo-600' },
+    { id: 'NON_SERIALIZED', title: 'Non-Serialized', value: inv.totalNonSerializedParts ?? 0, icon: Layers, color: 'text-purple-600' },
+    { id: 'OEM', title: 'Total OEMs', value: inv.totalOEMs ?? 0, icon: Cpu, color: 'text-cyan-600' },
+    { id: 'DELHI', title: 'Delhi Store Stock', value: inv.delhiTotalStock ?? 0, icon: MapPin, color: 'text-emerald-600' },
+    { id: 'BENGALURU', title: 'Bengaluru Stock', value: inv.bengaluruTotalStock ?? 0, icon: MapPin, color: 'text-orange-600' },
+    { id: 'LOW_STOCK', title: 'Low Stock Items', value: inv.lowStockCount ?? 0, icon: AlertTriangle, color: 'text-amber-600' },
+    { id: 'OUT_OF_STOCK', title: 'Out of Stock', value: inv.outOfStockCount ?? 0, icon: XCircle, color: 'text-rose-600' },
+  ];
 
   const activeCardObj = topSummaryCards.find((c) => c.id === selectedFilter) || topSummaryCards[0];
 

@@ -131,22 +131,20 @@ export const InventoryListPage: React.FC = () => {
         <div className="flex items-center gap-2 p-1 bg-slate-100 border border-slate-200 rounded-2xl">
           <button
             onClick={() => setActiveTab('location-inventory')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-              activeTab === 'location-inventory'
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${activeTab === 'location-inventory'
                 ? 'bg-indigo-600 text-white shadow-md'
                 : 'text-slate-700 hover:text-slate-900 hover:bg-slate-200/70'
-            }`}
+              }`}
           >
             <Building2 className="w-4 h-4" />
             Location Inventory (15-Field Spec)
           </button>
           <button
             onClick={() => setActiveTab('audit-history')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-              activeTab === 'audit-history'
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${activeTab === 'audit-history'
                 ? 'bg-indigo-600 text-white shadow-md'
                 : 'text-slate-700 hover:text-slate-900 hover:bg-slate-200/70'
-            }`}
+              }`}
           >
             <History className="w-4 h-4" />
             Swap Tracking / Audit History

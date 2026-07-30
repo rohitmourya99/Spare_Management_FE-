@@ -24,11 +24,29 @@ app.use(helmet({
   contentSecurityPolicy: false, // allow images/data URLs
 }));
 
-// CORS - Flexible origin support for development & deployment
-app.use(cors({
-  origin: (_origin, callback) => callback(null, true),
+// Explicit CORS Configuration with Preflight Support
+const allowedOrigins = [
+  'https://spare-management-fe.onrender.com',
+  'https://spare-ims-frontend.onrender.com',
+  'http://localhost:5173',
+  'http://localhost:3000',
+];
+
+const corsOptions: cors.CorsOptions = {
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(null, true); // Fallback to allow request
+    }
+  },
   credentials: true,
-}));
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 // Compression for fast API payload transfers
 app.use(compression({

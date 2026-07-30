@@ -22,14 +22,14 @@ interface ReportDef {
 }
 
 const REPORTS: ReportDef[] = [
-  // Inventory Reports
+  // Stock List Reports
   {
     key: 'full-inventory',
-    title: 'Full Inventory Report',
+    title: 'Full Stock List Report',
     desc: 'Complete list of all spare items with OEM, stock levels, location, and status.',
     icon: Package,
     color: 'text-blue-700 bg-blue-50 border-blue-200',
-    category: 'Inventory',
+    category: 'Stock List',
     hasStoreFilter: true,
   },
   {
@@ -38,7 +38,7 @@ const REPORTS: ReportDef[] = [
     desc: 'Items with available quantity ≤ 2 requiring stock replenishment.',
     icon: AlertTriangle,
     color: 'text-amber-700 bg-amber-50 border-amber-200',
-    category: 'Inventory',
+    category: 'Stock List',
     hasStoreFilter: true,
   },
   {
@@ -47,7 +47,7 @@ const REPORTS: ReportDef[] = [
     desc: 'All spare items currently with zero available quantity.',
     icon: AlertTriangle,
     color: 'text-rose-700 bg-rose-50 border-rose-200',
-    category: 'Inventory',
+    category: 'Stock List',
   },
   {
     key: 'oem-wise-stock',
@@ -55,7 +55,7 @@ const REPORTS: ReportDef[] = [
     desc: 'Stock inventory grouped and summarized by OEM/manufacturer.',
     icon: BarChart2,
     color: 'text-indigo-700 bg-indigo-50 border-indigo-200',
-    category: 'Inventory',
+    category: 'Stock List',
   },
   // Movement Reports
   {
@@ -115,7 +115,7 @@ const REPORTS: ReportDef[] = [
   },
 ];
 
-const categories = ['Inventory', 'Movements', 'BHEL Sites', 'Compliance'];
+const categories = ['Stock List', 'Movements', 'BHEL Sites', 'Compliance'];
 
 export const ReportsPage: React.FC = () => {
   const [loading, setLoading] = useState<string | null>(null);

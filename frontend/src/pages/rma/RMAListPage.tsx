@@ -103,7 +103,7 @@ export const RMAListPage: React.FC = () => {
             <thead className="bg-slate-900/80 text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800">
               <tr>
                 <th className="p-3.5">RMA Ticket No</th>
-                <th className="p-3.5">Spare Item</th>
+                <th className="p-3.5">Stock Item</th>
                 <th className="p-3.5">OEM</th>
                 <th className="p-3.5">OEM Case / Ticket No</th>
                 <th className="p-3.5">Status</th>
@@ -164,7 +164,7 @@ export const RMAListPage: React.FC = () => {
       <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); resetForm(); }} title="Raise OEM RMA Ticket" maxWidth="md">
         <div className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">Select Faulty Spare Part *</label>
+            <label className="block text-xs font-semibold text-slate-300 mb-1.5">Select Faulty Stock Item *</label>
             {selectedItem ? (
               <div className="p-3 rounded-xl bg-slate-900 border border-brand-500/30 flex items-center justify-between">
                 <div>

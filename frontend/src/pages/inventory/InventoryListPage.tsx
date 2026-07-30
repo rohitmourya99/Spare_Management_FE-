@@ -224,7 +224,7 @@ export const InventoryListPage: React.FC = () => {
   };
 
   return (
-    <Layout title="Spare Inventory Master">
+    <Layout title="Stock List Master">
       {/* Top Controls Header */}
       <div className="space-y-4 mb-6">
         {/* Row 1: Warehouse Tabs */}
@@ -336,7 +336,7 @@ export const InventoryListPage: React.FC = () => {
                   <td colSpan={10} className="p-10 text-center text-slate-500">
                     <div className="flex flex-col items-center gap-2">
                       <RefreshCw className="w-6 h-6 animate-spin text-indigo-600" />
-                      <span className="text-sm font-semibold">Loading inventory...</span>
+                      <span className="text-sm font-semibold">Loading stock list...</span>
                     </div>
                   </td>
                 </tr>
@@ -345,7 +345,7 @@ export const InventoryListPage: React.FC = () => {
                   <td colSpan={10} className="p-10 text-center text-slate-500">
                     <div className="flex flex-col items-center gap-2">
                       <Package className="w-8 h-8 text-slate-400" />
-                      <span className="font-semibold text-slate-700">No inventory items found. Click "Add Item" or "Import Excel" to get started.</span>
+                      <span className="font-semibold text-slate-700">No stock items found. Click "Add Item" or "Import Excel" to get started.</span>
                     </div>
                   </td>
                 </tr>
@@ -597,7 +597,7 @@ export const InventoryListPage: React.FC = () => {
       </Modal>
 
       {/* Import Excel Modal */}
-      <Modal isOpen={importModalOpen} onClose={() => setImportModalOpen(false)} title="Import Spares Excel" maxWidth="md">
+      <Modal isOpen={importModalOpen} onClose={() => setImportModalOpen(false)} title="Import Stock List Excel" maxWidth="md">
         <div className="space-y-4">
           <div>
             <label className="block text-xs font-bold text-slate-800 mb-1.5">Target Store Warehouse *</label>
@@ -647,7 +647,7 @@ export const InventoryListPage: React.FC = () => {
           {isImporting && (
             <div className="flex items-center gap-3 p-3 bg-indigo-50 border border-indigo-200 rounded-xl">
               <RefreshCw className="w-4 h-4 text-indigo-600 animate-spin shrink-0" />
-              <span className="text-sm font-bold text-indigo-900">Importing inventory data...</span>
+              <span className="text-sm font-bold text-indigo-900">Importing stock data...</span>
             </div>
           )}
 
@@ -715,8 +715,8 @@ export const InventoryListPage: React.FC = () => {
         )}
       </Modal>
 
-      {/* Add New Inventory Spare Item Modal */}
-      <Modal isOpen={addItemModalOpen} onClose={() => setAddItemModalOpen(false)} title="Add New Spare Part" maxWidth="lg">
+      {/* Add New Stock Item Modal */}
+      <Modal isOpen={addItemModalOpen} onClose={() => setAddItemModalOpen(false)} title="Add New Stock Item" maxWidth="lg">
         <form
           onSubmit={(e) => {
             e.preventDefault();

@@ -127,7 +127,7 @@ export const DashboardPage: React.FC = () => {
     { label: 'Dispatch Spare', icon: Truck, gradient: 'from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 border-b-2 border-rose-900/30', onClick: () => navigate('/dispatch') },
     { label: 'Pickup Spare', icon: RotateCcw, gradient: 'from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 border-b-2 border-emerald-900/30', onClick: () => navigate('/pickup') },
     { label: 'Reports', icon: FileSpreadsheet, gradient: 'from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 border-b-2 border-amber-900/30', onClick: () => navigate('/reports') },
-    { label: 'Search Inventory', icon: Search, gradient: 'from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 border-b-2 border-blue-900/30', onClick: () => navigate('/inventory') },
+    { label: 'Search Stock List', icon: Search, gradient: 'from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 border-b-2 border-blue-900/30', onClick: () => navigate('/inventory') },
   ];
 
   const topSummaryCards = [
@@ -156,7 +156,7 @@ export const DashboardPage: React.FC = () => {
               <Sparkles className="w-4 h-4 text-indigo-600" />
               <span className="text-xs font-extrabold uppercase tracking-wider text-indigo-600">Proactive Spare IMS</span>
             </div>
-            <h1 className="text-xl font-black text-slate-900 tracking-tight">Enterprise Inventory Dashboard</h1>
+            <h1 className="text-xl font-black text-slate-900 tracking-tight">Enterprise Stock List Dashboard</h1>
             <p className="text-xs text-slate-600 mt-1 max-w-xl font-medium">
               Real-time spare parts monitoring across Delhi &amp; Bengaluru warehouses, BHEL dispatch tracking, and OEM replacements.
             </p>
@@ -168,7 +168,7 @@ export const DashboardPage: React.FC = () => {
               className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-500/20 border-b-2 border-indigo-800 flex items-center gap-1.5 transition-all hover:-translate-y-0.5"
             >
               <Package className="w-3.5 h-3.5" />
-              Manage Inventory
+              Manage Stock List
             </button>
           </div>
         </div>
@@ -325,7 +325,7 @@ export const DashboardPage: React.FC = () => {
                 onClick={() => navigate('/inventory')}
                 className="text-xs font-bold text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-1"
               >
-                View all {displayedItems.length} items in Inventory List <ChevronRight className="w-3.5 h-3.5" />
+                View all {displayedItems.length} items in Stock List <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
           )}
@@ -342,7 +342,7 @@ export const DashboardPage: React.FC = () => {
                 <MapPin className="w-5 h-5 text-blue-600" />
               </div>
               <div>
-                <p className="font-bold text-slate-900 text-sm">Delhi Spare Store</p>
+                <p className="font-bold text-slate-900 text-sm">Delhi Stock Store</p>
                 <p className="text-[11px] text-slate-500 font-medium">Proactive Delhi Warehouse</p>
               </div>
             </div>
@@ -372,7 +372,7 @@ export const DashboardPage: React.FC = () => {
                 <MapPin className="w-5 h-5 text-orange-600" />
               </div>
               <div>
-                <p className="font-bold text-slate-900 text-sm">Bengaluru Spare Store</p>
+                <p className="font-bold text-slate-900 text-sm">Bengaluru Stock Store</p>
                 <p className="text-[11px] text-slate-500 font-medium">Proactive South Warehouse</p>
               </div>
             </div>
@@ -422,7 +422,7 @@ export const DashboardPage: React.FC = () => {
               <AlertTriangle className="w-4 h-4 text-amber-600" />
             </div>
             <div>
-              <p className="text-xs font-bold text-amber-900">Inventory Reorder Warning</p>
+              <p className="text-xs font-bold text-amber-900">Stock Reorder Warning</p>
               <p className="text-[11px] text-amber-700 font-medium mt-0.5">
                 {inv.lowStockCount} item(s) are running low. {inv.outOfStockCount > 0 && `${inv.outOfStockCount} item(s) are completely out of stock.`}
               </p>

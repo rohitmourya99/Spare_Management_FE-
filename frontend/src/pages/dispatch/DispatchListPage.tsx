@@ -388,7 +388,7 @@ export const DispatchListPage: React.FC = () => {
       <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); resetForm(); }} title="Create Outbound Dispatch" maxWidth="lg">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-bold text-slate-800 mb-1">Select Spare Item to Dispatch *</label>
+            <label className="block text-xs font-bold text-slate-800 mb-1">Select Stock Item to Dispatch *</label>
             {selectedItem ? (
               <div className="flex items-center justify-between p-3 bg-indigo-50 border border-indigo-200 rounded-xl">
                 <div>

@@ -413,7 +413,7 @@ export const PickupListPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <div className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-slate-800 mb-1.5">Select Spare Part *</label>
+              <label className="block text-xs font-bold text-slate-800 mb-1.5">Select Stock Item *</label>
               {selectedItem ? (
                 <div className="p-3 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-between">
                   <div>
@@ -428,7 +428,7 @@ export const PickupListPage: React.FC = () => {
                 <div>
                   <input
                     type="text"
-                    placeholder="Search spare part..."
+                    placeholder="Search stock item..."
                     value={itemSearch}
                     onChange={(e) => setItemSearch(e.target.value)}
                     className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 font-medium focus:outline-none focus:border-indigo-600"

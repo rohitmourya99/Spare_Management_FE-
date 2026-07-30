@@ -55,7 +55,7 @@ export const LoginPage: React.FC = () => {
               <span className="text-[11px] font-extrabold uppercase tracking-widest text-indigo-300">Enterprise Logistics</span>
             </div>
             <h2 className="text-2xl font-black tracking-tight text-white leading-tight">
-              Proactive Spare Inventory Management System
+              Proactive Stock List Management System
             </h2>
             <p className="text-xs text-slate-300 mt-2 font-medium leading-relaxed">
               Centralized stock tracking for Delhi &amp; Bengaluru warehouses, automated BHEL site dispatches, and OEM return receipts.

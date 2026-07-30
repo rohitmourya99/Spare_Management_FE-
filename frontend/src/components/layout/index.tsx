@@ -19,7 +19,7 @@ export const Sidebar: React.FC = () => {
 
   const navItems = [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, color: 'text-indigo-600' },
-    { label: 'Inventory', path: '/inventory', icon: Package, color: 'text-blue-600' },
+    { label: 'Stock List', path: '/inventory', icon: Package, color: 'text-blue-600' },
     { label: 'Dispatch', path: '/dispatch', icon: Truck, color: 'text-rose-600' },
     { label: 'Pickup & OEM', path: '/pickup', icon: RotateCcw, color: 'text-emerald-600' },
     { label: 'Site Master', path: '/sites', icon: Building2, color: 'text-cyan-600' },

@@ -89,7 +89,7 @@ export const SpareDetailPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <Layout title="Spare Details">
+      <Layout title="Stock Details">
         <div className="flex items-center justify-center h-64">
           <div className="w-8 h-8 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
         </div>
@@ -99,9 +99,9 @@ export const SpareDetailPage: React.FC = () => {
 
   if (error || !item) {
     return (
-      <Layout title="Spare Details">
+      <Layout title="Stock Details">
         <div className="p-5 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 font-bold">
-          Spare part not found or error loading data.
+          Stock item not found or error loading data.
         </div>
       </Layout>
     );
@@ -110,14 +110,14 @@ export const SpareDetailPage: React.FC = () => {
   const comments = commentsData || [];
 
   return (
-    <Layout title={`${item.spareId} — Spare Details`}>
+    <Layout title={`${item.spareId} — Stock Details`}>
       {/* Breadcrumb */}
       <button
         onClick={() => navigate('/inventory')}
         className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 font-bold mb-5 transition-colors"
       >
         <ArrowLeft className="w-4 h-4" />
-        Back to Inventory
+        Back to Stock List
       </button>
 
       {/* Header Card */}
@@ -149,7 +149,7 @@ export const SpareDetailPage: React.FC = () => {
       {/* Spare Info Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-5">
         {/* Spare Information */}
-        <Card title="Spare Information" className="lg:col-span-2">
+        <Card title="Stock Information" className="lg:col-span-2">
           <div className="grid grid-cols-2 gap-x-6 gap-y-3 mt-1">
             {[
               { label: 'Part Code', value: item.partCode || '—', icon: Hash },

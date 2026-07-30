@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -18,7 +18,7 @@ const COLORS = ['#2563eb', '#059669', '#d97706', '#dc2626', '#7c3aed', '#db2777'
 
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
-  const [selectedCardFilter, setSelectedCardFilter] = useState<string>('all');
+  const [selectedFilter, setSelectedFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   const { data, isLoading, error } = useQuery({
@@ -35,7 +35,7 @@ export const DashboardPage: React.FC = () => {
   const { data: inventoryItemsData, isLoading: isLoadingInventory } = useQuery({
     queryKey: ['dashboard-inventory-items'],
     queryFn: async () => {
-      const res = await api.get('/inventory?limit=250');
+      const res = await api.get('/inventory?limit=300');
       return res.data.data.items || [];
     },
     refetchInterval: false,
@@ -75,54 +75,72 @@ export const DashboardPage: React.FC = () => {
   ];
 
   const topSummaryCards = [
-    { id: 'all', title: 'Total Spare Parts', value: inv.totalSpareParts ?? 0, icon: Package, color: 'text-blue-600' },
-    { id: 'serialized', title: 'Serialized Parts', value: inv.totalSerializedParts ?? 0, icon: Archive, color: 'text-indigo-600' },
-    { id: 'non_serialized', title: 'Non-Serialized', value: inv.totalNonSerializedParts ?? 0, icon: Layers, color: 'text-purple-600' },
-    { id: 'oems', title: 'Total OEMs', value: inv.totalOEMs ?? 0, icon: Cpu, color: 'text-cyan-600' },
-    { id: 'delhi', title: 'Delhi Store Stock', value: inv.delhiTotalStock ?? 0, icon: MapPin, color: 'text-emerald-600' },
-    { id: 'bengaluru', title: 'Bengaluru Stock', value: inv.bengaluruTotalStock ?? 0, icon: MapPin, color: 'text-orange-600' },
-    { id: 'low_stock', title: 'Low Stock Items', value: inv.lowStockCount ?? 0, icon: AlertTriangle, color: 'text-amber-600' },
-    { id: 'out_of_stock', title: 'Out of Stock', value: inv.outOfStockCount ?? 0, icon: XCircle, color: 'text-rose-600' },
+    { id: 'ALL', title: 'Total Spare Parts', value: inv.totalSpareParts ?? 0, icon: Package, color: 'text-blue-600' },
+    { id: 'SERIALIZED', title: 'Serialized Parts', value: inv.totalSerializedParts ?? 0, icon: Archive, color: 'text-indigo-600' },
+    { id: 'NON_SERIALIZED', title: 'Non-Serialized', value: inv.totalNonSerializedParts ?? 0, icon: Layers, color: 'text-purple-600' },
+    { id: 'OEM', title: 'Total OEMs', value: inv.totalOEMs ?? 0, icon: Cpu, color: 'text-cyan-600' },
+    { id: 'DELHI', title: 'Delhi Store Stock', value: inv.delhiTotalStock ?? 0, icon: MapPin, color: 'text-emerald-600' },
+    { id: 'BENGALURU', title: 'Bengaluru Stock', value: inv.bengaluruTotalStock ?? 0, icon: MapPin, color: 'text-orange-600' },
+    { id: 'LOW_STOCK', title: 'Low Stock Items', value: inv.lowStockCount ?? 0, icon: AlertTriangle, color: 'text-amber-600' },
+    { id: 'OUT_OF_STOCK', title: 'Out of Stock', value: inv.outOfStockCount ?? 0, icon: XCircle, color: 'text-rose-600' },
   ];
 
-  // Filter items based on selected card filter & search input
-  const allItems = inventoryItemsData || [];
-  const filteredItems = allItems.filter((item: any) => {
-    // Text search matching
+  // Filter items based on selected card filter & search input using useMemo
+  const displayedItems = useMemo(() => {
+    if (!inventoryItemsData || !Array.isArray(inventoryItemsData)) return [];
+    let items = [...inventoryItemsData];
+
+    switch (selectedFilter) {
+      case 'SERIALIZED':
+        items = items.filter((i: any) => i.is_serialized || i.isSerialized);
+        break;
+      case 'NON_SERIALIZED':
+        items = items.filter((i: any) => !i.is_serialized && !i.isSerialized);
+        break;
+      case 'DELHI':
+        items = items.filter((i: any) =>
+          (i.store || i.location?.name || i.location || '').toLowerCase().includes('delhi')
+        );
+        break;
+      case 'BENGALURU':
+        items = items.filter((i: any) =>
+          (i.store || i.location?.name || i.location || '').toLowerCase().includes('bengaluru')
+        );
+        break;
+      case 'LOW_STOCK':
+        items = items.filter(
+          (i: any) =>
+            Number(i.availableQuantity ?? i.quantity) <= Number(i.minStock || i.min_stock || 5) &&
+            Number(i.availableQuantity ?? i.quantity) > 0
+        );
+        break;
+      case 'OUT_OF_STOCK':
+        items = items.filter((i: any) => Number(i.availableQuantity ?? i.quantity) === 0);
+        break;
+      case 'OEM':
+        items.sort((a: any, b: any) => (a.oem?.name || '').localeCompare(b.oem?.name || ''));
+        break;
+      case 'ALL':
+      default:
+        break;
+    }
+
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      const matchText =
-        item.productName?.toLowerCase().includes(q) ||
-        item.partCode?.toLowerCase().includes(q) ||
-        item.serialNumber?.toLowerCase().includes(q) ||
-        item.oem?.name?.toLowerCase().includes(q) ||
-        item.spareId?.toLowerCase().includes(q);
-      if (!matchText) return false;
+      items = items.filter(
+        (i: any) =>
+          i.productName?.toLowerCase().includes(q) ||
+          i.partCode?.toLowerCase().includes(q) ||
+          i.serialNumber?.toLowerCase().includes(q) ||
+          i.oem?.name?.toLowerCase().includes(q) ||
+          i.spareId?.toLowerCase().includes(q)
+      );
     }
 
-    // Card filter selection
-    switch (selectedCardFilter) {
-      case 'serialized':
-        return item.isSerialized === true;
-      case 'non_serialized':
-        return item.isSerialized === false;
-      case 'delhi':
-        return item.store === 'Delhi';
-      case 'bengaluru':
-        return item.store === 'Bengaluru';
-      case 'low_stock':
-        return item.availableQuantity <= (item.minStock || 5) && item.availableQuantity > 0;
-      case 'out_of_stock':
-        return item.availableQuantity === 0 || item.quantity === 0;
-      case 'oems':
-        return true;
-      case 'all':
-      default:
-        return true;
-    }
-  });
+    return items;
+  }, [inventoryItemsData, selectedFilter, searchQuery]);
 
-  const activeCardObj = topSummaryCards.find((c) => c.id === selectedCardFilter) || topSummaryCards[0];
+  const activeCardObj = topSummaryCards.find((c) => c.id === selectedFilter) || topSummaryCards[0];
 
   return (
     <Layout title="Dashboard & Overview">
@@ -164,8 +182,8 @@ export const DashboardPage: React.FC = () => {
             value={card.value}
             icon={card.icon}
             color={card.color}
-            isActive={selectedCardFilter === card.id}
-            onClick={() => setSelectedCardFilter(card.id)}
+            isActive={selectedFilter === card.id}
+            onClick={() => setSelectedFilter(card.id)}
           />
         ))}
       </div>
@@ -180,10 +198,10 @@ export const DashboardPage: React.FC = () => {
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="font-extrabold text-slate-900 text-sm">
-                  Drill-Down Detail View: <span className="text-indigo-600 font-black">{activeCardObj.title}</span>
+                  Showing results for: <span className="text-indigo-600 font-black">{activeCardObj.title}</span>
                 </h3>
                 <span className="text-xs bg-indigo-100 text-indigo-800 font-extrabold px-2.5 py-0.5 rounded-full border border-indigo-200">
-                  {filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'}
+                  {displayedItems.length} {displayedItems.length === 1 ? 'item' : 'items'}
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 font-medium mt-0.5">
@@ -205,17 +223,17 @@ export const DashboardPage: React.FC = () => {
               />
             </div>
 
-            {/* Clear Filter / Show All Button */}
-            {selectedCardFilter !== 'all' && (
+            {/* Reset View Button */}
+            {selectedFilter !== 'ALL' && (
               <button
                 onClick={() => {
-                  setSelectedCardFilter('all');
+                  setSelectedFilter('ALL');
                   setSearchQuery('');
                 }}
                 className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1.5 border border-slate-300 transition-colors shrink-0 shadow-2xs"
               >
                 <XCircle className="w-3.5 h-3.5 text-slate-500" />
-                Clear Filter / Show All
+                Reset View
               </button>
             )}
           </div>
@@ -243,7 +261,7 @@ export const DashboardPage: React.FC = () => {
                     Loading drill-down data...
                   </td>
                 </tr>
-              ) : filteredItems.length === 0 ? (
+              ) : displayedItems.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="p-8 text-center text-slate-500 font-semibold">
                     <Package className="w-8 h-8 mx-auto mb-2 text-slate-300" />
@@ -251,7 +269,7 @@ export const DashboardPage: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                filteredItems.slice(0, 10).map((item: any) => (
+                displayedItems.slice(0, 15).map((item: any) => (
                   <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
                     <td className="p-3 font-bold text-slate-900">
                       <div>{item.productName}</div>
@@ -274,13 +292,13 @@ export const DashboardPage: React.FC = () => {
                       )}
                     </td>
                     <td className="p-3 font-semibold text-slate-800">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold border ${item.store === 'Delhi' ? 'bg-blue-50 text-blue-800 border-blue-200' : 'bg-orange-50 text-orange-800 border-orange-200'}`}>
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold border ${(item.store || item.location?.name || '').includes('Delhi') ? 'bg-blue-50 text-blue-800 border-blue-200' : 'bg-orange-50 text-orange-800 border-orange-200'}`}>
                         <MapPin className="w-3 h-3" />
-                        {item.store || 'Delhi'}
+                        {item.store || item.location?.name || 'Delhi'}
                       </span>
                     </td>
                     <td className="p-3 font-extrabold text-slate-900">
-                      {item.availableQuantity} / {item.quantity} {item.unit || 'PCS'}
+                      {item.availableQuantity ?? item.quantity} / {item.quantity} {item.unit || 'PCS'}
                     </td>
                     <td className="p-3">
                       <Badge variant={item.status === 'AVAILABLE' ? 'success' : item.status === 'RESERVED' ? 'warning' : 'danger'}>
@@ -300,13 +318,13 @@ export const DashboardPage: React.FC = () => {
               )}
             </tbody>
           </table>
-          {filteredItems.length > 10 && (
+          {displayedItems.length > 15 && (
             <div className="p-3 bg-slate-50 border-t border-slate-200 text-center">
               <button
                 onClick={() => navigate('/inventory')}
                 className="text-xs font-bold text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-1"
               >
-                View all {filteredItems.length} items in Inventory List <ChevronRight className="w-3.5 h-3.5" />
+                View all {displayedItems.length} items in Inventory List <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
           )}

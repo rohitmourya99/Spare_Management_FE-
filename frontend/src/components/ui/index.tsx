@@ -224,23 +224,34 @@ export interface StatCardProps {
 export const StatCard: React.FC<StatCardProps> = ({ title, value, icon: Icon, color, trend, onClick, isActive }) => {
   return (
     <div
-      className={`bg-white rounded-2xl p-4 border transition-all duration-200 hover:-translate-y-1 hover:border-indigo-500 hover:shadow-xl ${
+      role="button"
+      tabIndex={0}
+      className={`bg-white rounded-2xl p-4 border transition-all duration-200 hover:-translate-y-1 hover:border-indigo-500 hover:shadow-xl cursor-pointer select-none pointer-events-auto ${
         isActive
-          ? 'ring-2 ring-indigo-500 border-indigo-500 bg-indigo-50/30 shadow-lg'
+          ? 'border-2 border-indigo-600 bg-indigo-50/40 ring-2 ring-indigo-500/20 shadow-lg font-black'
           : 'border-slate-200/90'
-      } ${onClick ? 'cursor-pointer' : ''}`}
+      }`}
       style={{
         boxShadow: '0 4px 18px -2px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.03), inset 0 1px 0 0 rgba(255, 255, 255, 0.8)',
       }}
-      onClick={onClick}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (onClick) onClick();
+      }}
+      onKeyDown={(e) => {
+        if ((e.key === 'Enter' || e.key === ' ') && onClick) {
+          e.preventDefault();
+          onClick();
+        }
+      }}
     >
-      <div className="flex items-start justify-between mb-2.5">
-        <p className="text-[11px] font-bold text-slate-600 leading-tight max-w-[80%]">{title}</p>
-        <div className="w-8 h-8 rounded-xl bg-gradient-to-b from-slate-50 to-slate-100 flex items-center justify-center shrink-0 border border-slate-200/80 shadow-inner">
-          <Icon className={`w-4 h-4 ${color}`} />
+      <div className="flex items-start justify-between mb-2.5 pointer-events-none">
+        <p className="text-[11px] font-bold text-slate-600 leading-tight max-w-[80%] pointer-events-none">{title}</p>
+        <div className="w-8 h-8 rounded-xl bg-gradient-to-b from-slate-50 to-slate-100 flex items-center justify-center shrink-0 border border-slate-200/80 shadow-inner pointer-events-none">
+          <Icon className={`w-4 h-4 ${color} pointer-events-none`} />
         </div>
       </div>
-      <p className={`text-2xl font-black ${color} tracking-tight leading-none`}>
+      <p className={`text-2xl font-black ${color} tracking-tight leading-none pointer-events-none`}>
         {typeof value === 'number' ? value.toLocaleString('en-IN') : value}
       </p>
       {trend && (

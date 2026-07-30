@@ -54,7 +54,22 @@ export class DispatchService {
       prisma.dispatch.count({ where }),
     ]);
 
-    return { dispatches, pagination: buildPagination(page, limit, total) };
+    // Map originalSerialNumber from remarks or inventoryItem for immutability
+    const mappedDispatches = dispatches.map((d) => {
+      let originalSerial = d.inventoryItem?.serialNumber || null;
+      if (d.remarks && d.remarks.includes('[Dispatched SN:')) {
+        const match = d.remarks.match(/\[Dispatched SN:\s*([^\]]+)\]/);
+        if (match && match[1]) {
+          originalSerial = match[1].trim();
+        }
+      }
+      return {
+        ...d,
+        originalSerialNumber: originalSerial,
+      };
+    });
+
+    return { dispatches: mappedDispatches, pagination: buildPagination(page, limit, total) };
   }
 
   async getById(id: string) {
@@ -69,7 +84,19 @@ export class DispatchService {
       },
     });
     if (!dispatch) throw new AppError(404, 'Dispatch not found');
-    return dispatch;
+
+    let originalSerial = dispatch.inventoryItem?.serialNumber || null;
+    if (dispatch.remarks && dispatch.remarks.includes('[Dispatched SN:')) {
+      const match = dispatch.remarks.match(/\[Dispatched SN:\s*([^\]]+)\]/);
+      if (match && match[1]) {
+        originalSerial = match[1].trim();
+      }
+    }
+
+    return {
+      ...dispatch,
+      originalSerialNumber: originalSerial,
+    };
   }
 
   async create(data: CreateDispatchDto, userId: string) {
@@ -90,9 +117,6 @@ export class DispatchService {
     const dispatchNo = `DS-${new Date().getFullYear()}-${String(count + 1).padStart(5, '0')}`;
 
     const newAvail = item.availableQuantity - qtyToDispatch;
-    // When all stock is dispatched, mark as RESERVED (not DISPATCHED).
-    // RESERVED means: part is at a site, slot is waiting for OEM replacement.
-    // User can manually move to DISPATCHED via inventory status dropdown if needed.
     const newStatus = newAvail <= 0 ? 'RESERVED' : item.status;
 
     // Capture exact live real-time timestamp (current date and time of dispatch)
@@ -106,6 +130,10 @@ export class DispatchService {
       }
     }
 
+    // Lock original serial number permanently in remarks
+    const originalSerial = item.serialNumber || 'Bulk';
+    const lockedRemarks = `[Dispatched SN: ${originalSerial}]${data.remarks ? ' ' + data.remarks : ''}`;
+
     // Transaction to create dispatch & update inventory stock & record movement
     const [dispatch] = await prisma.$transaction([
       prisma.dispatch.create({
@@ -118,14 +146,14 @@ export class DispatchService {
           trackingNo: data.trackingNo,
           dispatchDate: dispatchTimestamp,
           expectedDelivery: data.expectedDelivery ? new Date(data.expectedDelivery) : null,
-          remarks: data.remarks,
+          remarks: lockedRemarks,
           status: DispatchStatus.DISPATCHED,
           createdById: userId,
           approvedById: userId,
           approvedAt: now,
         },
         include: {
-          inventoryItem: { select: { spareId: true, productName: true } },
+          inventoryItem: { select: { spareId: true, productName: true, serialNumber: true } },
           site: { select: { siteName: true } },
         },
       }),

@@ -34,6 +34,7 @@ interface OemReceiptForm {
   oemId: string;
   partCode: string;
   serialNumber: string;
+  originalSerialNumber?: string;
   store: 'Delhi' | 'Bengaluru';
   remarks?: string;
 }
@@ -43,6 +44,7 @@ const defaultOemForm = (): OemReceiptForm => ({
   oemId: '',
   partCode: '',
   serialNumber: '',
+  originalSerialNumber: '',
   store: 'Delhi',
   remarks: '',
 });
@@ -543,7 +545,7 @@ export const PickupListPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="block text-xs font-bold text-slate-800 mb-1.5">Part Code</label>
               <input type="text" placeholder="e.g. N9K-C93108TC-EX"
@@ -551,7 +553,13 @@ export const PickupListPage: React.FC = () => {
                 className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 font-mono font-bold focus:outline-none focus:border-indigo-600" />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-800 mb-1.5">Serial Number</label>
+              <label className="block text-xs font-bold text-slate-800 mb-1.5">Original / Faulty Serial No.</label>
+              <input type="text" placeholder="e.g. SN-FAULTY-1002"
+                value={oemForm.originalSerialNumber} onChange={(e) => setOemForm(f => ({ ...f, originalSerialNumber: e.target.value }))}
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 font-mono font-bold focus:outline-none focus:border-indigo-600" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-1.5">New Replacement Serial No. *</label>
               <input type="text" placeholder="e.g. FOC2411L0AB"
                 value={oemForm.serialNumber} onChange={(e) => setOemForm(f => ({ ...f, serialNumber: e.target.value }))}
                 className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 font-mono font-bold focus:outline-none focus:border-indigo-600" />

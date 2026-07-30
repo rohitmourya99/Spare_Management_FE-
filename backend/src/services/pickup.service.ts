@@ -256,17 +256,32 @@ export class PickupService {
       });
     }
 
-    // Log the inventory movement as a RECEIPT
+    const faultySerial = (data as any).originalSerialNumber || (existingMatch ? existingMatch.serialNumber : null) || 'N/A';
+    const newSerial = data.serialNumber ? data.serialNumber.trim() : 'N/A';
+    const oemName = newItem.oem?.name || 'OEM';
+
+    // Log detailed audit history trace
+    await prisma.activityLog.create({
+      data: {
+        userId,
+        action: 'OEM_REPLACEMENT_RECEIPT',
+        entity: 'Pickup',
+        entityId: newItem.id,
+        entityLabel: `OEM Replacement Trace — OEM: ${oemName} | Part: ${data.productName} | Original SN: ${faultySerial} -> New SN: ${newSerial} | Date: ${new Date().toISOString()} | Location: ${data.store}`,
+      },
+    });
+
+    // Log the inventory movement as a RECEIPT with replacement trace remarks
     await prisma.inventoryMovement.create({
       data: {
         inventoryItemId: newItem.id,
         type: 'RECEIPT',
         quantity: qty,
-        previousStock: 0,
-        newStock: qty,
+        previousStock: existingMatch ? existingMatch.availableQuantity : 0,
+        newStock: newItem.availableQuantity,
         referenceId: newItem.spareId || 'OEM-RECEIPT',
         performedById: userId,
-        remarks: `OEM Replacement received — SN: ${data.serialNumber || 'N/A'} | Store: ${data.store}`,
+        remarks: `[REPLACEMENT HISTORY TRACE] OEM: ${oemName} | Part: ${data.productName} (${data.partCode || 'N/A'}) | Faulty/Orig SN: ${faultySerial} | New Replacement SN: ${newSerial} | Date: ${new Date().toISOString()} | Location: ${data.store}`,
       },
     });
 

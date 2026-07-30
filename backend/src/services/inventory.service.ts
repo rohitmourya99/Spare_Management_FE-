@@ -457,7 +457,7 @@ export class InventoryService {
 
   /**
    * Replace serial number in-place on an existing inventory item
-   * (Matches by itemId OR OEM + Part Name / SKU, resets status to AVAILABLE, and syncs stock)
+   * (Matches by itemId OR OEM + Part Name / SKU, resets status to AVAILABLE, and syncs stock in-place)
    */
   async replaceSerialInPlace(
     params: {
@@ -466,6 +466,7 @@ export class InventoryService {
       partCode?: string;
       oemId?: string;
       serialNumber: string;
+      originalSerialNumber?: string;
       remarks?: string;
     },
     userId: string
@@ -503,6 +504,9 @@ export class InventoryService {
       throw new AppError(404, 'Target inventory item not found to replace serial number');
     }
 
+    const faultySerial = params.originalSerialNumber || item.serialNumber || 'N/A';
+    const newSerial = params.serialNumber.trim();
+    const oemName = item.oem?.name || 'OEM';
     const previousStock = item.availableQuantity;
     const newStock = item.quantity > 0 ? item.quantity : 1;
 
@@ -510,11 +514,11 @@ export class InventoryService {
     const updated = await prisma.inventoryItem.update({
       where: { id: item.id },
       data: {
-        serialNumber: params.serialNumber.trim(),
+        serialNumber: newSerial,
         isSerialized: true,
         status: 'AVAILABLE',
         availableQuantity: newStock,
-        remarks: params.remarks || `Replacement serial number updated: ${params.serialNumber.trim()}`,
+        remarks: params.remarks || `Replacement serial number updated in-place: ${newSerial} (Original: ${faultySerial})`,
         updatedById: userId,
       },
       include: {
@@ -524,7 +528,7 @@ export class InventoryService {
       },
     });
 
-    // Record movement log on the item
+    // Record detailed replacement audit movement log
     await prisma.inventoryMovement.create({
       data: {
         inventoryItemId: item.id,
@@ -533,17 +537,17 @@ export class InventoryService {
         previousStock,
         newStock,
         performedById: userId,
-        remarks: `Replacement serial updated in-place: ${params.serialNumber.trim()}`,
+        remarks: `[REPLACEMENT HISTORY TRACE] OEM: ${oemName} | Part: ${item.productName} | Faulty/Orig SN: ${faultySerial} | New Replacement SN: ${newSerial} | Date: ${new Date().toISOString()} | Location: ${item.store || item.location?.name || 'Main Store'}`,
       },
     });
 
     await prisma.activityLog.create({
       data: {
         userId,
-        action: 'UPDATE',
+        action: 'REPLACEMENT_RECEIPT',
         entity: 'InventoryItem',
         entityId: item.id,
-        entityLabel: `${item.spareId} — Serial Replacement (${params.serialNumber.trim()})`,
+        entityLabel: `OEM Replacement Trace — OEM: ${oemName} | Part: ${item.productName} | Original SN: ${faultySerial} -> New SN: ${newSerial} | Store: ${item.store || 'Main Store'}`,
       },
     });
 

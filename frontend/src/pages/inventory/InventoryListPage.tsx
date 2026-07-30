@@ -143,6 +143,7 @@ export const InventoryListPage: React.FC = () => {
         partCode: baseItem.partCode,
         oemId: baseItem.oemId,
         serialNumber: replacementSerial.trim(),
+        originalSerialNumber: baseItem.serialNumber || 'N/A',
         remarks: `Replacement serial number registered for ${baseItem.spareId}`,
       };
       const res = await api.post('/inventory/replace-serial', payload);

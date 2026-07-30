@@ -216,11 +216,11 @@ export const DispatchListPage: React.FC = () => {
                         </p>
                       </td>
 
-                      {/* Serial Number */}
+                      {/* Serial Number (Locked Dispatched Serial) */}
                       <td className="p-3.5 font-mono text-xs whitespace-nowrap">
-                        {d.inventoryItem?.serialNumber ? (
+                        {(d as any).originalSerialNumber || d.inventoryItem?.serialNumber ? (
                           <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded border border-indigo-200 font-bold">
-                            {d.inventoryItem?.serialNumber}
+                            {(d as any).originalSerialNumber || d.inventoryItem?.serialNumber}
                           </span>
                         ) : (
                           <span className="text-slate-600 italic text-[11px] bg-slate-100 px-2 py-0.5 rounded border border-slate-200 font-medium">

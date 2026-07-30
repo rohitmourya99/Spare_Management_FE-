@@ -19,6 +19,9 @@ export class AuthService {
 
     logger.info(`Attempting login for: ${inputClean}`);
 
+    // Automatically ensure default accounts exist in database if missing
+    await this.ensureDefaultUsersExist();
+
     // Map common username handles to primary system emails
     const aliasMap: Record<string, string> = {
       admin: 'admin@proactivedata.in',
@@ -26,15 +29,16 @@ export class AuthService {
       inventory: 'inventory@proactivedata.in',
       engineer: 'engineer@proactivedata.in',
       viewer: 'viewer@proactivedata.in',
+      rohit: 'rohit@pro.com',
     };
     const targetEmail = aliasMap[inputClean] || inputClean;
 
-    const user = await prisma.user.findFirst({
+    let user = await prisma.user.findFirst({
       where: {
         OR: [
-          { email: { equals: targetEmail } },
-          { email: { equals: inputClean } },
-          { name: { equals: inputClean } },
+          { email: { equals: targetEmail, mode: 'insensitive' } },
+          { email: { equals: inputClean, mode: 'insensitive' } },
+          { name: { equals: inputClean, mode: 'insensitive' } },
         ],
       },
     });
@@ -252,6 +256,42 @@ export class AuthService {
 
     if (!user) throw new AppError(404, 'User not found');
     return user;
+  }
+
+  /**
+   * Helper: Guarantee default system accounts exist in database
+   */
+  private async ensureDefaultUsersExist() {
+    try {
+      const defaultAccounts = [
+        { name: 'Super Admin', email: 'admin@proactivedata.in', pass: 'Admin@123', role: 'SUPER_ADMIN' },
+        { name: 'Rohit Mourya', email: 'rohit@pro.com', pass: 'Rohit@123', role: 'SUPER_ADMIN' },
+        { name: 'Inventory Admin', email: 'inventory@proactivedata.in', pass: 'Inv@123', role: 'INVENTORY_ADMIN' },
+        { name: 'Field Engineer', email: 'engineer@proactivedata.in', pass: 'Eng@123', role: 'ENGINEER' },
+        { name: 'Read Only User', email: 'viewer@proactivedata.in', pass: 'View@123', role: 'READ_ONLY' },
+      ];
+
+      for (const acc of defaultAccounts) {
+        const existing = await prisma.user.findFirst({
+          where: { email: { equals: acc.email, mode: 'insensitive' } },
+        });
+        if (!existing) {
+          const hashedPassword = await bcrypt.hash(acc.pass, 10);
+          await prisma.user.create({
+            data: {
+              name: acc.name,
+              email: acc.email,
+              password: hashedPassword,
+              role: acc.role as UserRole,
+              isActive: true,
+            },
+          });
+          logger.info(`Initialized missing system user: ${acc.email}`);
+        }
+      }
+    } catch (err) {
+      logger.warn('User initialization notice:', err);
+    }
   }
 }
 

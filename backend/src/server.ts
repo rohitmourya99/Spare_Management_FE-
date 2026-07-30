@@ -15,6 +15,10 @@ async function startServer() {
     logger.info(`📡 API endpoint: http://localhost:${env.PORT}/api`);
   });
 
+  // Enable persistent HTTP connections with extended Keep-Alive timeouts
+  server.keepAliveTimeout = 65000;
+  server.headersTimeout = 66000;
+
   const gracefulShutdown = async (signal: string) => {
     logger.info(`Received ${signal}. Shutting down gracefully...`);
     server.close(async () => {

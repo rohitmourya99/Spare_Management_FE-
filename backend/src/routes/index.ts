@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
+import { prisma } from '../config/database';
 import { authController } from '../controllers/auth.controller';
 import { inventoryController } from '../controllers/inventory.controller';
 import {
@@ -16,6 +17,18 @@ import { UserRole } from '../types';
 
 const upload = multer({ storage: multer.memoryStorage() });
 const router = Router();
+
+// ==============================================
+// HEALTH CHECK ROUTE (Public)
+// ==============================================
+router.get('/health', async (_req, res, next) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: 'ok' });
+  } catch (error) {
+    next(error);
+  }
+});
 
 // ==============================================
 // AUTH ROUTES (Public)

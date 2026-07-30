@@ -12,6 +12,13 @@ import { logger } from './config/logger';
 
 const app = express();
 
+// Express Keep-Alive headers for persistent HTTP connections
+app.use((_req, res, next) => {
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Keep-Alive', 'timeout=65');
+  next();
+});
+
 // Security headers
 app.use(helmet({
   contentSecurityPolicy: false, // allow images/data URLs

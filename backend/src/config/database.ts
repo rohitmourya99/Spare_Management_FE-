@@ -33,8 +33,8 @@ prisma.$on('error' as never, (e: { message: string }) => {
 
 export async function connectDatabase(): Promise<void> {
   if (!process.env.DATABASE_URL) {
-    logger.info('ℹ️ DATABASE_URL environment variable is missing. Defaulting to zero-config SQLite (file:./dev.db)...');
-    process.env.DATABASE_URL = 'file:./dev.db';
+    logger.info('ℹ️ DATABASE_URL environment variable is missing. Defaulting to PostgreSQL...');
+    process.env.DATABASE_URL = 'postgresql://spare_admin:Spare@Admin123@localhost:5432/spare_inventory_db';
   }
 
   try {

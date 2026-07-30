@@ -19,20 +19,15 @@ function getRowValue(row: Record<string, any>, ...possibleKeys: string[]): any {
 }
 
 async function main() {
-  console.log('🌱 Wiping existing data & performing clean seed with exact Excel serial numbers...');
+  const existingUsers = await prisma.user.count();
+  const existingItems = await prisma.inventoryItem.count();
 
-  // 1. Wipe transactional and master data
-  await prisma.comment.deleteMany();
-  await prisma.inventoryMovement.deleteMany();
-  await prisma.dispatch.deleteMany();
-  await prisma.pickup.deleteMany();
-  await prisma.rMA.deleteMany();
-  await prisma.activityLog.deleteMany();
-  await prisma.inventoryItem.deleteMany();
-  await prisma.category.deleteMany();
-  await prisma.oEM.deleteMany();
-  await prisma.site.deleteMany();
-  console.log('🧹 Cleaned existing database records.');
+  if (existingUsers > 0 && existingItems > 0) {
+    console.log('ℹ️ Database already contains records. Skipping seed script to protect persistent user data.');
+    return;
+  }
+
+  console.log('🌱 Seeding database...');
 
   // 2. Users
   const hashedAdmin = await bcrypt.hash('Admin@123', 10);

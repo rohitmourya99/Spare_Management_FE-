@@ -35,11 +35,17 @@ logs/
 *.log.*
 
 # ===========================
-# Database
+# Database (PERSISTENT - NEVER COMMIT TO GIT)
 # ===========================
 *.sqlite
 *.sqlite3
 *.db
+*.db-journal
+dev.db
+prisma/dev.db
+backend/prisma/dev.db
+backend/dev.db
+data/db.json
 
 # ===========================
 # TypeScript

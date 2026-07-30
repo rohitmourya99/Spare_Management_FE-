@@ -30,7 +30,7 @@ export async function ensureDatabaseSeeded(): Promise<void> {
 
     const superAdmin = await prisma.user.upsert({
       where: { email: 'admin@proactivedata.in' },
-      update: { password: hashedAdmin, isActive: true },
+      update: {},
       create: {
         name: 'Super Admin',
         email: 'admin@proactivedata.in',
@@ -43,7 +43,7 @@ export async function ensureDatabaseSeeded(): Promise<void> {
 
     await prisma.user.upsert({
       where: { email: 'inventory@proactivedata.in' },
-      update: { password: hashedInv, isActive: true },
+      update: {},
       create: {
         name: 'Inventory Admin',
         email: 'inventory@proactivedata.in',
@@ -55,7 +55,7 @@ export async function ensureDatabaseSeeded(): Promise<void> {
 
     await prisma.user.upsert({
       where: { email: 'engineer@proactivedata.in' },
-      update: { password: hashedEng, isActive: true },
+      update: {},
       create: {
         name: 'Field Engineer',
         email: 'engineer@proactivedata.in',
@@ -67,7 +67,7 @@ export async function ensureDatabaseSeeded(): Promise<void> {
 
     await prisma.user.upsert({
       where: { email: 'viewer@proactivedata.in' },
-      update: { password: hashedView, isActive: true },
+      update: {},
       create: {
         name: 'Read Only User',
         email: 'viewer@proactivedata.in',

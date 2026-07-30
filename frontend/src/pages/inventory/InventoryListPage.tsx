@@ -43,6 +43,59 @@ export const InventoryListPage: React.FC = () => {
   const [replacementModalItem, setReplacementModalItem] = useState<InventoryItem | null>(null);
   const [replacementSerial, setReplacementSerial] = useState('');
 
+  // Add Spare Part Modal State
+  const [addItemModalOpen, setAddItemModalOpen] = useState(false);
+  const [newItemForm, setNewItemForm] = useState({
+    productName: '',
+    partCode: '',
+    oemId: '',
+    categoryId: '',
+    store: 'Delhi',
+    quantity: 1,
+    unit: 'PCS',
+    serialNumber: '',
+    isSerialized: false,
+    rack: '',
+    bin: '',
+    condition: 'NEW',
+    warrantyStart: '',
+    warrantyEnd: '',
+    remarks: '',
+  });
+
+  const resetNewItemForm = () => {
+    setNewItemForm({
+      productName: '',
+      partCode: '',
+      oemId: '',
+      categoryId: '',
+      store: 'Delhi',
+      quantity: 1,
+      unit: 'PCS',
+      serialNumber: '',
+      isSerialized: false,
+      rack: '',
+      bin: '',
+      condition: 'NEW',
+      warrantyStart: '',
+      warrantyEnd: '',
+      remarks: '',
+    });
+  };
+
+  const createItemMutation = useMutation({
+    mutationFn: async (payload: typeof newItemForm) => {
+      const res = await api.post('/inventory', payload);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      setAddItemModalOpen(false);
+      resetNewItemForm();
+    },
+  });
+
   // Handle deep link ?action=import from Dashboard Quick Action
   useEffect(() => {
     if (searchParams.get('action') === 'import') {
@@ -210,7 +263,7 @@ export const InventoryListPage: React.FC = () => {
             <Button
               variant="primary"
               size="sm"
-              onClick={() => navigate('/inventory/new')}
+              onClick={() => setAddItemModalOpen(true)}
               icon={<Plus className="w-4 h-4" />}
             >
               Add Item
@@ -666,6 +719,159 @@ export const InventoryListPage: React.FC = () => {
             </Button>
           </div>
         )}
+      </Modal>
+
+      {/* Add New Inventory Spare Item Modal */}
+      <Modal isOpen={addItemModalOpen} onClose={() => setAddItemModalOpen(false)} title="Add New Spare Part" maxWidth="lg">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            createItemMutation.mutate(newItemForm);
+          }}
+          className="space-y-4"
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-1">Product Name *</label>
+              <input
+                type="text"
+                required
+                value={newItemForm.productName}
+                onChange={(e) => setNewItemForm({ ...newItemForm, productName: e.target.value })}
+                placeholder="e.g. Cisco Catalyst 3850 Switch"
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 font-bold focus:outline-none focus:border-indigo-600"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-1">Part Code / SKU / Number</label>
+              <input
+                type="text"
+                value={newItemForm.partCode}
+                onChange={(e) => setNewItemForm({ ...newItemForm, partCode: e.target.value })}
+                placeholder="e.g. WS-C3850-24P-S"
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 font-bold focus:outline-none focus:border-indigo-600"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-1">Store / Warehouse *</label>
+              <select
+                value={newItemForm.store}
+                onChange={(e) => setNewItemForm({ ...newItemForm, store: e.target.value })}
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 font-bold focus:outline-none focus:border-indigo-600"
+              >
+                <option value="Delhi">Delhi Main Store</option>
+                <option value="Bengaluru">Bengaluru Regional Store</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-1">Quantity *</label>
+              <input
+                type="number"
+                min="1"
+                required
+                value={newItemForm.quantity}
+                onChange={(e) => setNewItemForm({ ...newItemForm, quantity: parseInt(e.target.value) || 1 })}
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 font-bold focus:outline-none focus:border-indigo-600"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-1">Serial Number</label>
+              <input
+                type="text"
+                value={newItemForm.serialNumber}
+                onChange={(e) => setNewItemForm({ ...newItemForm, serialNumber: e.target.value, isSerialized: Boolean(e.target.value.trim()) })}
+                placeholder="e.g. FOC2145L09Z"
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 font-mono font-bold focus:outline-none focus:border-indigo-600"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-1">Condition</label>
+              <select
+                value={newItemForm.condition}
+                onChange={(e) => setNewItemForm({ ...newItemForm, condition: e.target.value })}
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 font-bold focus:outline-none focus:border-indigo-600"
+              >
+                <option value="NEW">New</option>
+                <option value="REFURBISHED">Refurbished</option>
+                <option value="REPAIRED">Repaired</option>
+                <option value="USED">Used</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-1">Rack Location</label>
+              <input
+                type="text"
+                value={newItemForm.rack}
+                onChange={(e) => setNewItemForm({ ...newItemForm, rack: e.target.value })}
+                placeholder="e.g. RACK-A4"
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 font-bold focus:outline-none focus:border-indigo-600"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-1">Bin Location</label>
+              <input
+                type="text"
+                value={newItemForm.bin}
+                onChange={(e) => setNewItemForm({ ...newItemForm, bin: e.target.value })}
+                placeholder="e.g. BIN-02"
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 font-bold focus:outline-none focus:border-indigo-600"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-1">Warranty Start Date</label>
+              <input
+                type="date"
+                value={newItemForm.warrantyStart}
+                onChange={(e) => setNewItemForm({ ...newItemForm, warrantyStart: e.target.value })}
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 font-bold focus:outline-none focus:border-indigo-600"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-1">Warranty End Date</label>
+              <input
+                type="date"
+                value={newItemForm.warrantyEnd}
+                onChange={(e) => setNewItemForm({ ...newItemForm, warrantyEnd: e.target.value })}
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 font-bold focus:outline-none focus:border-indigo-600"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-800 mb-1">Remarks</label>
+            <textarea
+              rows={2}
+              value={newItemForm.remarks}
+              onChange={(e) => setNewItemForm({ ...newItemForm, remarks: e.target.value })}
+              placeholder="Additional specifications or spare part remarks..."
+              className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 font-medium focus:outline-none focus:border-indigo-600"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+            <Button variant="ghost" size="sm" type="button" onClick={() => setAddItemModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              type="submit"
+              isLoading={createItemMutation.isPending}
+              disabled={!newItemForm.productName.trim()}
+            >
+              Save Spare Part
+            </Button>
+          </div>
+        </form>
       </Modal>
     </Layout>
   );

@@ -23,8 +23,11 @@ app.use(cors({
   credentials: true,
 }));
 
-// Compression
-app.use(compression());
+// Compression for fast API payload transfers
+app.use(compression({
+  threshold: 512,
+  level: 6,
+}));
 
 // Body parser
 app.use(express.json({ limit: '10mb' }));

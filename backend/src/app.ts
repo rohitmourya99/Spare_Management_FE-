@@ -12,10 +12,23 @@ import { logger } from './config/logger';
 
 const app = express();
 
-// Express Keep-Alive headers for persistent HTTP connections
-app.use((_req, res, next) => {
+// Custom CORS middleware: Guarantee Access-Control-Allow-Origin on all requests & OPTIONS preflight
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('Keep-Alive', 'timeout=65');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
   next();
 });
 
@@ -24,7 +37,7 @@ app.use(helmet({
   contentSecurityPolicy: false, // allow images/data URLs
 }));
 
-// Explicit CORS Configuration with Preflight Support
+// Explicit CORS Package Middleware
 const allowedOrigins = [
   'https://spare-management-fe.onrender.com',
   'https://spare-ims-frontend.onrender.com',
@@ -42,7 +55,7 @@ const corsOptions: cors.CorsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
 };
 
 app.use(cors(corsOptions));

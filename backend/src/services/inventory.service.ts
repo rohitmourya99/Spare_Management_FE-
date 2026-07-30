@@ -153,6 +153,24 @@ export class InventoryService {
     const prefix = data.store === 'Bengaluru' ? 'PDS-BLR' : 'PDS-DEL';
     const spareId = `${prefix}-${new Date().getFullYear()}-${String(count + 1).padStart(5, '0')}`;
 
+    let targetOemId = data.oemId;
+    if (!targetOemId) {
+      let firstOem = await prisma.oEM.findFirst({ where: { isActive: true } });
+      if (!firstOem) {
+        firstOem = await prisma.oEM.create({ data: { name: 'Generic OEM' } });
+      }
+      targetOemId = firstOem.id;
+    }
+
+    let targetCategoryId = data.categoryId;
+    if (!targetCategoryId) {
+      let firstCat = await prisma.category.findFirst({ where: { oemId: targetOemId, isActive: true } });
+      if (!firstCat) {
+        firstCat = await prisma.category.create({ data: { name: 'General', oemId: targetOemId } });
+      }
+      targetCategoryId = firstCat.id;
+    }
+
     const qrCode = await generateQRCode(spareId);
     const isSerialized = Boolean(data.serialNumber && data.serialNumber.trim() !== '');
     const quantity = isSerialized ? 1 : (data.quantity || 1);
@@ -160,9 +178,9 @@ export class InventoryService {
     const item = await prisma.inventoryItem.create({
       data: {
         spareId,
-        oemId: data.oemId,
-        categoryId: data.categoryId,
-        productName: data.productName,
+        oemId: targetOemId,
+        categoryId: targetCategoryId,
+        productName: data.productName || 'Unnamed Spare Item',
         description: data.description,
         model: data.model,
         partId: data.partId,

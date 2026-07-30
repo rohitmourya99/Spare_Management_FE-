@@ -32,14 +32,16 @@ authRoutes.get('/me', authenticate, (req, res, next) => authController.getProfil
 // ==============================================
 const inventoryRoutes = Router();
 inventoryRoutes.use(authenticate);
+// Static / Specific Inventory Routes (Placed ABOVE dynamic routes)
 inventoryRoutes.get('/dashboard-stats', (req, res, next) => inventoryController.getDashboardStats(req, res).catch(next));
 inventoryRoutes.get('/', (req, res, next) => inventoryController.getAll(req, res).catch(next));
 inventoryRoutes.post('/import', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN), upload.single('file'), (req, res, next) => inventoryController.importExcel(req, res).catch(next));
 
-// Mandatory Comments Section
-inventoryRoutes.get('/:id/comments', (req, res, next) => inventoryController.getComments(req, res).catch(next));
-inventoryRoutes.post('/:id/comments', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.ENGINEER), (req, res, next) => inventoryController.addComment(req, res).catch(next));
-inventoryRoutes.put('/comments/:commentId', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.ENGINEER), (req, res, next) => inventoryController.updateComment(req, res).catch(next));
+// Manual Inventory Form & Draft Handlers (/new & /new/comments)
+inventoryRoutes.get('/new/comments', (req, res, next) => inventoryController.getComments(req, res).catch(next));
+inventoryRoutes.post('/new/comments', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.ENGINEER), (req, res, next) => inventoryController.addComment(req, res).catch(next));
+inventoryRoutes.get('/new', (req, res, next) => inventoryController.getById(req, res).catch(next));
+inventoryRoutes.post('/new', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.ENGINEER), (req, res, next) => inventoryController.create(req, res).catch(next));
 
 // Exports
 inventoryRoutes.get('/export/excel', (req, res, next) => inventoryController.exportExcel(req, res).catch(next));
@@ -53,8 +55,16 @@ inventoryRoutes.get('/categories', (req, res, next) => inventoryController.getCa
 inventoryRoutes.post('/categories', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN), (req, res, next) => inventoryController.createCategory(req, res).catch(next));
 inventoryRoutes.get('/locations', (req, res, next) => inventoryController.getLocations(req, res).catch(next));
 inventoryRoutes.post('/locations', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN), (req, res, next) => inventoryController.createLocation(req, res).catch(next));
+
+// Comments edit route
+inventoryRoutes.put('/comments/:commentId', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.ENGINEER), (req, res, next) => inventoryController.updateComment(req, res).catch(next));
+
+// Dynamic Parameter Routes (Placed LAST)
+inventoryRoutes.get('/:id/comments', (req, res, next) => inventoryController.getComments(req, res).catch(next));
+inventoryRoutes.post('/:id/comments', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.ENGINEER), (req, res, next) => inventoryController.addComment(req, res).catch(next));
+
 inventoryRoutes.get('/:id', (req, res, next) => inventoryController.getById(req, res).catch(next));
-inventoryRoutes.post('/', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN), (req, res, next) => inventoryController.create(req, res).catch(next));
+inventoryRoutes.post('/', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.ENGINEER), (req, res, next) => inventoryController.create(req, res).catch(next));
 inventoryRoutes.put('/:id', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN), (req, res, next) => inventoryController.update(req, res).catch(next));
 inventoryRoutes.delete('/:id', authorize(UserRole.SUPER_ADMIN), (req, res, next) => inventoryController.delete(req, res).catch(next));
 

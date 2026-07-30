@@ -14,6 +14,24 @@ export class InventoryController {
   }
 
   async getById(req: Request, res: Response): Promise<void> {
+    if (req.params.id === 'new') {
+      ApiResponse.success(res, {
+        id: 'new',
+        spareId: 'NEW-ITEM',
+        productName: 'New Inventory Spare Item',
+        status: 'AVAILABLE',
+        quantity: 1,
+        availableQuantity: 1,
+        isSerialized: true,
+        unit: 'Units',
+        store: 'Delhi',
+        movements: [],
+        dispatches: [],
+        pickups: [],
+        comments: [],
+      });
+      return;
+    }
     const item = await inventoryService.getById(req.params.id);
     ApiResponse.success(res, item);
   }
@@ -49,11 +67,19 @@ export class InventoryController {
 
   // Mandatory Spare Comments
   async getComments(req: Request, res: Response): Promise<void> {
+    if (req.params.id === 'new') {
+      ApiResponse.success(res, []);
+      return;
+    }
     const comments = await commentService.getByInventoryId(req.params.id);
     ApiResponse.success(res, comments);
   }
 
   async addComment(req: Request, res: Response): Promise<void> {
+    if (req.params.id === 'new') {
+      ApiResponse.success(res, [], 'Comment registered for draft item');
+      return;
+    }
     const { comment } = req.body;
     const newComment = await commentService.create(req.params.id, comment, req.user!.userId);
     ApiResponse.created(res, newComment, 'Comment added successfully');

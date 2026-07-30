@@ -73,83 +73,146 @@ export function exportInventoryToPDF(
     res.setHeader('Content-Disposition', `attachment; filename="${filename}.pdf"`);
     doc.pipe(res);
 
-    // Header
-    doc
-      .fontSize(18)
-      .fillColor('#1e293b')
-      .text('Proactive Data Systems Pvt. Ltd.', { align: 'center' });
+    const pageWidth = doc.page.width;
+    const margin = 40;
+    const tableWidth = pageWidth - margin * 2; // ~761.89
 
-    doc
-      .fontSize(13)
-      .fillColor('#334155')
-      .text(title, { align: 'center' });
-
-    doc
-      .fontSize(9)
-      .fillColor('#64748b')
-      .text(`Generated: ${format(new Date(), 'dd-MMM-yyyy HH:mm')}`, { align: 'center' });
-
-    doc.moveDown(1);
-    doc.moveTo(40, doc.y).lineTo(800, doc.y).strokeColor('#e2e8f0').stroke();
-    doc.moveDown(0.5);
-
-    // Table header
-    const headers = ['Spare ID', 'OEM', 'Product', 'Model', 'Serial No', 'Qty', 'Location', 'Status', 'Warranty End'];
-    const colWidths = [80, 70, 140, 90, 90, 35, 80, 70, 80];
-    let x = 40;
-    const headerY = doc.y;
-
-    headers.forEach((h, i) => {
-      doc
-        .fontSize(8)
-        .fillColor('#1e40af')
+    const drawHeader = (pdfDoc: PDFKit.PDFDocument, pageTitle: string) => {
+      pdfDoc
+        .fontSize(16)
+        .fillColor('#0F172A')
         .font('Helvetica-Bold')
-        .text(h, x, headerY, { width: colWidths[i] });
-      x += colWidths[i];
-    });
+        .text('Proactive Data Systems Pvt. Ltd.', margin, 40, { align: 'center', width: tableWidth });
 
-    doc.moveDown(0.3);
-    doc.moveTo(40, doc.y).lineTo(800, doc.y).strokeColor('#cbd5e1').stroke();
+      pdfDoc
+        .fontSize(11)
+        .fillColor('#334155')
+        .font('Helvetica-Bold')
+        .text(pageTitle, margin, 62, { align: 'center', width: tableWidth });
 
-    // Table rows
-    items.slice(0, 100).forEach((item, index) => {
-      if (doc.y > 520) doc.addPage();
-      const rowY = doc.y + 4;
-      x = 40;
+      pdfDoc
+        .fontSize(8)
+        .fillColor('#64748B')
+        .font('Helvetica')
+        .text(`Generated: ${format(new Date(), 'dd-MMM-yyyy HH:mm')}`, margin, 78, { align: 'center', width: tableWidth });
 
-      if (index % 2 === 0) {
-        doc.rect(40, rowY - 2, 760, 14).fillColor('#f8fafc').fill();
+      pdfDoc.moveTo(margin, 92).lineTo(margin + tableWidth, 92).strokeColor('#CBD5E1').lineWidth(1).stroke();
+    };
+
+    drawHeader(doc, title);
+
+    let currentY = 102;
+
+    if (!items || items.length === 0) {
+      doc
+        .fontSize(11)
+        .fillColor('#475569')
+        .font('Helvetica')
+        .text('No records found for this report.', margin, currentY + 20, { align: 'center', width: tableWidth });
+      doc.end();
+      return;
+    }
+
+    // Determine headers and row mapper
+    let headers: string[] = [];
+    let getRowValues: (item: any) => string[] = () => [];
+
+    const firstItem = items[0];
+    const keys = Object.keys(firstItem);
+    const isRawInventoryItem = 'spareId' in firstItem || 'productName' in firstItem;
+
+    if (!isRawInventoryItem && keys.length > 0) {
+      // Formatted report object (e.g. from getReportData)
+      headers = keys.slice(0, 10);
+      getRowValues = (item: any) => {
+        return headers.map((h) => {
+          const val = item[h];
+          if (val === null || val === undefined) return '-';
+          if (val instanceof Date) return format(val, 'dd-MMM-yyyy');
+          return String(val);
+        });
+      };
+    } else {
+      // Raw InventoryItem
+      headers = ['Spare ID', 'OEM', 'Product Name', 'Model', 'Serial No', 'Qty', 'Store / Loc', 'Status', 'Warranty End'];
+      getRowValues = (item: any) => [
+        item.spareId || item['Spare ID'] || '-',
+        item.oem?.name || item.oem || item['OEM'] || '-',
+        item.productName || item['Product Name'] || '-',
+        item.model || item['Model'] || '-',
+        item.serialNumber || item['Serial Number'] || 'N/A',
+        String(item.quantity ?? item['Quantity'] ?? item['Qty'] ?? 0),
+        item.location?.name || item.location || item.store || item['Store'] || '-',
+        item.status || item['Status'] || '-',
+        item.warrantyEnd ? format(new Date(item.warrantyEnd), 'dd-MMM-yyyy') : (item['Warranty End'] || '-'),
+      ];
+    }
+
+    // Calculate column widths
+    const colWidth = tableWidth / headers.length;
+    const colWidths = headers.map(() => colWidth);
+
+    const drawTableHeader = (startY: number) => {
+      let x = margin;
+      doc.rect(margin, startY, tableWidth, 20).fillColor('#0F172A').fill();
+
+      headers.forEach((h, i) => {
+        doc
+          .fontSize(8)
+          .fillColor('#FFFFFF')
+          .font('Helvetica-Bold')
+          .text(String(h).toUpperCase(), x + 4, startY + 5, {
+            width: colWidths[i] - 8,
+            height: 12,
+            lineBreak: false,
+          });
+        x += colWidths[i];
+      });
+      return startY + 22;
+    };
+
+    currentY = drawTableHeader(currentY);
+
+    // Draw rows
+    items.forEach((item, index) => {
+      if (currentY > 510) {
+        doc.addPage();
+        drawHeader(doc, title);
+        currentY = drawTableHeader(102);
       }
 
-      const row = [
-        item.spareId ?? '',
-        item.oem?.name ?? '',
-        item.productName ?? '',
-        item.model ?? '',
-        item.serialNumber ?? '-',
-        String(item.quantity ?? 0),
-        item.location?.name ?? '',
-        item.status ?? '',
-        item.warrantyEnd ? format(new Date(item.warrantyEnd), 'dd-MMM-yyyy') : '-',
-      ];
+      const rowValues = getRowValues(item);
+      let x = margin;
 
-      row.forEach((cell, i) => {
+      if (index % 2 === 1) {
+        doc.rect(margin, currentY, tableWidth, 18).fillColor('#F8FAFC').fill();
+      } else {
+        doc.rect(margin, currentY, tableWidth, 18).fillColor('#FFFFFF').fill();
+      }
+
+      rowValues.forEach((cell, i) => {
         doc
-          .fontSize(7)
-          .fillColor('#374151')
+          .fontSize(7.5)
+          .fillColor('#0F172A')
           .font('Helvetica')
-          .text(String(cell).substring(0, 25), x, rowY, { width: colWidths[i] });
+          .text(String(cell), x + 4, currentY + 4, {
+            width: colWidths[i] - 8,
+            height: 12,
+            lineBreak: false,
+          });
         x += colWidths[i];
       });
 
-      doc.moveDown(0.1);
+      doc.moveTo(margin, currentY + 18).lineTo(margin + tableWidth, currentY + 18).strokeColor('#E2E8F0').lineWidth(0.5).stroke();
+      currentY += 18;
     });
 
     // Footer
     doc
       .fontSize(8)
-      .fillColor('#94a3b8')
-      .text(`Total Records: ${items.length}`, 40, doc.page.height - 40);
+      .fillColor('#64748B')
+      .font('Helvetica')
+      .text(`Total Records: ${items.length}`, margin, doc.page.height - 35, { width: tableWidth });
 
     doc.end();
   } catch (error) {

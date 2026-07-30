@@ -171,6 +171,13 @@ model InventoryItem {
   barcode           String?
   isDeleted         Boolean   @default(false)
 
+  dispatchedToLocationId String?
+  dispatchedToRoomId     String?
+  replacedFaultySerialNo String?
+  dispatchDate           DateTime?
+  oemPickupDate          DateTime?
+  turnaroundDays         Int?
+
   // Relations
   dispatches   Dispatch[]
   pickups      Pickup[]
@@ -495,6 +502,7 @@ model ReplacementAuditLog {
   dispatchedById   String?
   dispatchedByName String?
   dispatchedBy     User?    @relation(fields: [dispatchedById], references: [id])
+  turnaroundDays   Int?
 
   createdAt DateTime @default(now())
 

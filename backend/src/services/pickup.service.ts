@@ -208,6 +208,14 @@ export class PickupService {
 
     let newItem;
     if (existingMatch) {
+      const dispatchDate = existingMatch.dispatchDate;
+      const oemPickupDate = new Date();
+      let turnaroundDays = undefined;
+      if (dispatchDate) {
+        const diffMs = oemPickupDate.getTime() - new Date(dispatchDate).getTime();
+        turnaroundDays = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+      }
+
       // In-Place Update on existing item (No duplicate entry created)
       newItem = await prisma.inventoryItem.update({
         where: { id: existingMatch.id },
@@ -215,7 +223,9 @@ export class PickupService {
           ...(data.serialNumber ? { serialNumber: data.serialNumber.trim(), isSerialized: true } : {}),
           status: 'AVAILABLE',
           availableQuantity: existingMatch.quantity > 0 ? existingMatch.quantity : (existingMatch.availableQuantity + qty),
-          remarks: data.remarks || `OEM replacement serial number updated in-place: ${data.serialNumber || 'N/A'}`,
+          oemPickupDate,
+          turnaroundDays,
+          remarks: data.remarks || `OEM replacement serial number updated in-place: ${data.serialNumber || 'N/A'} (Turnaround: ${turnaroundDays !== undefined ? turnaroundDays + ' days' : 'N/A'})`,
           updatedById: userId,
         },
         include: {

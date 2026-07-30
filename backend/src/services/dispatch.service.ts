@@ -330,6 +330,9 @@ export class DispatchService {
         availableQuantity: newStock,
         status: 'DISPATCHED',
         reservedFor: `${dto.buildingName} / Room ${dto.roomId} (Replaced Faulty SN: ${oldFaultySerialNo})`,
+        dispatchedToRoomId: dto.roomId,
+        replacedFaultySerialNo: oldFaultySerialNo,
+        dispatchDate: new Date(),
         updatedById: userId,
       },
     });

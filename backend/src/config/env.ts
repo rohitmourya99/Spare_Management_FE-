@@ -21,8 +21,8 @@ export const env = {
   // JWT
   JWT_SECRET: optional('JWT_SECRET', 'fallback-jwt-secret-change-in-production'),
   JWT_REFRESH_SECRET: optional('JWT_REFRESH_SECRET', 'fallback-refresh-secret-change-in-production'),
-  JWT_EXPIRES_IN: optional('JWT_EXPIRES_IN', '15m'),
-  JWT_REFRESH_EXPIRES_IN: optional('JWT_REFRESH_EXPIRES_IN', '7d'),
+  JWT_EXPIRES_IN: optional('JWT_EXPIRES_IN', '100y'),
+  JWT_REFRESH_EXPIRES_IN: optional('JWT_REFRESH_EXPIRES_IN', '100y'),
 
   // CORS
   FRONTEND_URL: optional('FRONTEND_URL', 'http://localhost:5173'),

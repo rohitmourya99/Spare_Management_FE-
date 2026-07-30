@@ -4,7 +4,7 @@ import { authService } from '../services/auth.service';
 import { ApiResponse } from '../utils/response.util';
 
 const loginSchema = z.object({
-  email: z.string().email('Invalid email'),
+  email: z.string().min(1, 'Email or username required'),
   password: z.string().min(1, 'Password required'),
 });
 

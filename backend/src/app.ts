@@ -17,9 +17,9 @@ app.use(helmet({
   contentSecurityPolicy: false, // allow images/data URLs
 }));
 
-// CORS
+// CORS - Flexible origin support for development & deployment
 app.use(cors({
-  origin: env.FRONTEND_URL,
+  origin: (_origin, callback) => callback(null, true),
   credentials: true,
 }));
 

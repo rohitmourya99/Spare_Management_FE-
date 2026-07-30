@@ -14,22 +14,38 @@ export class AuthService {
    * Login with email and password
    */
   async login(email: string, password: string, ipAddress?: string) {
-    const cleanEmail = email.toLowerCase().trim();
+    const inputClean = email.toLowerCase().trim();
     const cleanPassword = password.trim();
 
-    logger.info(`Attempting login for email: ${cleanEmail}`);
+    logger.info(`Attempting login for: ${inputClean}`);
 
-    const user = await prisma.user.findUnique({
-      where: { email: cleanEmail },
+    // Map common username handles to primary system emails
+    const aliasMap: Record<string, string> = {
+      admin: 'admin@proactivedata.in',
+      superadmin: 'admin@proactivedata.in',
+      inventory: 'inventory@proactivedata.in',
+      engineer: 'engineer@proactivedata.in',
+      viewer: 'viewer@proactivedata.in',
+    };
+    const targetEmail = aliasMap[inputClean] || inputClean;
+
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: { equals: targetEmail } },
+          { email: { equals: inputClean } },
+          { name: { equals: inputClean } },
+        ],
+      },
     });
 
     if (!user) {
-      logger.warn(`Login failed: No user found with email ${cleanEmail}`);
+      logger.warn(`Login failed: No user found for input ${inputClean}`);
       throw new AppError(401, 'Invalid email or password');
     }
 
     if (!user.isActive) {
-      logger.warn(`Login failed: User ${cleanEmail} is deactivated`);
+      logger.warn(`Login failed: User ${inputClean} is deactivated`);
       throw new AppError(401, 'Your account has been deactivated. Contact administrator.');
     }
 
@@ -54,7 +70,7 @@ export class AuthService {
     }
 
     if (!passwordMatch) {
-      logger.warn(`Login failed: Password mismatch for user ${cleanEmail}`);
+      logger.warn(`Login failed: Password mismatch for user ${inputClean}`);
       throw new AppError(401, 'Invalid email or password');
     }
 

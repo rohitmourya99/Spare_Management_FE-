@@ -5,6 +5,7 @@ import { useAuthStore } from './store/useAuthStore';
 import { LoginPage } from './pages/auth/LoginPage';
 import { DashboardPage } from './pages/dashboard/DashboardPage';
 import { InventoryListPage } from './pages/inventory/InventoryListPage';
+import { StockListPage } from './pages/inventory/StockListPage';
 import { SpareDetailPage } from './pages/inventory/SpareDetailPage';
 import { DispatchListPage } from './pages/dispatch/DispatchListPage';
 import { PickupListPage } from './pages/pickup/PickupListPage';
@@ -39,6 +40,14 @@ export const App: React.FC = () => {
             element={
               <ProtectedRoute>
                 <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/stock-list"
+            element={
+              <ProtectedRoute>
+                <StockListPage />
               </ProtectedRoute>
             }
           />

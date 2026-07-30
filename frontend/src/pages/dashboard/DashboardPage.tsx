@@ -164,7 +164,7 @@ export const DashboardPage: React.FC = () => {
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => navigate('/inventory')}
+              onClick={() => navigate('/stock-list')}
               className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-500/20 border-b-2 border-indigo-800 flex items-center gap-1.5 transition-all hover:-translate-y-0.5"
             >
               <Package className="w-3.5 h-3.5" />

@@ -65,6 +65,29 @@ export class InventoryController {
     ApiResponse.success(res, summary, `Excel import completed for ${store} store`);
   }
 
+  async importLocationInventory(req: Request, res: Response): Promise<void> {
+    if (!req.file) {
+      throw new AppError(400, 'Please upload an Excel file (.xlsx or .xls)');
+    }
+    const summary = await excelService.importLocationInventory(req.file.buffer, req.user!.userId);
+    ApiResponse.success(res, summary, '15-Field Location Inventory import processed');
+  }
+
+  async getLocationInventories(req: Request, res: Response): Promise<void> {
+    const result = await inventoryService.getLocationInventories(req.query as any);
+    ApiResponse.paginated(res, result.items, result.pagination);
+  }
+
+  async getReplacementAuditLogs(req: Request, res: Response): Promise<void> {
+    const result = await inventoryService.getReplacementAuditLogs(req.query as any);
+    ApiResponse.paginated(res, result.logs, result.pagination);
+  }
+
+  async createReplacementSerialItem(req: Request, res: Response): Promise<void> {
+    const item = await inventoryService.createReplacementSerialItem(req.body, req.user!.userId);
+    ApiResponse.created(res, item, 'OEM Replacement serial item registered successfully');
+  }
+
   // Mandatory Spare Comments
   async getComments(req: Request, res: Response): Promise<void> {
     if (req.params.id === 'new') {

@@ -134,6 +134,40 @@ export const DispatchListPage: React.FC = () => {
 
   const dispatches: any[] = data?.data || [];
 
+  const [swapModalOpen, setSwapModalOpen] = useState(false);
+  const [swapForm, setSwapForm] = useState({
+    spareItemId: '',
+    faultySerialNo: '',
+    targetState: '',
+    buildingName: '',
+    roomId: '',
+    roomName: '',
+    remarks: '',
+  });
+
+  const swapMutation = useMutation({
+    mutationFn: async (payload: typeof swapForm) => {
+      const res = await api.post('/dispatch/swap', payload);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dispatches'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['location-inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['replacement-audit-logs'] });
+      setSwapModalOpen(false);
+      setSwapForm({
+        spareItemId: '',
+        faultySerialNo: '',
+        targetState: '',
+        buildingName: '',
+        roomId: '',
+        roomName: '',
+        remarks: '',
+      });
+    },
+  });
+
   return (
     <Layout title="Outbound Dispatches">
       {/* Top Header & Search */}
@@ -154,9 +188,14 @@ export const DispatchListPage: React.FC = () => {
           )}
         </div>
 
-        <Button variant="primary" size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setIsModalOpen(true)}>
-          Create New Dispatch
-        </Button>
+        <div className="flex items-center gap-2.5">
+          <Button variant="secondary" size="sm" icon={<RefreshCw className="w-4 h-4 text-indigo-600" />} onClick={() => setSwapModalOpen(true)}>
+            Swap Faulty Serial
+          </Button>
+          <Button variant="primary" size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setIsModalOpen(true)}>
+            Create New Dispatch
+          </Button>
+        </div>
       </div>
 
       {/* Dispatches Table */}
@@ -499,6 +538,132 @@ export const DispatchListPage: React.FC = () => {
             </Button>
             <Button variant="primary" size="sm" type="submit" isLoading={createMutation.isPending}>
               Confirm Dispatch
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Faulty Serial Number Replacement & Swap Modal */}
+      <Modal
+        isOpen={swapModalOpen}
+        onClose={() => setSwapModalOpen(false)}
+        title="Faulty Serial Replacement & Automated Swap"
+        maxWidth="lg"
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            swapMutation.mutate(swapForm);
+          }}
+          className="space-y-4"
+        >
+          <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900">
+            <p className="font-bold flex items-center gap-1.5 mb-0.5">
+              <RefreshCw className="w-4 h-4 text-amber-600" />
+              Automated Serial Swap Process:
+            </p>
+            <p className="text-[11px] font-medium text-amber-800">
+              System replaces the installed <strong className="text-amber-950">Faulty Part Serial No.</strong> in the specified room inventory with the new <strong className="text-amber-950">Spare Part Serial No.</strong> from Stock List, sets stock status to <strong className="text-rose-700 font-bold">DISPATCHED</strong>, and records an entry in the Replacement Audit Log.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-800 mb-1">Select New Spare Item from Stock List *</label>
+            <select
+              required
+              value={swapForm.spareItemId}
+              onChange={(e) => setSwapForm({ ...swapForm, spareItemId: e.target.value })}
+              className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 font-bold focus:outline-none focus:border-indigo-600"
+            >
+              <option value="">Select Spare Item to Swap &amp; Dispatch...</option>
+              {(itemsData || []).filter(i => i.availableQuantity > 0).map((i: any) => (
+                <option key={i.id} value={i.id}>
+                  {i.productName} — SN: {i.serialNumber || i.spareId} ({i.store} Store)
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-1">Target Location / State *</label>
+              <input
+                type="text"
+                required
+                value={swapForm.targetState}
+                onChange={(e) => setSwapForm({ ...swapForm, targetState: e.target.value })}
+                placeholder="e.g. Uttar Pradesh"
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 font-bold focus:outline-none focus:border-indigo-600"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-1">Building Name *</label>
+              <input
+                type="text"
+                required
+                value={swapForm.buildingName}
+                onChange={(e) => setSwapForm({ ...swapForm, buildingName: e.target.value })}
+                placeholder="e.g. BHEL Main Admin Building"
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 font-bold focus:outline-none focus:border-indigo-600"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-1">Room ID *</label>
+              <input
+                type="text"
+                required
+                value={swapForm.roomId}
+                onChange={(e) => setSwapForm({ ...swapForm, roomId: e.target.value })}
+                placeholder="e.g. ROOM-102"
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-indigo-600"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-1">Room Name / Label</label>
+              <input
+                type="text"
+                value={swapForm.roomName}
+                onChange={(e) => setSwapForm({ ...swapForm, roomName: e.target.value })}
+                placeholder="e.g. Control Server Room 1"
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-600"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-800 mb-1">Faulty Part Serial No. (Currently Installed) *</label>
+            <input
+              type="text"
+              required
+              value={swapForm.faultySerialNo}
+              onChange={(e) => setSwapForm({ ...swapForm, faultySerialNo: e.target.value })}
+              placeholder="e.g. FLT-SN-998877"
+              className="w-full px-3 py-2 bg-white border border-rose-300 rounded-xl text-xs font-mono text-rose-700 font-bold focus:outline-none focus:border-rose-600"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-800 mb-1">Remarks</label>
+            <textarea
+              rows={2}
+              value={swapForm.remarks}
+              onChange={(e) => setSwapForm({ ...swapForm, remarks: e.target.value })}
+              placeholder="Remarks for faulty serial replacement swap..."
+              className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-600"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+            <Button variant="ghost" size="sm" type="button" onClick={() => setSwapModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" size="sm" type="submit" isLoading={swapMutation.isPending}>
+              Confirm Serial Swap &amp; Dispatch
             </Button>
           </div>
         </form>

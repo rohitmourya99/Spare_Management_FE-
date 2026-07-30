@@ -49,6 +49,10 @@ inventoryRoutes.use(authenticate);
 inventoryRoutes.get('/dashboard-stats', (req, res, next) => inventoryController.getDashboardStats(req, res).catch(next));
 inventoryRoutes.get('/', (req, res, next) => inventoryController.getAll(req, res).catch(next));
 inventoryRoutes.post('/import', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN), upload.single('file'), (req, res, next) => inventoryController.importExcel(req, res).catch(next));
+inventoryRoutes.post('/location-inventory/import', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN), upload.single('file'), (req, res, next) => inventoryController.importLocationInventory(req, res).catch(next));
+inventoryRoutes.get('/location-inventory', (req, res, next) => inventoryController.getLocationInventories(req, res).catch(next));
+inventoryRoutes.get('/replacement-audit-logs', (req, res, next) => inventoryController.getReplacementAuditLogs(req, res).catch(next));
+inventoryRoutes.post('/new-serial', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.ENGINEER), (req, res, next) => inventoryController.createReplacementSerialItem(req, res).catch(next));
 
 // Manual Inventory Form & Draft Handlers (/new & /new/comments)
 inventoryRoutes.get('/new/comments', (req, res, next) => inventoryController.getComments(req, res).catch(next));
@@ -96,6 +100,7 @@ dispatchRoutes.post('/', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMI
 dispatchRoutes.post('/:id/approve', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN), (req, res, next) => dispatchController.approve(req, res).catch(next));
 dispatchRoutes.put('/:id/status', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN), (req, res, next) => dispatchController.markDispatched(req, res).catch(next));
 dispatchRoutes.post('/:id/cancel', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN), (req, res, next) => dispatchController.cancel(req, res).catch(next));
+dispatchRoutes.post('/swap', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.ENGINEER), (req, res, next) => dispatchController.swapFaultySerial(req, res).catch(next));
 
 // ==============================================
 // PICKUP ROUTES

@@ -5,7 +5,7 @@ import {
   Search, Plus, Download, Upload, QrCode, Eye,
   ChevronLeft, ChevronRight, X, AlertTriangle, CheckCircle2,
   Package, RefreshCw, FileUp, Building2, MapPin, User, Phone, Mail,
-  Truck, Check, Clock, Tag, Cpu,
+  Truck, Check, Clock, Tag, Cpu, History, FileSpreadsheet, Layers, Building,
 } from 'lucide-react';
 import api from '../../api';
 import { Layout } from '../../components/layout';
@@ -25,6 +25,35 @@ export const InventoryListPage: React.FC = () => {
   const [filterSerialized, setFilterSerialized] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [page, setPage] = useState(1);
+
+  const [activeMainTab, setActiveMainTab] = useState<'stock-list' | 'location-inventory' | 'audit-logs'>('stock-list');
+
+  // 15-Field Location Inventory Excel Upload State
+  const [locImportModalOpen, setLocImportModalOpen] = useState(false);
+  const [locImportSummary, setLocImportSummary] = useState<any>(null);
+  const [isLocImporting, setIsLocImporting] = useState(false);
+  const locFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Location Inventory Query State
+  const [locSearch, setLocSearch] = useState('');
+  const [locPage, setLocPage] = useState(1);
+
+  // Audit Logs Query State
+  const [auditSearch, setAuditSearch] = useState('');
+  const [auditPage, setAuditPage] = useState(1);
+
+  // New OEM Serial Entry Modal State
+  const [newSerialModalOpen, setNewSerialModalOpen] = useState(false);
+  const [newSerialForm, setNewSerialForm] = useState({
+    oemId: '',
+    categoryId: '',
+    productName: '',
+    partCode: '',
+    partId: '',
+    serialNumber: '',
+    store: 'Delhi',
+    remarks: '',
+  });
 
   // Modals
   const [qrModalItem, setQrModalItem] = useState<InventoryItem | null>(null);
@@ -121,6 +150,95 @@ export const InventoryListPage: React.FC = () => {
 
   const items: InventoryItem[] = data?.data || [];
   const pagination = data?.pagination;
+
+  // OEMs Query for New Serial Form
+  const { data: oemsData } = useQuery({
+    queryKey: ['oems'],
+    queryFn: async () => {
+      const res = await api.get('/inventory/oems');
+      return res.data.data;
+    },
+  });
+
+  // Location Inventory Query (15-field spec)
+  const { data: locData, isLoading: locLoading } = useQuery({
+    queryKey: ['location-inventory', locSearch, locPage],
+    queryFn: async () => {
+      const res = await api.get('/inventory/location-inventory', {
+        params: { search: locSearch, page: locPage, limit: 15 },
+      });
+      return res.data;
+    },
+    enabled: activeMainTab === 'location-inventory',
+  });
+
+  const locationItems = locData?.data || [];
+  const locPagination = locData?.pagination;
+
+  // Swap Tracking & Audit Logs Query
+  const { data: auditData, isLoading: auditLoading } = useQuery({
+    queryKey: ['replacement-audit-logs', auditSearch, auditPage],
+    queryFn: async () => {
+      const res = await api.get('/inventory/replacement-audit-logs', {
+        params: { search: auditSearch, page: auditPage, limit: 15 },
+      });
+      return res.data;
+    },
+    enabled: activeMainTab === 'audit-logs',
+  });
+
+  const auditLogs = auditData?.data || [];
+  const auditPagination = auditData?.pagination;
+
+  // New Serial Registration Mutation
+  const newSerialMutation = useMutation({
+    mutationFn: async (payload: typeof newSerialForm) => {
+      const res = await api.post('/inventory/new-serial', payload);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      setNewSerialModalOpen(false);
+      setNewSerialForm({
+        oemId: '',
+        categoryId: '',
+        productName: '',
+        partCode: '',
+        partId: '',
+        serialNumber: '',
+        store: 'Delhi',
+        remarks: '',
+      });
+    },
+  });
+
+  // Handle 15-Field Location Inventory Excel File Import
+  const handleLocFileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsLocImporting(true);
+    setLocImportSummary(null);
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await api.post('/inventory/location-inventory/import', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setLocImportSummary(res.data.data);
+      queryClient.invalidateQueries({ queryKey: ['location-inventory'] });
+    } catch (err: any) {
+      setLocImportSummary({
+        errors: [{ row: 1, reason: err.response?.data?.message || 'Failed to parse 15-field Excel file' }],
+      });
+    } finally {
+      setIsLocImporting(false);
+      if (locFileInputRef.current) locFileInputRef.current.value = '';
+    }
+  };
 
   // Mutation for Manual Status Override (AVAILABLE <-> RESERVED <-> DISPATCHED)
   const updateStatusMutation = useMutation({
@@ -225,45 +343,118 @@ export const InventoryListPage: React.FC = () => {
 
   return (
     <Layout title="Stock List Master">
-      {/* Top Controls Header */}
-      <div className="space-y-4 mb-6">
-        {/* Row 1: Warehouse Tabs */}
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-1.5 p-1 bg-slate-100 border border-slate-200 rounded-xl">
-            {(['All', 'Delhi', 'Bengaluru'] as const).map((s) => (
-              <button
-                key={s}
-                onClick={() => { setStore(s); setPage(1); }}
-                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  store === s
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'text-slate-700 hover:text-slate-900 hover:bg-slate-200/60'
-                }`}
-              >
-                {s === 'All' ? '🏬 All Warehouses' : s === 'Delhi' ? '📍 Delhi Store' : '📍 Bengaluru Store'}
-              </button>
-            ))}
-          </div>
+      {/* Main Feature Tabs */}
+      <div className="flex flex-wrap items-center gap-2 mb-5 border-b border-slate-200 pb-3">
+        <button
+          onClick={() => setActiveMainTab('stock-list')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            activeMainTab === 'stock-list'
+              ? 'bg-indigo-600 text-white shadow-sm'
+              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <Package className="w-4 h-4" />
+          Stock List Master
+        </button>
+        <button
+          onClick={() => setActiveMainTab('location-inventory')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            activeMainTab === 'location-inventory'
+              ? 'bg-indigo-600 text-white shadow-sm'
+              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <Building2 className="w-4 h-4" />
+          Location Inventory (15-Field Spec)
+        </button>
+        <button
+          onClick={() => setActiveMainTab('audit-logs')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            activeMainTab === 'audit-logs'
+              ? 'bg-indigo-600 text-white shadow-sm'
+              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <History className="w-4 h-4" />
+          Swap Tracking / Audit History
+        </button>
 
-          <div className="flex items-center gap-2.5 ml-auto">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => { setImportSummary(null); setImportModalOpen(true); }}
-              icon={<Upload className="w-3.5 h-3.5" />}
-            >
-              Import Excel
-            </Button>
+        <div className="flex items-center gap-2 ml-auto">
+          {activeMainTab === 'stock-list' && (
+            <>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => { setLocImportSummary(null); setLocImportModalOpen(true); }}
+                icon={<FileSpreadsheet className="w-3.5 h-3.5 text-indigo-600" />}
+              >
+                Upload 15-Field Inventory Excel
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setNewSerialModalOpen(true)}
+                icon={<Plus className="w-3.5 h-3.5 text-emerald-600" />}
+              >
+                + New Serial No
+              </Button>
+            </>
+          )}
+
+          {activeMainTab === 'location-inventory' && (
             <Button
               variant="primary"
               size="sm"
-              onClick={() => setAddItemModalOpen(true)}
-              icon={<Plus className="w-4 h-4" />}
+              onClick={() => { setLocImportSummary(null); setLocImportModalOpen(true); }}
+              icon={<FileSpreadsheet className="w-3.5 h-3.5" />}
             >
-              Add Item
+              Upload 15-Field Excel
             </Button>
-          </div>
+          )}
         </div>
+      </div>
+
+      {activeMainTab === 'stock-list' && (
+        <>
+          {/* Top Controls Header */}
+          <div className="space-y-4 mb-6">
+            {/* Row 1: Warehouse Tabs */}
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-1.5 p-1 bg-slate-100 border border-slate-200 rounded-xl">
+                {(['All', 'Delhi', 'Bengaluru'] as const).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => { setStore(s); setPage(1); }}
+                    className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      store === s
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'text-slate-700 hover:text-slate-900 hover:bg-slate-200/60'
+                    }`}
+                  >
+                    {s === 'All' ? '🏬 All Warehouses' : s === 'Delhi' ? '📍 Delhi Store' : '📍 Bengaluru Store'}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-2.5 ml-auto">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => { setImportSummary(null); setImportModalOpen(true); }}
+                  icon={<Upload className="w-3.5 h-3.5" />}
+                >
+                  Import Stock List
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setAddItemModalOpen(true)}
+                  icon={<Plus className="w-4 h-4" />}
+                >
+                  Add Item
+                </Button>
+              </div>
+            </div>
 
         {/* Row 2: Search Bar & Filters */}
         <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-50 border border-slate-200 rounded-2xl">
@@ -482,6 +673,373 @@ export const InventoryListPage: React.FC = () => {
           </div>
         )}
       </Card>
+      </>
+      )}
+
+      {/* Installed Location Inventory View */}
+      {activeMainTab === 'location-inventory' && (
+        <Card title="Installed Location Inventory Master (15-Field Specification)">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div className="relative w-full sm:w-80">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                placeholder="Search Serial, Part ID, Room ID, Building..."
+                value={locSearch}
+                onChange={(e) => { setLocSearch(e.target.value); setLocPage(1); }}
+                className="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-600"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant="info">Total Installed: {locPagination?.total || locationItems.length}</Badge>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto border border-slate-200 rounded-xl">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                <tr>
+                  <th className="p-3">State</th>
+                  <th className="p-3">Building Name</th>
+                  <th className="p-3">Room ID &amp; Name</th>
+                  <th className="p-3">OEM</th>
+                  <th className="p-3">Part ID</th>
+                  <th className="p-3">Part Serial No.</th>
+                  <th className="p-3">Location Class</th>
+                  <th className="p-3">Solution Type</th>
+                  <th className="p-3">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {locLoading ? (
+                  <tr>
+                    <td colSpan={9} className="p-8 text-center text-slate-500 font-semibold">
+                      <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-indigo-600" />
+                      Loading location inventory...
+                    </td>
+                  </tr>
+                ) : locationItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="p-8 text-center text-slate-500 font-semibold">
+                      No installed location inventory items found. Upload 15-field Excel file to import.
+                    </td>
+                  </tr>
+                ) : (
+                  locationItems.map((item: any) => (
+                    <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="p-3 font-bold text-slate-900">{item.state}</td>
+                      <td className="p-3 font-semibold text-slate-800">{item.buildingName}</td>
+                      <td className="p-3">
+                        <p className="font-bold text-indigo-900">{item.roomId}</p>
+                        <p className="text-[11px] text-slate-500">{item.roomName}</p>
+                      </td>
+                      <td className="p-3 text-slate-700 font-medium">{item.oem}</td>
+                      <td className="p-3 font-mono font-bold text-slate-900">{item.partId}</td>
+                      <td className="p-3 font-mono font-bold text-indigo-700">
+                        <span className="bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                          {item.partSerialNo}
+                        </span>
+                      </td>
+                      <td className="p-3 text-slate-700 font-medium">{item.locationClass}</td>
+                      <td className="p-3 text-slate-700 font-medium">{item.solutionType}</td>
+                      <td className="p-3">
+                        <Badge variant={item.status === 'INSTALLED' ? 'success' : 'warning'}>
+                          {item.status}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {locPagination && locPagination.totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 mt-2 bg-slate-50">
+              <p className="text-xs text-slate-600 font-medium">
+                Showing {((locPage - 1) * 15) + 1}–{Math.min(locPage * 15, locPagination.total)} of {locPagination.total} items
+              </p>
+              <div className="flex items-center gap-2">
+                <Button variant="secondary" size="sm" disabled={locPage <= 1} onClick={() => setLocPage(p => p - 1)}>
+                  Prev
+                </Button>
+                <span className="text-xs text-slate-800 font-bold px-2">{locPage} / {locPagination.totalPages}</span>
+                <Button variant="secondary" size="sm" disabled={!locPagination.hasNext} onClick={() => setLocPage(p => p + 1)}>
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* Faulty Serial Swap Tracking & Audit History View */}
+      {activeMainTab === 'audit-logs' && (
+        <Card title="Faulty Serial Swap Tracking & Audit History Log">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div className="relative w-full sm:w-80">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                placeholder="Search Faulty SN, Spare SN, Room ID, State..."
+                value={auditSearch}
+                onChange={(e) => { setAuditSearch(e.target.value); setAuditPage(1); }}
+                className="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-600"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant="success">Total Swaps Recorded: {auditPagination?.total || auditLogs.length}</Badge>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto border border-slate-200 rounded-xl">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                <tr>
+                  <th className="p-3">Swap Date &amp; Time</th>
+                  <th className="p-3">Part ID</th>
+                  <th className="p-3">Replaced Faulty Serial No</th>
+                  <th className="p-3">New Spare Serial No</th>
+                  <th className="p-3">State &amp; Location</th>
+                  <th className="p-3">Building Name</th>
+                  <th className="p-3">Room ID &amp; Name</th>
+                  <th className="p-3">Dispatched By</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {auditLoading ? (
+                  <tr>
+                    <td colSpan={8} className="p-8 text-center text-slate-500 font-semibold">
+                      <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-indigo-600" />
+                      Loading audit logs...
+                    </td>
+                  </tr>
+                ) : auditLogs.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="p-8 text-center text-slate-500 font-semibold">
+                      No serial replacement swap records found.
+                    </td>
+                  </tr>
+                ) : (
+                  auditLogs.map((log: any) => (
+                    <tr key={log.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="p-3 font-medium text-slate-700 whitespace-nowrap">
+                        {new Date(log.swapDate || log.createdAt).toLocaleString('en-IN')}
+                      </td>
+                      <td className="p-3 font-mono font-bold text-slate-900">{log.partId}</td>
+                      <td className="p-3 font-mono font-bold text-rose-700">
+                        <span className="bg-rose-50 border border-rose-200 px-2 py-0.5 rounded text-rose-800">
+                          {log.oldFaultySerialNo}
+                        </span>
+                      </td>
+                      <td className="p-3 font-mono font-bold text-emerald-700">
+                        <span className="bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded text-emerald-800">
+                          {log.newSpareSerialNo}
+                        </span>
+                      </td>
+                      <td className="p-3 font-semibold text-slate-800">{log.state}</td>
+                      <td className="p-3 text-slate-800 font-medium">{log.buildingName}</td>
+                      <td className="p-3">
+                        <p className="font-bold text-indigo-950">{log.roomId}</p>
+                        {log.roomName && <p className="text-[11px] text-slate-500">{log.roomName}</p>}
+                      </td>
+                      <td className="p-3 font-bold text-slate-700">
+                        {log.dispatchedByName || log.dispatchedBy?.name || 'System User'}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {auditPagination && auditPagination.totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 mt-2 bg-slate-50">
+              <p className="text-xs text-slate-600 font-medium">
+                Showing {((auditPage - 1) * 15) + 1}–{Math.min(auditPage * 15, auditPagination.total)} of {auditPagination.total} logs
+              </p>
+              <div className="flex items-center gap-2">
+                <Button variant="secondary" size="sm" disabled={auditPage <= 1} onClick={() => setAuditPage(p => p - 1)}>
+                  Prev
+                </Button>
+                <span className="text-xs text-slate-800 font-bold px-2">{auditPage} / {auditPagination.totalPages}</span>
+                <Button variant="secondary" size="sm" disabled={!auditPagination.hasNext} onClick={() => setAuditPage(p => p + 1)}>
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* Location Inventory 15-Field Excel Upload Modal */}
+      <Modal
+        isOpen={locImportModalOpen}
+        onClose={() => setLocImportModalOpen(false)}
+        title="Upload 15-Field Location Inventory Excel"
+        maxWidth="md"
+      >
+        <div className="space-y-4">
+          <div className="p-3.5 bg-indigo-50 border border-indigo-200 rounded-xl text-xs text-indigo-950">
+            <p className="font-bold mb-1 flex items-center gap-1.5">
+              <FileSpreadsheet className="w-4 h-4 text-indigo-600" />
+              15-Column Header Requirement:
+            </p>
+            <p className="text-[11px] font-mono text-indigo-800 leading-relaxed">
+              Installation Date, OEM, Part ID, Part Serial No., Room ID, Location Class, Solution Type, Building Name, Room Name, Floor, Unit, Sub Unit, State, Contract Start Date, Contract End Date
+            </p>
+          </div>
+
+          <div>
+            <input
+              type="file"
+              ref={locFileInputRef}
+              accept=".xlsx,.xls"
+              onChange={handleLocFileImport}
+              className="hidden"
+            />
+            <Button
+              variant="primary"
+              size="md"
+              className="w-full justify-center"
+              onClick={() => locFileInputRef.current?.click()}
+              isLoading={isLocImporting}
+              icon={<Upload className="w-4 h-4" />}
+            >
+              Select &amp; Upload 15-Field Excel File
+            </Button>
+          </div>
+
+          {locImportSummary && (
+            <div className="space-y-3 pt-3 border-t border-slate-200">
+              <div className="flex items-center justify-between text-xs font-bold p-3 bg-slate-100 rounded-xl">
+                <span>Total Rows: {locImportSummary.totalRows || 0}</span>
+                <span className="text-emerald-700">Imported: {locImportSummary.imported || 0}</span>
+                <span className="text-indigo-700">Updated: {locImportSummary.updated || 0}</span>
+                <span className="text-rose-700">Failed: {locImportSummary.failed || 0}</span>
+              </div>
+
+              {locImportSummary.errors && locImportSummary.errors.length > 0 && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs space-y-2">
+                  <p className="font-bold text-rose-900 flex items-center gap-1.5">
+                    <AlertTriangle className="w-4 h-4 text-rose-600" />
+                    Validation Errors &amp; Failures ({locImportSummary.errors.length}):
+                  </p>
+                  <div className="max-h-48 overflow-y-auto space-y-1 divide-y divide-rose-100 pr-1">
+                    {locImportSummary.errors.map((err: any, idx: number) => (
+                      <div key={idx} className="pt-1 text-[11px] text-rose-800 font-mono">
+                        <strong className="text-rose-950 font-bold">Row {err.row}:</strong> {err.reason}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* + New Serial No Registration Modal */}
+      <Modal
+        isOpen={newSerialModalOpen}
+        onClose={() => setNewSerialModalOpen(false)}
+        title="Register OEM Replacement (+ New Serial No)"
+        maxWidth="md"
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            newSerialMutation.mutate(newSerialForm);
+          }}
+          className="space-y-4"
+        >
+          <div>
+            <label className="block text-xs font-bold text-slate-800 mb-1">OEM Manufacturer *</label>
+            <select
+              required
+              value={newSerialForm.oemId}
+              onChange={(e) => setNewSerialForm({ ...newSerialForm, oemId: e.target.value })}
+              className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 font-bold focus:outline-none focus:border-indigo-600"
+            >
+              <option value="">Select OEM...</option>
+              {(oemsData || []).map((o: any) => (
+                <option key={o.id} value={o.id}>{o.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-1">Product / Part Name *</label>
+              <input
+                type="text"
+                required
+                value={newSerialForm.productName}
+                onChange={(e) => setNewSerialForm({ ...newSerialForm, productName: e.target.value })}
+                placeholder="e.g. Cisco Catalyst Switch 9300"
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 font-bold focus:outline-none focus:border-indigo-600"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-1">Part Code / Part ID</label>
+              <input
+                type="text"
+                value={newSerialForm.partCode}
+                onChange={(e) => setNewSerialForm({ ...newSerialForm, partCode: e.target.value, partId: e.target.value })}
+                placeholder="e.g. C9300-48P"
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 font-bold focus:outline-none focus:border-indigo-600"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-1">New Serial Number *</label>
+              <input
+                type="text"
+                required
+                value={newSerialForm.serialNumber}
+                onChange={(e) => setNewSerialForm({ ...newSerialForm, serialNumber: e.target.value })}
+                placeholder="e.g. FOC24190ABC"
+                className="w-full px-3 py-2 bg-white border border-slate-300 font-mono rounded-xl text-xs text-indigo-700 font-bold focus:outline-none focus:border-indigo-600"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-1">Target Stock Store *</label>
+              <select
+                value={newSerialForm.store}
+                onChange={(e) => setNewSerialForm({ ...newSerialForm, store: e.target.value })}
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 font-bold focus:outline-none focus:border-indigo-600"
+              >
+                <option value="Delhi">Delhi Store</option>
+                <option value="Bengaluru">Bengaluru Store</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-800 mb-1">Remarks</label>
+            <textarea
+              rows={2}
+              value={newSerialForm.remarks}
+              onChange={(e) => setNewSerialForm({ ...newSerialForm, remarks: e.target.value })}
+              placeholder="Remarks for replacement serial registration..."
+              className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-600"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+            <Button variant="ghost" size="sm" type="button" onClick={() => setNewSerialModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" size="sm" type="submit" isLoading={newSerialMutation.isPending}>
+              Register New Serial
+            </Button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Dispatched / Reserved Site Location & SPOC Details Modal */}
       <Modal isOpen={!!locationModalItem} onClose={() => setLocationModalItem(null)} title="Reserved Site Location & SPOC Details" maxWidth="lg">

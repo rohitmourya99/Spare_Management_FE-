@@ -50,7 +50,26 @@ const defaultOemForm = (): OemReceiptForm => ({
 });
 
 const statusVariant = (s: string): 'success' | 'danger' | 'warning' | 'info' | 'default' =>
-  s === 'RECEIVED' ? 'success' : s === 'IN_TRANSIT' ? 'warning' : s === 'CANCELLED' ? 'danger' : 'info';
+  s === 'RECEIVED' || s === 'COMPLETED' ? 'success' : s === 'IN_TRANSIT' ? 'warning' : 'info';
+
+const calcTurnaroundDuration = (startVal?: string | Date, endVal?: string | Date) => {
+  if (!startVal) return '—';
+  const start = new Date(startVal);
+  const end = endVal ? new Date(endVal) : new Date();
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) return '—';
+
+  const diffMs = end.getTime() - start.getTime();
+  if (diffMs < 0) return '—';
+
+  const totalHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+
+  if (days > 0) {
+    return `${days}d ${hours}h`;
+  }
+  return `${hours}h`;
+};
 
 export const PickupListPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -236,24 +255,38 @@ export const PickupListPage: React.FC = () => {
                     <th className="p-3.5">Qty</th>
                     <th className="p-3.5">Courier / Tracking</th>
                     <th className="p-3.5">Fault Description</th>
-                    <th className="p-3.5">Date</th>
+                    <th className="p-3.5">Pickup Date</th>
+                    <th className="p-3.5">OEM Turnaround</th>
                     <th className="p-3.5">Status</th>
                     <th className="p-3.5 text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 text-slate-900">
                   {pickupsLoading ? (
-                    <tr><td colSpan={10} className="p-8 text-center text-slate-500 font-semibold">
+                    <tr><td colSpan={11} className="p-8 text-center text-slate-500 font-semibold">
                       <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-indigo-600" />
                       Loading pickups...
                     </td></tr>
                   ) : pickups.length === 0 ? (
-                    <tr><td colSpan={10} className="p-8 text-center text-slate-500 font-semibold">
+                    <tr><td colSpan={11} className="p-8 text-center text-slate-500 font-semibold">
                       <RotateCcw className="w-8 h-8 mx-auto mb-2 text-slate-400" />
                       No pickup records found.
                     </td></tr>
                   ) : (
-                    pickups.map((p) => (
+                    pickups.map((p) => {
+                      const duration = (p as any).pickupDate ? (
+                        (p as any).receivedDate ? (
+                          <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded font-mono font-bold">
+                            {calcTurnaroundDuration((p as any).pickupDate, (p as any).receivedDate)}
+                          </span>
+                        ) : (
+                          <span className="bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded font-mono font-bold">
+                            {calcTurnaroundDuration((p as any).pickupDate)} (Running)
+                          </span>
+                        )
+                      ) : '—';
+
+                      return (
                       <tr key={p.id} className="hover:bg-slate-50 transition-colors">
                         <td className="p-3.5 font-mono text-xs text-emerald-700 font-black whitespace-nowrap">{p.pickupNo}</td>
                         <td className="p-3.5">
@@ -274,6 +307,7 @@ export const PickupListPage: React.FC = () => {
                         <td className="p-3.5 text-xs text-slate-700 font-semibold whitespace-nowrap">
                           {p.pickupDate ? new Date(p.pickupDate).toLocaleDateString('en-IN') : '—'}
                         </td>
+                        <td className="p-3.5 text-xs whitespace-nowrap">{duration}</td>
                         <td className="p-3.5">
                           <Badge variant={statusVariant(p.status)}>{p.status}</Badge>
                         </td>
@@ -296,8 +330,9 @@ export const PickupListPage: React.FC = () => {
                           )}
                         </td>
                       </tr>
-                    ))
-                  )}
+                    );
+                  })
+                )}
                 </tbody>
               </table>
             </div>

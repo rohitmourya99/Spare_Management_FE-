@@ -553,6 +553,203 @@ export class InventoryService {
 
     return updated;
   }
+
+  /**
+   * Get location inventory items with search and filters
+   */
+  async getLocationInventories(filters: {
+    search?: string;
+    state?: string;
+    buildingName?: string;
+    roomId?: string;
+    partId?: string;
+    page?: string;
+    limit?: string;
+  }) {
+    const { page, limit, skip } = parsePagination(filters);
+    const where: Prisma.LocationInventoryWhereInput = {};
+
+    if (filters.state) where.state = { equals: filters.state };
+    if (filters.buildingName) where.buildingName = { contains: filters.buildingName };
+    if (filters.roomId) where.roomId = { contains: filters.roomId };
+    if (filters.partId) where.partId = { contains: filters.partId };
+
+    if (filters.search) {
+      where.OR = [
+        { partSerialNo: { contains: filters.search } },
+        { partId: { contains: filters.search } },
+        { roomId: { contains: filters.search } },
+        { buildingName: { contains: filters.search } },
+        { roomName: { contains: filters.search } },
+        { oem: { contains: filters.search } },
+        { state: { contains: filters.search } },
+      ];
+    }
+
+    const [total, items] = await Promise.all([
+      prisma.locationInventory.count({ where }),
+      prisma.locationInventory.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { updatedAt: 'desc' },
+      }),
+    ]);
+
+    return {
+      items,
+      pagination: buildPagination(page, limit, total),
+    };
+  }
+
+  /**
+   * Get replacement swap audit logs with search and pagination
+   */
+  async getReplacementAuditLogs(filters: {
+    search?: string;
+    state?: string;
+    buildingName?: string;
+    roomId?: string;
+    page?: string;
+    limit?: string;
+  }) {
+    const { page, limit, skip } = parsePagination(filters);
+    const where: Prisma.ReplacementAuditLogWhereInput = {};
+
+    if (filters.state) where.state = { equals: filters.state };
+    if (filters.buildingName) where.buildingName = { contains: filters.buildingName };
+    if (filters.roomId) where.roomId = { contains: filters.roomId };
+
+    if (filters.search) {
+      where.OR = [
+        { oldFaultySerialNo: { contains: filters.search } },
+        { newSpareSerialNo: { contains: filters.search } },
+        { partId: { contains: filters.search } },
+        { roomId: { contains: filters.search } },
+        { buildingName: { contains: filters.search } },
+        { state: { contains: filters.search } },
+      ];
+    }
+
+    const [total, logs] = await Promise.all([
+      prisma.replacementAuditLog.count({ where }),
+      prisma.replacementAuditLog.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { swapDate: 'desc' },
+        include: {
+          dispatchedBy: {
+            select: { id: true, name: true, email: true },
+          },
+        },
+      }),
+    ]);
+
+    return {
+      logs,
+      pagination: buildPagination(page, limit, total),
+    };
+  }
+
+  /**
+   * Register replacement OEM parts under a new serial number with pre-filled OEM Name and Part Code
+   */
+  async createReplacementSerialItem(
+    data: {
+      oemId: string;
+      categoryId?: string;
+      productName: string;
+      partCode?: string;
+      partId?: string;
+      serialNumber: string;
+      store?: string;
+      remarks?: string;
+    },
+    userId: string
+  ) {
+    if (!data.serialNumber || !data.serialNumber.trim()) {
+      throw new AppError(400, 'Replacement serial number is required.');
+    }
+    const cleanSerial = data.serialNumber.trim();
+
+    const existing = await prisma.inventoryItem.findUnique({
+      where: { serialNumber: cleanSerial },
+    });
+    if (existing) {
+      throw new AppError(400, `Item with serial number '${cleanSerial}' already exists.`);
+    }
+
+    let categoryId = data.categoryId;
+    if (!categoryId) {
+      const cat = await prisma.category.findFirst({
+        where: { oemId: data.oemId },
+      });
+      if (cat) {
+        categoryId = cat.id;
+      } else {
+        const newCat = await prisma.category.create({
+          data: { name: 'General', oemId: data.oemId },
+        });
+        categoryId = newCat.id;
+      }
+    }
+
+    const count = await prisma.inventoryItem.count();
+    const store = data.store || 'Delhi';
+    const prefix = store === 'Bengaluru' ? 'PDS-BLR' : 'PDS-DEL';
+    const spareId = `${prefix}-${new Date().getFullYear()}-${String(count + 1).padStart(5, '0')}`;
+    const qrCode = await generateQRCode(spareId);
+
+    const newItem = await prisma.inventoryItem.create({
+      data: {
+        spareId,
+        oemId: data.oemId,
+        categoryId,
+        productName: data.productName.trim(),
+        partCode: data.partCode ? data.partCode.trim() : null,
+        partId: data.partId ? data.partId.trim() : null,
+        serialNumber: cleanSerial,
+        isSerialized: true,
+        quantity: 1,
+        availableQuantity: 1,
+        store,
+        status: 'AVAILABLE',
+        remarks: data.remarks || 'OEM Replacement item registered under new serial number',
+        qrCode,
+        createdById: userId,
+      },
+      include: {
+        oem: true,
+        category: true,
+        location: true,
+      },
+    });
+
+    await prisma.inventoryMovement.create({
+      data: {
+        inventoryItemId: newItem.id,
+        type: 'RECEIPT',
+        quantity: 1,
+        previousStock: 0,
+        newStock: 1,
+        performedById: userId,
+        remarks: `OEM Replacement stock item registered under new serial number (${cleanSerial})`,
+      },
+    });
+
+    await prisma.activityLog.create({
+      data: {
+        userId,
+        action: 'CREATE',
+        entity: 'InventoryItem',
+        entityId: newItem.id,
+        entityLabel: `OEM Replacement registered under new SN: ${cleanSerial} (${newItem.productName})`,
+      },
+    });
+
+    return newItem;
+  }
 }
 
 export const inventoryService = new InventoryService();

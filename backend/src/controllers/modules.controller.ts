@@ -41,6 +41,11 @@ export class DispatchController {
     await dispatchService.cancel(req.params.id, req.user!.userId);
     ApiResponse.success(res, null, 'Dispatch cancelled');
   }
+
+  async swapFaultySerial(req: Request, res: Response) {
+    const result = await dispatchService.swapFaultySerial(req.body, req.user!.userId);
+    ApiResponse.success(res, result, 'Faulty serial number swapped and stock item dispatched successfully');
+  }
 }
 
 // Pickup Controller

@@ -39,6 +39,7 @@ model User {
   fileUploads          FileUpload[]
   comments             Comment[]
   movements            InventoryMovement[]
+  replacementAuditLogs ReplacementAuditLog[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -435,11 +436,75 @@ model ActivityLog {
   ipAddress   String?
   userAgent   String?
   createdAt   DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
   @@index([action])
   @@index([entity])
   @@map("activity_logs")
+}
+
+// ==============================================
+// LOCATION INVENTORY (15-FIELD SPECIFICATION)
+// ==============================================
+
+model LocationInventory {
+  id                String    @id @default(uuid())
+  installationDate  DateTime?
+  oem               String
+  partId            String
+  partSerialNo      String    @unique
+  roomId            String
+  locationClass     String
+  solutionType      String
+  buildingName      String
+  roomName          String
+  floor             String
+  unit              String
+  subUnit           String
+  state             String
+  contractStartDate DateTime?
+  contractEndDate   DateTime?
+  status            String    @default("INSTALLED") // INSTALLED, REPLACED, FAULTY
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([partSerialNo])
+  @@index([roomId])
+  @@index([state])
+  @@index([buildingName])
+  @@index([partId])
+  @@map("location_inventories")
+}
+
+// ==============================================
+// REPLACEMENT AUDIT LOG
+// ==============================================
+
+model ReplacementAuditLog {
+  id                String   @id @default(uuid())
+  partId            String
+  oldFaultySerialNo String
+  newSpareSerialNo  String
+  state             String
+  buildingName      String
+  roomId            String
+  roomName          String
+  swapDate          DateTime @default(now())
+
+  dispatchedById   String?
+  dispatchedByName String?
+  dispatchedBy     User?    @relation(fields: [dispatchedById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([oldFaultySerialNo])
+  @@index([newSpareSerialNo])
+  @@index([partId])
+  @@index([roomId])
+  @@index([state])
+  @@map("replacement_audit_logs")
 }
 
 // ==============================================

@@ -306,6 +306,201 @@ export class ExcelService {
 
     return summary;
   }
+
+  /**
+   * Import Location Inventory from 15-field Excel specification with row-level validation
+   */
+  async importLocationInventory(fileBuffer: Buffer, userId: string): Promise<ImportSummary> {
+    const workbook = xlsx.read(fileBuffer, { type: 'buffer', cellDates: true });
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    const rawData = xlsx.utils.sheet_to_json<Record<string, any>>(sheet, { defval: '' });
+
+    const requiredHeaders = [
+      'Installation Date',
+      'OEM',
+      'Part ID',
+      'Part Serial No.',
+      'Room ID',
+      'Location Class',
+      'Solution Type',
+      'Building Name',
+      'Room Name',
+      'Floor',
+      'Unit',
+      'Sub Unit',
+      'State',
+      'Contract Start Date',
+      'Contract End Date',
+    ];
+
+    const summary: ImportSummary = {
+      totalRows: rawData.length,
+      imported: 0,
+      updated: 0,
+      skipped: 0,
+      failed: 0,
+      errors: [],
+    };
+
+    if (rawData.length === 0) {
+      summary.errors.push({ row: 1, reason: 'Uploaded Excel sheet is empty' });
+      return summary;
+    }
+
+    // Header validation
+    const firstRowKeys = Object.keys(rawData[0]).map((k) => k.trim());
+    const missingHeaders: string[] = [];
+
+    for (const reqH of requiredHeaders) {
+      const found = firstRowKeys.some((k) => k.toLowerCase() === reqH.toLowerCase());
+      if (!found) {
+        missingHeaders.push(reqH);
+      }
+    }
+
+    if (missingHeaders.length > 0) {
+      summary.errors.push({
+        row: 1,
+        reason: `Missing required column header(s): ${missingHeaders.join(', ')}`,
+      });
+      summary.failed = rawData.length;
+      return summary;
+    }
+
+    const getVal = (row: Record<string, any>, key: string) => {
+      const keys = Object.keys(row);
+      const matchedKey = keys.find((k) => k.trim().toLowerCase() === key.trim().toLowerCase());
+      return matchedKey ? row[matchedKey] : '';
+    };
+
+    const parseExcelDate = (val: any): Date | null => {
+      if (!val) return null;
+      if (val instanceof Date && !isNaN(val.getTime())) return val;
+      if (typeof val === 'number') {
+        const dateObj = xlsx.SSF.parse_date_code(val);
+        if (dateObj) return new Date(Date.UTC(dateObj.y, dateObj.m - 1, dateObj.d));
+      }
+      const parsed = new Date(val);
+      return !isNaN(parsed.getTime()) ? parsed : null;
+    };
+
+    const seenSerials = new Set<string>();
+
+    for (let i = 0; i < rawData.length; i++) {
+      const row = rawData[i];
+      const rowNum = i + 2;
+
+      try {
+        const oem = String(getVal(row, 'OEM') || '').trim();
+        const partId = String(getVal(row, 'Part ID') || '').trim();
+        const partSerialNo = String(getVal(row, 'Part Serial No.') || getVal(row, 'Part Serial No') || '').trim();
+        const roomId = String(getVal(row, 'Room ID') || '').trim();
+        const locationClass = String(getVal(row, 'Location Class') || '').trim();
+        const solutionType = String(getVal(row, 'Solution Type') || '').trim();
+        const buildingName = String(getVal(row, 'Building Name') || '').trim();
+        const roomName = String(getVal(row, 'Room Name') || '').trim();
+        const floor = String(getVal(row, 'Floor') || '').trim();
+        const unit = String(getVal(row, 'Unit') || '').trim();
+        const subUnit = String(getVal(row, 'Sub Unit') || '').trim();
+        const state = String(getVal(row, 'State') || '').trim();
+
+        const installationDate = parseExcelDate(getVal(row, 'Installation Date'));
+        const contractStartDate = parseExcelDate(getVal(row, 'Contract Start Date'));
+        const contractEndDate = parseExcelDate(getVal(row, 'Contract End Date'));
+
+        if (!partSerialNo) {
+          summary.failed++;
+          summary.errors.push({ row: rowNum, reason: 'Missing Part Serial No.' });
+          continue;
+        }
+
+        if (!partId) {
+          summary.failed++;
+          summary.errors.push({ row: rowNum, reason: 'Missing Part ID' });
+          continue;
+        }
+
+        if (seenSerials.has(partSerialNo.toLowerCase())) {
+          summary.failed++;
+          summary.errors.push({
+            row: rowNum,
+            reason: `Duplicate Serial No. '${partSerialNo}' in Row ${rowNum}`,
+          });
+          continue;
+        }
+
+        seenSerials.add(partSerialNo.toLowerCase());
+
+        const existing = await prisma.locationInventory.findUnique({
+          where: { partSerialNo },
+        });
+
+        if (existing) {
+          await prisma.locationInventory.update({
+            where: { id: existing.id },
+            data: {
+              installationDate,
+              oem,
+              partId,
+              roomId,
+              locationClass,
+              solutionType,
+              buildingName,
+              roomName,
+              floor,
+              unit,
+              subUnit,
+              state,
+              contractStartDate,
+              contractEndDate,
+            },
+          });
+          summary.updated++;
+        } else {
+          await prisma.locationInventory.create({
+            data: {
+              installationDate,
+              oem,
+              partId,
+              partSerialNo,
+              roomId,
+              locationClass,
+              solutionType,
+              buildingName,
+              roomName,
+              floor,
+              unit,
+              subUnit,
+              state,
+              contractStartDate,
+              contractEndDate,
+              status: 'INSTALLED',
+            },
+          });
+          summary.imported++;
+        }
+      } catch (err: any) {
+        summary.failed++;
+        summary.errors.push({
+          row: rowNum,
+          reason: err.message || `Error processing Row ${rowNum}`,
+        });
+      }
+    }
+
+    await prisma.activityLog.create({
+      data: {
+        userId,
+        action: 'IMPORT',
+        entity: 'LocationInventory',
+        entityLabel: `Location Inventory 15-Field Import (${summary.imported} imported, ${summary.updated} updated, ${summary.failed} failed)`,
+        newValue: JSON.stringify(summary),
+      },
+    });
+
+    return summary;
+  }
 }
 
 export const excelService = new ExcelService();

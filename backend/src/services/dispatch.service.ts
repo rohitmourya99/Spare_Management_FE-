@@ -261,6 +261,129 @@ export class DispatchService {
       },
     });
   }
+
+  /**
+   * Performs automated Faulty Serial Number Replacement & Swap Logic
+   */
+  async swapFaultySerial(
+    dto: {
+      spareItemId: string;
+      locationInventoryId?: string;
+      faultySerialNo: string;
+      targetState: string;
+      buildingName: string;
+      roomId: string;
+      roomName?: string;
+      remarks?: string;
+    },
+    userId: string
+  ) {
+    const spareItem = await prisma.inventoryItem.findUnique({
+      where: { id: dto.spareItemId },
+      include: { oem: true },
+    });
+
+    if (!spareItem) {
+      throw new AppError(404, 'Spare stock item not found.');
+    }
+
+    if (spareItem.availableQuantity <= 0) {
+      throw new AppError(400, 'Selected spare item is not available in stock.');
+    }
+
+    const newSpareSerialNo = spareItem.serialNumber || spareItem.spareId;
+    let locationItem = null;
+
+    if (dto.locationInventoryId) {
+      locationItem = await prisma.locationInventory.findUnique({
+        where: { id: dto.locationInventoryId },
+      });
+    }
+
+    if (!locationItem && dto.faultySerialNo) {
+      locationItem = await prisma.locationInventory.findUnique({
+        where: { partSerialNo: dto.faultySerialNo.trim() },
+      });
+    }
+
+    const oldFaultySerialNo = dto.faultySerialNo.trim();
+    const partId = locationItem?.partId || spareItem.partCode || spareItem.productName;
+
+    // Update location inventory record if found
+    if (locationItem) {
+      await prisma.locationInventory.update({
+        where: { id: locationItem.id },
+        data: {
+          partSerialNo: newSpareSerialNo,
+          status: 'INSTALLED',
+        },
+      });
+    }
+
+    // Update stock item in Stock List to DISPATCHED
+    const prevStock = spareItem.availableQuantity;
+    const newStock = Math.max(0, spareItem.availableQuantity - 1);
+
+    await prisma.inventoryItem.update({
+      where: { id: spareItem.id },
+      data: {
+        availableQuantity: newStock,
+        status: 'DISPATCHED',
+        reservedFor: `${dto.buildingName} / Room ${dto.roomId} (Replaced Faulty SN: ${oldFaultySerialNo})`,
+        updatedById: userId,
+      },
+    });
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true },
+    });
+
+    // Create entry in ReplacementAuditLog
+    const auditLog = await prisma.replacementAuditLog.create({
+      data: {
+        partId,
+        oldFaultySerialNo,
+        newSpareSerialNo,
+        state: dto.targetState,
+        buildingName: dto.buildingName,
+        roomId: dto.roomId,
+        roomName: dto.roomName || locationItem?.roomName || '',
+        dispatchedById: userId,
+        dispatchedByName: user?.name || 'System User',
+      },
+    });
+
+    // Movement & Activity Logs
+    await prisma.inventoryMovement.create({
+      data: {
+        inventoryItemId: spareItem.id,
+        type: 'DISPATCH',
+        quantity: 1,
+        previousStock: prevStock,
+        newStock,
+        performedById: userId,
+        remarks: `Faulty Serial Swap: Installed new spare SN ${newSpareSerialNo} replacing faulty SN ${oldFaultySerialNo} in Room ${dto.roomId} (${dto.buildingName})`,
+      },
+    });
+
+    await prisma.activityLog.create({
+      data: {
+        userId,
+        action: 'SERIAL_SWAP',
+        entity: 'LocationInventory',
+        entityId: auditLog.id,
+        entityLabel: `Swapped Faulty SN ${oldFaultySerialNo} -> New Spare SN ${newSpareSerialNo} (Room: ${dto.roomId}, ${dto.buildingName})`,
+      },
+    });
+
+    return {
+      success: true,
+      auditLog,
+      spareItem,
+      locationItem,
+    };
+  }
 }
 
 export const dispatchService = new DispatchService();

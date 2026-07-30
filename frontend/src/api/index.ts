@@ -18,11 +18,9 @@ const getStoredToken = (): string | null => {
 };
 
 const getApiBaseUrl = (): string => {
-  return (
-    import.meta.env.VITE_API_BASE_URL ||
-    import.meta.env.VITE_API_URL ||
-    'https://spare-ims-backend.onrender.com/api'
-  );
+  if (import.meta.env.VITE_API_BASE_URL) return import.meta.env.VITE_API_BASE_URL;
+  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+  return '/api';
 };
 
 const api = axios.create({

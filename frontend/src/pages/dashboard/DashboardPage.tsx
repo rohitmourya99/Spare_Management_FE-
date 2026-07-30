@@ -1,10 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   Package, Layers, MapPin, Cpu, AlertTriangle,
   Truck, RotateCcw, Upload, Search, FileSpreadsheet, ChevronRight,
-  Activity, Archive, CheckCircle2, XCircle, Sparkles, TrendingUp,
+  Activity, Archive, CheckCircle2, XCircle, Sparkles, TrendingUp, Filter,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -18,6 +18,8 @@ const COLORS = ['#2563eb', '#059669', '#d97706', '#dc2626', '#7c3aed', '#db2777'
 
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
+  const [selectedCardFilter, setSelectedCardFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['dashboard-stats'],
@@ -28,6 +30,15 @@ export const DashboardPage: React.FC = () => {
     refetchInterval: false,
     refetchOnWindowFocus: false,
     retry: false,
+  });
+
+  const { data: inventoryItemsData, isLoading: isLoadingInventory } = useQuery({
+    queryKey: ['dashboard-inventory-items'],
+    queryFn: async () => {
+      const res = await api.get('/inventory?limit=250');
+      return res.data.data.items || [];
+    },
+    refetchInterval: false,
   });
 
   if (isLoading) {
@@ -64,15 +75,54 @@ export const DashboardPage: React.FC = () => {
   ];
 
   const topSummaryCards = [
-    { title: 'Total Spare Parts', value: inv.totalSpareParts ?? 0, icon: Package, color: 'text-blue-600' },
-    { title: 'Serialized Parts', value: inv.totalSerializedParts ?? 0, icon: Archive, color: 'text-indigo-600' },
-    { title: 'Non-Serialized', value: inv.totalNonSerializedParts ?? 0, icon: Layers, color: 'text-purple-600' },
-    { title: 'Total OEMs', value: inv.totalOEMs ?? 0, icon: Cpu, color: 'text-cyan-600' },
-    { title: 'Delhi Store Stock', value: inv.delhiTotalStock ?? 0, icon: MapPin, color: 'text-emerald-600' },
-    { title: 'Bengaluru Stock', value: inv.bengaluruTotalStock ?? 0, icon: MapPin, color: 'text-orange-600' },
-    { title: 'Low Stock Items', value: inv.lowStockCount ?? 0, icon: AlertTriangle, color: 'text-amber-600' },
-    { title: 'Out of Stock', value: inv.outOfStockCount ?? 0, icon: XCircle, color: 'text-rose-600' },
+    { id: 'all', title: 'Total Spare Parts', value: inv.totalSpareParts ?? 0, icon: Package, color: 'text-blue-600' },
+    { id: 'serialized', title: 'Serialized Parts', value: inv.totalSerializedParts ?? 0, icon: Archive, color: 'text-indigo-600' },
+    { id: 'non_serialized', title: 'Non-Serialized', value: inv.totalNonSerializedParts ?? 0, icon: Layers, color: 'text-purple-600' },
+    { id: 'oems', title: 'Total OEMs', value: inv.totalOEMs ?? 0, icon: Cpu, color: 'text-cyan-600' },
+    { id: 'delhi', title: 'Delhi Store Stock', value: inv.delhiTotalStock ?? 0, icon: MapPin, color: 'text-emerald-600' },
+    { id: 'bengaluru', title: 'Bengaluru Stock', value: inv.bengaluruTotalStock ?? 0, icon: MapPin, color: 'text-orange-600' },
+    { id: 'low_stock', title: 'Low Stock Items', value: inv.lowStockCount ?? 0, icon: AlertTriangle, color: 'text-amber-600' },
+    { id: 'out_of_stock', title: 'Out of Stock', value: inv.outOfStockCount ?? 0, icon: XCircle, color: 'text-rose-600' },
   ];
+
+  // Filter items based on selected card filter & search input
+  const allItems = inventoryItemsData || [];
+  const filteredItems = allItems.filter((item: any) => {
+    // Text search matching
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchText =
+        item.productName?.toLowerCase().includes(q) ||
+        item.partCode?.toLowerCase().includes(q) ||
+        item.serialNumber?.toLowerCase().includes(q) ||
+        item.oem?.name?.toLowerCase().includes(q) ||
+        item.spareId?.toLowerCase().includes(q);
+      if (!matchText) return false;
+    }
+
+    // Card filter selection
+    switch (selectedCardFilter) {
+      case 'serialized':
+        return item.isSerialized === true;
+      case 'non_serialized':
+        return item.isSerialized === false;
+      case 'delhi':
+        return item.store === 'Delhi';
+      case 'bengaluru':
+        return item.store === 'Bengaluru';
+      case 'low_stock':
+        return item.availableQuantity <= (item.minStock || 5) && item.availableQuantity > 0;
+      case 'out_of_stock':
+        return item.availableQuantity === 0 || item.quantity === 0;
+      case 'oems':
+        return true;
+      case 'all':
+      default:
+        return true;
+    }
+  });
+
+  const activeCardObj = topSummaryCards.find((c) => c.id === selectedCardFilter) || topSummaryCards[0];
 
   return (
     <Layout title="Dashboard & Overview">
@@ -105,18 +155,162 @@ export const DashboardPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Top 8 Metric Stat Cards */}
+      {/* Top 8 Metric Stat Cards (Interactive 1-Click Filters) */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6">
-        {topSummaryCards.map((card, idx) => (
+        {topSummaryCards.map((card) => (
           <StatCard
-            key={idx}
+            key={card.id}
             title={card.title}
             value={card.value}
             icon={card.icon}
             color={card.color}
-            onClick={() => navigate('/inventory')}
+            isActive={selectedCardFilter === card.id}
+            onClick={() => setSelectedCardFilter(card.id)}
           />
         ))}
+      </div>
+
+      {/* Interactive Metric Card Drill-Down Detail Table */}
+      <div className="mb-6 bg-white border border-slate-200/90 rounded-2xl p-5 shadow-lg">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-200">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center border border-indigo-200 text-indigo-600 shrink-0">
+              <Filter className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-extrabold text-slate-900 text-sm">
+                  Drill-Down Detail View: <span className="text-indigo-600 font-black">{activeCardObj.title}</span>
+                </h3>
+                <span className="text-xs bg-indigo-100 text-indigo-800 font-extrabold px-2.5 py-0.5 rounded-full border border-indigo-200">
+                  {filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                Click any top summary card above to instantly filter and inspect matching spare parts in real time.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5">
+            {/* Search Input */}
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                placeholder="Search filtered list..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:border-indigo-600 w-44 md:w-56"
+              />
+            </div>
+
+            {/* Clear Filter / Show All Button */}
+            {selectedCardFilter !== 'all' && (
+              <button
+                onClick={() => {
+                  setSelectedCardFilter('all');
+                  setSearchQuery('');
+                }}
+                className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1.5 border border-slate-300 transition-colors shrink-0 shadow-2xs"
+              >
+                <XCircle className="w-3.5 h-3.5 text-slate-500" />
+                Clear Filter / Show All
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Filtered Data Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50/70 text-[11px] font-extrabold text-slate-700 uppercase tracking-wider">
+                <th className="p-3">Spare Part</th>
+                <th className="p-3">OEM Vendor</th>
+                <th className="p-3">Serial Number</th>
+                <th className="p-3">Store Location</th>
+                <th className="p-3">Available Stock</th>
+                <th className="p-3">Status</th>
+                <th className="p-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-xs text-slate-900">
+              {isLoadingInventory ? (
+                <tr>
+                  <td colSpan={7} className="p-8 text-center text-slate-500 font-semibold">
+                    <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                    Loading drill-down data...
+                  </td>
+                </tr>
+              ) : filteredItems.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="p-8 text-center text-slate-500 font-semibold">
+                    <Package className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                    No spare parts matching selected filter <span className="font-bold text-slate-800">"{activeCardObj.title}"</span>.
+                  </td>
+                </tr>
+              ) : (
+                filteredItems.slice(0, 10).map((item: any) => (
+                  <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="p-3 font-bold text-slate-900">
+                      <div>{item.productName}</div>
+                      <div className="text-[10px] text-indigo-600 font-mono font-bold mt-0.5">
+                        {item.spareId} {item.partCode ? `· SKU: ${item.partCode}` : ''}
+                      </div>
+                    </td>
+                    <td className="p-3 font-bold text-slate-700">
+                      {item.oem?.name || 'Standard OEM'}
+                    </td>
+                    <td className="p-3 font-mono">
+                      {item.serialNumber ? (
+                        <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded border border-indigo-200 font-bold text-[11px]">
+                          {item.serialNumber}
+                        </span>
+                      ) : (
+                        <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded border border-slate-200 font-medium text-[11px]">
+                          Non-Serialized
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-3 font-semibold text-slate-800">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold border ${item.store === 'Delhi' ? 'bg-blue-50 text-blue-800 border-blue-200' : 'bg-orange-50 text-orange-800 border-orange-200'}`}>
+                        <MapPin className="w-3 h-3" />
+                        {item.store || 'Delhi'}
+                      </span>
+                    </td>
+                    <td className="p-3 font-extrabold text-slate-900">
+                      {item.availableQuantity} / {item.quantity} {item.unit || 'PCS'}
+                    </td>
+                    <td className="p-3">
+                      <Badge variant={item.status === 'AVAILABLE' ? 'success' : item.status === 'RESERVED' ? 'warning' : 'danger'}>
+                        {item.status}
+                      </Badge>
+                    </td>
+                    <td className="p-3 text-right">
+                      <button
+                        onClick={() => navigate('/inventory')}
+                        className="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-xs font-bold border border-indigo-200 transition-colors inline-flex items-center gap-1"
+                      >
+                        Inspect <ChevronRight className="w-3 h-3" />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+          {filteredItems.length > 10 && (
+            <div className="p-3 bg-slate-50 border-t border-slate-200 text-center">
+              <button
+                onClick={() => navigate('/inventory')}
+                className="text-xs font-bold text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-1"
+              >
+                View all {filteredItems.length} items in Inventory List <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Store Distribution Cards & Quick Actions */}

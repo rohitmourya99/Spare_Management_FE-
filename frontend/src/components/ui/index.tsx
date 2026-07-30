@@ -218,12 +218,17 @@ export interface StatCardProps {
   bg?: string;
   trend?: { value: number; label: string };
   onClick?: () => void;
+  isActive?: boolean;
 }
 
-export const StatCard: React.FC<StatCardProps> = ({ title, value, icon: Icon, color, trend, onClick }) => {
+export const StatCard: React.FC<StatCardProps> = ({ title, value, icon: Icon, color, trend, onClick, isActive }) => {
   return (
     <div
-      className={`bg-white rounded-2xl p-4 border border-slate-200/90 cursor-default transition-all duration-200 hover:-translate-y-1 hover:border-indigo-300 hover:shadow-xl ${onClick ? 'cursor-pointer' : ''}`}
+      className={`bg-white rounded-2xl p-4 border transition-all duration-200 hover:-translate-y-1 hover:border-indigo-500 hover:shadow-xl ${
+        isActive
+          ? 'ring-2 ring-indigo-500 border-indigo-500 bg-indigo-50/30 shadow-lg'
+          : 'border-slate-200/90'
+      } ${onClick ? 'cursor-pointer' : ''}`}
       style={{
         boxShadow: '0 4px 18px -2px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.03), inset 0 1px 0 0 rgba(255, 255, 255, 0.8)',
       }}

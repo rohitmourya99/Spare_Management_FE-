@@ -91,6 +91,19 @@ export class InventoryController {
     ApiResponse.success(res, updated, 'Comment updated successfully');
   }
 
+  async replaceSerial(req: Request, res: Response): Promise<void> {
+    const { itemId, serialNumber, productName, partCode, oemId, remarks } = req.body;
+    const targetId = req.params.id || itemId;
+    if (!serialNumber || !serialNumber.trim()) {
+      throw new AppError(400, 'Replacement serial number is required');
+    }
+    const updated = await inventoryService.replaceSerialInPlace(
+      { itemId: targetId, serialNumber: serialNumber.trim(), productName, partCode, oemId, remarks },
+      req.user!.userId
+    );
+    ApiResponse.success(res, updated, 'Serial number updated and item set to AVAILABLE');
+  }
+
   // Exports
   async exportExcel(req: Request, res: Response): Promise<void> {
     const { items } = await inventoryService.getAll({ ...req.query as any, limit: '10000' });

@@ -454,6 +454,101 @@ export class InventoryService {
     }
     return months;
   }
+
+  /**
+   * Replace serial number in-place on an existing inventory item
+   * (Matches by itemId OR OEM + Part Name / SKU, resets status to AVAILABLE, and syncs stock)
+   */
+  async replaceSerialInPlace(
+    params: {
+      itemId?: string;
+      productName?: string;
+      partCode?: string;
+      oemId?: string;
+      serialNumber: string;
+      remarks?: string;
+    },
+    userId: string
+  ) {
+    let item = null;
+
+    if (params.itemId && params.itemId !== 'new') {
+      item = await prisma.inventoryItem.findFirst({
+        where: { id: params.itemId, isDeleted: false },
+        include: { oem: true, category: true, location: true },
+      });
+    }
+
+    if (!item && (params.productName || params.partCode)) {
+      const whereClause: Prisma.InventoryItemWhereInput = {
+        isDeleted: false,
+        OR: [
+          params.productName ? { productName: { equals: params.productName } } : {},
+          params.partCode ? { partCode: { equals: params.partCode } } : {},
+        ].filter((c) => Object.keys(c).length > 0),
+      };
+
+      if (params.oemId) {
+        whereClause.oemId = params.oemId;
+      }
+
+      item = await prisma.inventoryItem.findFirst({
+        where: whereClause,
+        orderBy: { updatedAt: 'desc' },
+        include: { oem: true, category: true, location: true },
+      });
+    }
+
+    if (!item) {
+      throw new AppError(404, 'Target inventory item not found to replace serial number');
+    }
+
+    const previousStock = item.availableQuantity;
+    const newStock = item.quantity > 0 ? item.quantity : 1;
+
+    // Perform IN-PLACE UPDATE on existing item ID (NO insert / duplicate creation)
+    const updated = await prisma.inventoryItem.update({
+      where: { id: item.id },
+      data: {
+        serialNumber: params.serialNumber.trim(),
+        isSerialized: true,
+        status: 'AVAILABLE',
+        availableQuantity: newStock,
+        remarks: params.remarks || `Replacement serial number updated: ${params.serialNumber.trim()}`,
+        updatedById: userId,
+      },
+      include: {
+        oem: true,
+        category: true,
+        location: true,
+      },
+    });
+
+    // Record movement log on the item
+    await prisma.inventoryMovement.create({
+      data: {
+        inventoryItemId: item.id,
+        type: 'RECEIPT',
+        quantity: 1,
+        previousStock,
+        newStock,
+        performedById: userId,
+        remarks: `Replacement serial updated in-place: ${params.serialNumber.trim()}`,
+      },
+    });
+
+    await prisma.activityLog.create({
+      data: {
+        userId,
+        action: 'UPDATE',
+        entity: 'InventoryItem',
+        entityId: item.id,
+        entityLabel: `${item.spareId} — Serial Replacement (${params.serialNumber.trim()})`,
+      },
+    });
+
+    return updated;
+  }
 }
 
 export const inventoryService = new InventoryService();

@@ -134,25 +134,18 @@ export const InventoryListPage: React.FC = () => {
     },
   });
 
-  // Mutation for Adding Replacement Serial Part
+  // Mutation for In-Place Serial Number Replacement (NO duplicate creation)
   const createReplacementMutation = useMutation({
     mutationFn: async (baseItem: InventoryItem) => {
       const payload = {
+        itemId: baseItem.id,
         productName: baseItem.productName,
-        oemId: baseItem.oemId,
-        categoryId: baseItem.categoryId,
         partCode: baseItem.partCode,
+        oemId: baseItem.oemId,
         serialNumber: replacementSerial.trim(),
-        isSerialized: true,
-        quantity: 1,
-        availableQuantity: 1,
-        store: baseItem.store,
-        rack: baseItem.rack,
-        bin: baseItem.bin,
-        status: 'AVAILABLE',
-        remarks: `Replacement unit for dispatched item ${baseItem.serialNumber || baseItem.spareId}`,
+        remarks: `Replacement serial number registered for ${baseItem.spareId}`,
       };
-      const res = await api.post('/inventory', payload);
+      const res = await api.post('/inventory/replace-serial', payload);
       return res.data;
     },
     onSuccess: () => {

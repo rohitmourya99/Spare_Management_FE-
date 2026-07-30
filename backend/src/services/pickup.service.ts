@@ -188,36 +188,73 @@ export class PickupService {
       resolvedCategoryId = fallbackCat.id;
     }
 
-    // Build a unique spare ID for the new inventory entry
-    const invCount = await prisma.inventoryItem.count();
-    const spareId = `SP-OEM-${new Date().getFullYear()}-${String(invCount + 1).padStart(5, '0')}`;
-
-    // Create the new inventory item as AVAILABLE
-    const newItem = await prisma.inventoryItem.create({
-      data: {
-        spareId,
-        productName: data.productName,
-        ...(data.partCode ? { partCode: data.partCode } : {}),
+    // Match Logic: Check for an existing item with matching OEM + Part Name / SKU in RESERVED / DISPATCHED state
+    const existingMatch = await prisma.inventoryItem.findFirst({
+      where: {
+        isDeleted: false,
         oemId: resolvedOemId,
-        categoryId: resolvedCategoryId,
-        serialNumber: data.isSerialized !== false && data.serialNumber ? data.serialNumber : null,
-        isSerialized: data.isSerialized !== false && !!data.serialNumber,
-        quantity: qty,
-        availableQuantity: qty,
-        unit: data.unit || 'Pcs',
-        store: data.store,
-        ...(data.rack ? { rack: data.rack } : {}),
-        ...(data.bin ? { bin: data.bin } : {}),
-        status: 'AVAILABLE',
-        remarks: data.remarks || `Received from OEM replacement`,
-        createdById: userId,
-        updatedById: userId,
+        OR: [
+          { productName: { equals: data.productName } },
+          data.partCode ? { partCode: { equals: data.partCode } } : {},
+        ].filter((c) => Object.keys(c).length > 0),
+        status: { in: ['RESERVED', 'DISPATCHED', 'IN_TRANSIT'] },
       },
+      orderBy: { updatedAt: 'desc' },
       include: {
         oem: { select: { name: true } },
         category: { select: { name: true } },
       },
     });
+
+    let newItem;
+    if (existingMatch) {
+      // In-Place Update on existing item (No duplicate entry created)
+      newItem = await prisma.inventoryItem.update({
+        where: { id: existingMatch.id },
+        data: {
+          ...(data.serialNumber ? { serialNumber: data.serialNumber.trim(), isSerialized: true } : {}),
+          status: 'AVAILABLE',
+          availableQuantity: existingMatch.quantity > 0 ? existingMatch.quantity : (existingMatch.availableQuantity + qty),
+          remarks: data.remarks || `OEM replacement serial number updated in-place: ${data.serialNumber || 'N/A'}`,
+          updatedById: userId,
+        },
+        include: {
+          oem: { select: { name: true } },
+          category: { select: { name: true } },
+        },
+      });
+    } else {
+      // Build a unique spare ID for the new inventory entry
+      const invCount = await prisma.inventoryItem.count();
+      const spareId = `SP-OEM-${new Date().getFullYear()}-${String(invCount + 1).padStart(5, '0')}`;
+
+      // Create the new inventory item as AVAILABLE
+      newItem = await prisma.inventoryItem.create({
+        data: {
+          spareId,
+          productName: data.productName,
+          ...(data.partCode ? { partCode: data.partCode } : {}),
+          oemId: resolvedOemId,
+          categoryId: resolvedCategoryId,
+          serialNumber: data.isSerialized !== false && data.serialNumber ? data.serialNumber : null,
+          isSerialized: data.isSerialized !== false && !!data.serialNumber,
+          quantity: qty,
+          availableQuantity: qty,
+          unit: data.unit || 'Pcs',
+          store: data.store,
+          ...(data.rack ? { rack: data.rack } : {}),
+          ...(data.bin ? { bin: data.bin } : {}),
+          status: 'AVAILABLE',
+          remarks: data.remarks || `Received from OEM replacement`,
+          createdById: userId,
+          updatedById: userId,
+        },
+        include: {
+          oem: { select: { name: true } },
+          category: { select: { name: true } },
+        },
+      });
+    }
 
     // Log the inventory movement as a RECEIPT
     await prisma.inventoryMovement.create({
@@ -227,7 +264,7 @@ export class PickupService {
         quantity: qty,
         previousStock: 0,
         newStock: qty,
-        referenceId: spareId,
+        referenceId: newItem.spareId || 'OEM-RECEIPT',
         performedById: userId,
         remarks: `OEM Replacement received — SN: ${data.serialNumber || 'N/A'} | Store: ${data.store}`,
       },

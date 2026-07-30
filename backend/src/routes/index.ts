@@ -56,6 +56,10 @@ inventoryRoutes.post('/categories', authorize(UserRole.SUPER_ADMIN, UserRole.INV
 inventoryRoutes.get('/locations', (req, res, next) => inventoryController.getLocations(req, res).catch(next));
 inventoryRoutes.post('/locations', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN), (req, res, next) => inventoryController.createLocation(req, res).catch(next));
 
+// Replacement Serial Number In-Place Update Endpoint
+inventoryRoutes.post('/replace-serial', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.ENGINEER), (req, res, next) => inventoryController.replaceSerial(req, res).catch(next));
+inventoryRoutes.put('/:id/replace-serial', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.ENGINEER), (req, res, next) => inventoryController.replaceSerial(req, res).catch(next));
+
 // Comments edit route
 inventoryRoutes.put('/comments/:commentId', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.ENGINEER), (req, res, next) => inventoryController.updateComment(req, res).catch(next));
 

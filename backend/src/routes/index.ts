@@ -15,7 +15,26 @@ import {
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { UserRole } from '../types';
 
-const upload = multer({ storage: multer.memoryStorage() });
+// Permissive file filter: accept xlsx/xls/csv by extension (case-insensitive) regardless of MIME type
+// This prevents 400 Bad Request errors when browsers send application/octet-stream for .xlsx files
+const uploadFileFilter: multer.Options['fileFilter'] = (_req, file, cb) => {
+  const allowedExtRegex = /\.(xlsx|xls|csv)$/i;
+  const originalName = file.originalname || '';
+  if (allowedExtRegex.test(originalName)) {
+    cb(null, true);
+  } else {
+    // Still allow if no extension info (some clients omit it) or MIME is octet-stream
+    const isOctetStream = file.mimetype === 'application/octet-stream';
+    const isSpreadsheetMime =
+      file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+      file.mimetype === 'application/vnd.ms-excel' ||
+      file.mimetype === 'text/csv' ||
+      file.mimetype === 'application/csv';
+    cb(null, isOctetStream || isSpreadsheetMime);
+  }
+};
+
+const upload = multer({ storage: multer.memoryStorage(), fileFilter: uploadFileFilter });
 const router = Router();
 
 // ==============================================

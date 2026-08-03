@@ -134,6 +134,18 @@ export const InventoryListPage: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Case-insensitive file extension check to prevent 400 Bad Request from wrong file types
+    const allowedExtRegex = /\.(xlsx|xls|csv)$/i;
+    if (!allowedExtRegex.test(file.name)) {
+      setUploadSummary({
+        success: false,
+        message: 'Invalid file type. Please upload a .xlsx, .xls, or .csv file.',
+        errors: [],
+      });
+      if (excelFileInputRef.current) excelFileInputRef.current.value = '';
+      return;
+    }
+
     setIsUploading(true);
     setUploadProgress(0);
     setUploadSummary(null);
@@ -141,6 +153,7 @@ export const InventoryListPage: React.FC = () => {
     const formData = new FormData();
     formData.append('file', file);
 
+    // DO NOT set 'Content-Type': 'multipart/form-data' manually — browser auto-generates boundary string
     try {
       const res = await api.post('/inventory/upload-location-excel', formData, {
         onUploadProgress: (progressEvent) => {
@@ -543,7 +556,7 @@ export const InventoryListPage: React.FC = () => {
           </p>
 
           <div>
-            <input type="file" ref={excelFileInputRef} accept=".xlsx,.xls,.csv" onChange={handleExcelUpload} className="hidden" />
+            <input type="file" ref={excelFileInputRef} accept=".xlsx,.xls,.csv,.XLSX,.XLS,.CSV,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv" onChange={handleExcelUpload} className="hidden" />
             <Button
               variant="primary"
               size="md"

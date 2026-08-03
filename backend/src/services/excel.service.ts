@@ -330,6 +330,7 @@ export class ExcelService {
         return summary;
       }
       const sheet = workbook.Sheets[sheetName];
+      // Default all blank/empty cells to "XYZ"
       rawData = xlsx.utils.sheet_to_json<Record<string, any>>(sheet, { defval: 'XYZ' });
     } catch (e: any) {
       summary.errors.push({ row: 1, reason: `Failed to parse Excel file: ${e?.message || 'Invalid format'}` });
@@ -405,38 +406,44 @@ export class ExcelService {
       }
     };
 
-    // 1. Safe cleanup of duplicate rows in LocationInventory (keeping latest per roomId + partId)
+    // Step 0: Clean up existing '_BATCH_' suffixes in partSerialNo to restore exact serial numbers
     try {
-      const allLocInventories = await prisma.locationInventory.findMany({
-        orderBy: { updatedAt: 'desc' },
+      const batchRecords = await prisma.locationInventory.findMany({
+        where: { partSerialNo: { contains: '_BATCH_' } },
       });
-
-      const seenRoomPartDedupe = new Map<string, string>();
-      const duplicateIdsToDelete: string[] = [];
-
-      for (const item of allLocInventories) {
-        const key = `${(item.roomId || '').trim().toLowerCase()}_${(item.partId || '').trim().toLowerCase()}`;
-        if (seenRoomPartDedupe.has(key)) {
-          duplicateIdsToDelete.push(item.id);
-        } else {
-          seenRoomPartDedupe.set(key, item.id);
-        }
+      if (batchRecords.length > 0) {
+        await Promise.all(
+          batchRecords.map((r) => {
+            const cleanSerial = r.partSerialNo.split('_BATCH_')[0];
+            return prisma.locationInventory.update({
+              where: { id: r.id },
+              data: { partSerialNo: cleanSerial },
+            }).catch(() => null);
+          })
+        );
       }
-
-      if (duplicateIdsToDelete.length > 0) {
-        const CHUNK_SIZE = 500;
-        for (let i = 0; i < duplicateIdsToDelete.length; i += CHUNK_SIZE) {
-          const chunk = duplicateIdsToDelete.slice(i, i + CHUNK_SIZE);
-          await prisma.locationInventory.deleteMany({
-            where: { id: { in: chunk } },
-          });
-        }
-      }
-    } catch (err: any) {
-      console.warn('Safe cleanup warning:', err?.message);
+    } catch (e) {
+      console.warn('Batch serial cleanup warning:', e);
     }
 
-    // 2. Safe fetch of Replacement Audit Logs to protect app-replaced/dispatched devices
+    // Step 1: Fetch ALL existing LocationInventory records in ONE database query
+    const allExistingLocItems = await prisma.locationInventory.findMany().catch(() => []);
+
+    // Step 2: Create In-Memory lookup maps using `${roomId}_${partId}` for O(1) instant comparison
+    const roomPartMap = new Map<string, typeof allExistingLocItems[0]>();
+    const serialMap = new Map<string, typeof allExistingLocItems[0]>();
+
+    allExistingLocItems.forEach((item) => {
+      const key = `${(item.roomId || '').trim().toLowerCase()}_${(item.partId || '').trim().toLowerCase()}`;
+      if (!roomPartMap.has(key)) {
+        roomPartMap.set(key, item);
+      }
+      if (item.partSerialNo) {
+        serialMap.set(item.partSerialNo.trim().toLowerCase(), item);
+      }
+    });
+
+    // Fetch Replacement Audit Logs to protect app-replaced/dispatched devices
     const replacedSet = new Set<string>();
     try {
       const replacementLogs = await prisma.replacementAuditLog.findMany({
@@ -449,33 +456,14 @@ export class ExcelService {
         if (log.newSpareSerialNo) replacedSet.add(log.newSpareSerialNo.trim().toLowerCase());
         if (log.oldFaultySerialNo) replacedSet.add(log.oldFaultySerialNo.trim().toLowerCase());
       });
-    } catch (err: any) {
-      console.warn('Safe replacement logs query warning:', err?.message);
+    } catch (e) {
+      console.warn('Replacement logs lookup warning:', e);
     }
 
-    // 3. Fetch remaining LocationInventory records after cleanup
-    const currentLocItems = await prisma.locationInventory.findMany().catch(() => []);
-    const roomPartMap = new Map<string, typeof currentLocItems[0]>();
-    const serialMap = new Map<string, typeof currentLocItems[0]>();
-    const allExistingSerials = new Set<string>();
-
-    currentLocItems.forEach((item) => {
-      const key = `${(item.roomId || '').trim().toLowerCase()}_${(item.partId || '').trim().toLowerCase()}`;
-      if (!roomPartMap.has(key)) {
-        roomPartMap.set(key, item);
-      }
-      if (item.partSerialNo) {
-        serialMap.set(item.partSerialNo.trim().toLowerCase(), item);
-        allExistingSerials.add(item.partSerialNo.trim().toLowerCase());
-      }
-    });
-
-    const batchId = Date.now();
-    const seenInBatch = new Set<string>();
-    const recordsToCreate: Array<Prisma.LocationInventoryCreateInput> = [];
+    const newRecords: Array<Prisma.LocationInventoryCreateInput> = [];
     const updatesToPerform: Array<{ id: string; data: Prisma.LocationInventoryUpdateInput }> = [];
 
-    // Row iteration wrapped in try-catch so single row errors NEVER crash HTTP endpoint
+    // Step 3: Iterate Excel rows in memory
     for (let i = 0; i < rawData.length; i++) {
       const row = rawData[i];
       const rowNum = i + 2;
@@ -483,11 +471,7 @@ export class ExcelService {
       try {
         const oem = getValue(row, ['OEM', 'oem', 'Manufacturer']);
         const partId = getValue(row, ['Part ID', 'partId', 'PartID', 'part_id', 'Part Code', 'partCode']);
-        let rawSerial = getValue(row, ['Part Serial No.', 'Part Serial No', 'partSerialNo', 'serialNumber', 'Serial No', 'serial_no', 'Serial']);
-        if (rawSerial === 'XYZ') {
-          rawSerial = `SN-XYZ-${i + 1}`;
-        }
-
+        const exactSerial = getValue(row, ['Part Serial No.', 'Part Serial No', 'partSerialNo', 'serialNumber', 'Serial No', 'serial_no', 'Serial']);
         const roomId = getValue(row, ['Room ID', 'roomId', 'RoomID', 'room_id']);
         const locationClass = getValue(row, ['Location Class', 'locationClass', 'LocationClass', 'location_class', 'Class']);
         const solutionType = getValue(row, ['Solution Type', 'solutionType', 'SolutionType', 'solution_type']);
@@ -503,10 +487,10 @@ export class ExcelService {
         const contractEndDate = parseExcelDate(getValue(row, ['Contract End Date', 'contractEndDate']));
 
         const roomPartKey = `${roomId.toLowerCase()}_${partId.toLowerCase()}`;
-        const existingRecord = roomPartMap.get(roomPartKey) || serialMap.get(rawSerial.toLowerCase());
+        const existingRecord = roomPartMap.get(roomPartKey) || serialMap.get(exactSerial.toLowerCase());
 
         if (existingRecord) {
-          // Check if this device was replaced or dispatched in app
+          // Check if this device was replaced or dispatched in app software
           const isReplacedInApp =
             existingRecord.status === 'REPLACED' ||
             existingRecord.status === 'FAULTY' ||
@@ -514,7 +498,7 @@ export class ExcelService {
             replacedSet.has(existingRecord.partSerialNo.toLowerCase());
 
           if (isReplacedInApp) {
-            // CRITICAL: DO NOT overwrite partSerialNo for app-replaced devices! Keep active software serial.
+            // Case A: Record exists & replaced/dispatched in app: Update location metadata only, KEEP active software serial untouched
             updatesToPerform.push({
               id: existingRecord.id,
               data: {
@@ -535,21 +519,14 @@ export class ExcelService {
               },
             });
           } else {
-            // UNTOUCHED: Update location fields AND partSerialNo
-            let serialToSet = existingRecord.partSerialNo;
-            if (rawSerial !== 'XYZ' && rawSerial.toLowerCase() !== existingRecord.partSerialNo.toLowerCase()) {
-              if (!allExistingSerials.has(rawSerial.toLowerCase())) {
-                serialToSet = rawSerial;
-                allExistingSerials.add(rawSerial.toLowerCase());
-              }
-            }
+            // Case B: Record exists & untouched: Update location metadata AND update partSerialNo with EXACT Excel value
             updatesToPerform.push({
               id: existingRecord.id,
               data: {
                 installationDate: installationDate || existingRecord.installationDate,
                 oem,
                 partId,
-                partSerialNo: serialToSet,
+                partSerialNo: exactSerial,
                 roomId,
                 locationClass,
                 solutionType,
@@ -565,21 +542,12 @@ export class ExcelService {
             });
           }
         } else {
-          // DOES NOT EXIST: Insert as new LocationInventory record
-          let finalSerial = rawSerial;
-          const lowerSerial = rawSerial.toLowerCase();
-          if (allExistingSerials.has(lowerSerial) || seenInBatch.has(lowerSerial)) {
-            finalSerial = `${rawSerial}_BATCH_${batchId}_${i + 1}`;
-          }
-
-          seenInBatch.add(lowerSerial);
-          allExistingSerials.add(finalSerial.toLowerCase());
-
-          recordsToCreate.push({
+          // Case C: New record: Add to bulk insert queue with exact Excel details and "XYZ" for blank cells
+          newRecords.push({
             installationDate,
             oem: oem || 'XYZ',
             partId: partId || 'XYZ',
-            partSerialNo: finalSerial,
+            partSerialNo: exactSerial || 'XYZ',
             roomId: roomId || 'XYZ',
             locationClass: locationClass || 'XYZ',
             solutionType: solutionType || 'XYZ',
@@ -603,20 +571,20 @@ export class ExcelService {
       }
     }
 
-    // High-Speed Batch Create using createMany with chunk size of 500
-    if (recordsToCreate.length > 0) {
+    // Step 4: Execute new insertions in bulk using createMany({ data: newRecords, skipDuplicates: true }) in chunks of 500
+    if (newRecords.length > 0) {
       const CHUNK_SIZE = 500;
       let totalCreated = 0;
-      for (let i = 0; i < recordsToCreate.length; i += CHUNK_SIZE) {
-        const chunk = recordsToCreate.slice(i, i + CHUNK_SIZE);
+      for (let i = 0; i < newRecords.length; i += CHUNK_SIZE) {
+        const chunk = newRecords.slice(i, i + CHUNK_SIZE);
         try {
           const createRes = await prisma.locationInventory.createMany({
             data: chunk,
-            skipDuplicates: false,
+            skipDuplicates: true,
           });
           totalCreated += createRes.count;
         } catch (err: any) {
-          // Fallback line-by-line insert if chunk encounters unexpected error
+          // Fallback item-by-item insert
           for (const item of chunk) {
             try {
               await prisma.locationInventory.create({ data: item });
@@ -630,25 +598,19 @@ export class ExcelService {
       summary.imported = totalCreated;
     }
 
-    // Fast Transaction Updates
+    // Step 5: Execute updates using parallel batch promises in chunks of 50
     if (updatesToPerform.length > 0) {
-      const BATCH_SIZE = 100;
+      const BATCH_SIZE = 50;
       for (let i = 0; i < updatesToPerform.length; i += BATCH_SIZE) {
-        const batch = updatesToPerform.slice(i, i + BATCH_SIZE);
-        try {
-          await prisma.$transaction(
-            batch.map((u) => prisma.locationInventory.update({ where: { id: u.id }, data: u.data }))
-          );
-        } catch (err: any) {
-          // Fallback item-by-item update
-          for (const u of batch) {
-            try {
-              await prisma.locationInventory.update({ where: { id: u.id }, data: u.data });
-            } catch (e) {
-              // Ignore single update failure
-            }
-          }
-        }
+        const chunk = updatesToPerform.slice(i, i + BATCH_SIZE);
+        await Promise.all(
+          chunk.map((u) =>
+            prisma.locationInventory.update({
+              where: { id: u.id },
+              data: u.data,
+            }).catch(() => null)
+          )
+        );
       }
       summary.updated = updatesToPerform.length;
     }
@@ -659,12 +621,12 @@ export class ExcelService {
           userId,
           action: 'IMPORT',
           entity: 'LocationInventory',
-          entityLabel: `Resilient Location Inventory Import (${summary.imported} created, ${summary.updated} updated)`,
+          entityLabel: `Master Location Inventory Upload (${summary.imported} created, ${summary.updated} updated)`,
           newValue: JSON.stringify(summary),
         },
       });
     } catch (e) {
-      // Ignore activity log creation error
+      // Ignore log creation error
     }
 
     return summary;

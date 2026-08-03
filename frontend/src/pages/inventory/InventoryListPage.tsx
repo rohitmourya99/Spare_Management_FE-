@@ -62,6 +62,7 @@ export const InventoryListPage: React.FC = () => {
   // Modal for 15-Field Excel Upload
   const [excelModalOpen, setExcelModalOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadSummary, setUploadSummary] = useState<any>(null);
   const excelFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -134,6 +135,7 @@ export const InventoryListPage: React.FC = () => {
     if (!file) return;
 
     setIsUploading(true);
+    setUploadProgress(0);
     setUploadSummary(null);
 
     const formData = new FormData();
@@ -142,6 +144,11 @@ export const InventoryListPage: React.FC = () => {
     try {
       const res = await api.post('/inventory/upload-location-excel', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (progressEvent) => {
+          const total = progressEvent.total || progressEvent.loaded || 1;
+          const percent = Math.round((progressEvent.loaded * 100) / total);
+          setUploadProgress(percent);
+        },
       });
       setUploadSummary(res.data);
       queryClient.invalidateQueries({ queryKey: ['location-inventory'] });
@@ -546,6 +553,21 @@ export const InventoryListPage: React.FC = () => {
               Select 15-Field Excel File
             </Button>
           </div>
+
+          {isUploading && (
+            <div className="mt-3 w-full space-y-1.5">
+              <div className="flex justify-between text-xs font-bold text-slate-700">
+                <span>Uploading Inventory...</span>
+                <span>{uploadProgress}%</span>
+              </div>
+              <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
+                <div
+                  className="bg-indigo-600 h-2.5 rounded-full transition-all duration-200 ease-out"
+                  style={{ width: `${uploadProgress}%` }}
+                ></div>
+              </div>
+            </div>
+          )}
 
           {uploadSummary && (
             <div className={`p-4 rounded-xl text-xs space-y-2 border ${uploadSummary.success ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-rose-50 border-rose-200 text-rose-900'}`}>

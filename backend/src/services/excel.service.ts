@@ -495,6 +495,8 @@ export class ExcelService {
     const roomPartOccurrenceCount = new Map<string, number>();
     const serialMap = new Map<string, typeof allExistingLocItems[0]>();
 
+    const matchedDbIds = new Set<string>();
+
     allExistingLocItems.forEach((item) => {
       const rId = (item.roomId || '').trim().toLowerCase();
       const pId = (item.partId || '').trim().toLowerCase();
@@ -506,10 +508,12 @@ export class ExcelService {
 
       // Key 1: roomId_partId_occurrenceIndex
       occurrenceMap.set(`${keyBase}_${count}`, item);
-      // Key 2: roomId_partId_partSerialNo_occurrenceIndex
-      if (sNo && sNo !== 'xyz') {
+      // Key 2: roomId_partId_partSerialNo_occurrenceIndex (exclude generic serials like 'xyz')
+      if (sNo && !['xyz', 'n/a', 'na', 'null', 'none'].includes(sNo)) {
         occurrenceMap.set(`${keyBase}_${sNo}_${count}`, item);
-        serialMap.set(sNo, item);
+        if (!serialMap.has(sNo)) {
+          serialMap.set(sNo, item);
+        }
       }
     });
 
@@ -568,12 +572,33 @@ export class ExcelService {
         const occIndex = excelOccurrenceTracker.get(keyBase) || 0;
         excelOccurrenceTracker.set(keyBase, occIndex + 1);
 
-        const existingRecord =
-          occurrenceMap.get(`${keyBase}_${sNoClean}_${occIndex}`) ||
-          occurrenceMap.get(`${keyBase}_${occIndex}`) ||
-          serialMap.get(sNoClean);
+        // Find candidate existing record without double-matching any single DB row
+        let existingRecord: typeof allExistingLocItems[0] | undefined = undefined;
+
+        // Try 1: Exact room + part + serial + occurrence index
+        const candidate1 = occurrenceMap.get(`${keyBase}_${sNoClean}_${occIndex}`);
+        if (candidate1 && !matchedDbIds.has(candidate1.id)) {
+          existingRecord = candidate1;
+        }
+
+        // Try 2: Exact room + part + occurrence index
+        if (!existingRecord) {
+          const candidate2 = occurrenceMap.get(`${keyBase}_${occIndex}`);
+          if (candidate2 && !matchedDbIds.has(candidate2.id)) {
+            existingRecord = candidate2;
+          }
+        }
+
+        // Try 3: Unique serial lookup (ONLY for valid non-generic serial numbers)
+        if (!existingRecord && sNoClean && !['xyz', 'n/a', 'na', 'null', 'none'].includes(sNoClean)) {
+          const candidate3 = serialMap.get(sNoClean);
+          if (candidate3 && !matchedDbIds.has(candidate3.id)) {
+            existingRecord = candidate3;
+          }
+        }
 
         if (existingRecord) {
+          matchedDbIds.add(existingRecord.id);
           // Check if this device was replaced or dispatched in app software
           const isReplacedInApp =
             existingRecord.status === 'REPLACED' ||

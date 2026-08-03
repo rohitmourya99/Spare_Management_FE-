@@ -764,7 +764,7 @@ export class InventoryService {
    */
   async replenishItem(
     id: string,
-    data: { serialNo?: string; serialNumber?: string; quantity?: number; pcs?: number; addedPcs?: number; remarks?: string },
+    data: { newSerialNo?: string; serialNo?: string; serialNumber?: string; quantity?: number; pcs?: number; addedPcs?: number; remarks?: string },
     userId: string
   ) {
     const item = await prisma.inventoryItem.findFirst({
@@ -773,7 +773,7 @@ export class InventoryService {
     });
     if (!item) throw new AppError(404, 'Stock item not found');
 
-    const cleanSerial = (data.serialNo || data.serialNumber || '').trim();
+    const cleanSerial = (data.newSerialNo || data.serialNo || data.serialNumber || '').trim();
     if (cleanSerial && item.serialNumber && cleanSerial !== item.serialNumber) {
       const existing = await prisma.inventoryItem.findUnique({
         where: { serialNumber: cleanSerial },

@@ -382,7 +382,30 @@ export class ExcelService {
         const dateObj = xlsx.SSF.parse_date_code(val);
         if (dateObj) return new Date(Date.UTC(dateObj.y, dateObj.m - 1, dateObj.d));
       }
-      const parsed = new Date(val);
+      const str = String(val).trim();
+      if (!str) return null;
+
+      // Support DD/MM/YYYY, DD-MM-YYYY, or DD.MM.YYYY
+      if (/^\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}$/.test(str)) {
+        const parts = str.split(/[\/\-\.]/);
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        let year = parseInt(parts[2], 10);
+        if (year < 100) year += 2000;
+        const d = new Date(year, month, day);
+        if (!isNaN(d.getTime())) return d;
+      }
+
+      // Support Excel numeric string serial codes (e.g. "45123")
+      if (/^\d{4,6}$/.test(str)) {
+        const num = parseFloat(str);
+        if (!isNaN(num)) {
+          const dateObj = xlsx.SSF.parse_date_code(num);
+          if (dateObj) return new Date(Date.UTC(dateObj.y, dateObj.m - 1, dateObj.d));
+        }
+      }
+
+      const parsed = new Date(str);
       return !isNaN(parsed.getTime()) ? parsed : null;
     };
 
@@ -494,13 +517,19 @@ export class ExcelService {
       }
     }
 
-    // High-Speed Batch Create using createMany
+    // High-Speed Batch Create using createMany with chunk size of 500
     if (recordsToCreate.length > 0) {
-      const createRes = await prisma.locationInventory.createMany({
-        data: recordsToCreate,
-        skipDuplicates: true,
-      });
-      summary.imported = createRes.count;
+      const CHUNK_SIZE = 500;
+      let totalCreated = 0;
+      for (let i = 0; i < recordsToCreate.length; i += CHUNK_SIZE) {
+        const chunk = recordsToCreate.slice(i, i + CHUNK_SIZE);
+        const createRes = await prisma.locationInventory.createMany({
+          data: chunk,
+          skipDuplicates: true,
+        });
+        totalCreated += createRes.count;
+      }
+      summary.imported = totalCreated;
     }
 
     // Process updates in fast transaction batches

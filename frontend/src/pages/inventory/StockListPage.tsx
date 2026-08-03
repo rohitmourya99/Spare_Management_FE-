@@ -53,7 +53,7 @@ export const StockListPage: React.FC = () => {
   const [restockRemarks, setRestockRemarks] = useState('');
 
   const restockMutation = useMutation({
-    mutationFn: async (payload: { id: string; serialNo?: string; serialNumber?: string; quantity?: number; pcs?: number; remarks?: string }) => {
+    mutationFn: async (payload: { id: string; newSerialNo?: string; serialNo?: string; serialNumber?: string; quantity?: number; pcs?: number; remarks?: string }) => {
       const res = await api.patch(`/stock/${payload.id}/replenish`, payload);
       return res.data;
     },
@@ -790,6 +790,7 @@ export const StockListPage: React.FC = () => {
               e.preventDefault();
               restockMutation.mutate({
                 id: restockModalItem.id,
+                newSerialNo: restockSerial,
                 serialNo: restockSerial,
                 serialNumber: restockSerial,
                 quantity: restockQty,

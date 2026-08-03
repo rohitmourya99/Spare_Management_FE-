@@ -370,7 +370,17 @@ export const InventoryListPage: React.FC = () => {
                   ) : (
                     installedItems.map((item, index) => {
                       const sequenceNo = ((page - 1) * 15) + index + 1;
-                      const serialDisplay = item.partSerialNo || 'XYZ';
+                      const rawSerial = item.partSerialNo || 'XYZ';
+                      const isXYZ = !rawSerial || rawSerial.toUpperCase().startsWith('XYZ');
+                      let serialDisplay = isXYZ ? 'XYZ' : rawSerial;
+                      if (!isXYZ && serialDisplay.includes('_')) {
+                        const firstPart = serialDisplay.split('_')[0]?.trim();
+                        if (firstPart && firstPart.toUpperCase() !== 'XYZ') {
+                          serialDisplay = firstPart;
+                        } else {
+                          serialDisplay = 'XYZ';
+                        }
+                      }
                       const formatDate = (d: string | null | undefined) =>
                         d ? new Date(d).toLocaleDateString('en-IN') : null;
                       return (

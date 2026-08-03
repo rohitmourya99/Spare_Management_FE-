@@ -599,7 +599,14 @@ export class InventoryService {
         where,
         skip,
         take: limit,
-        orderBy: { updatedAt: 'desc' },
+        orderBy: [
+          { unit: 'asc' },
+          { subUnit: 'asc' },
+          { state: 'asc' },
+          { buildingName: 'asc' },
+          { roomId: 'asc' },
+          { partId: 'asc' },
+        ],
       }),
     ]);
 

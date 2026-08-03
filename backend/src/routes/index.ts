@@ -77,8 +77,10 @@ inventoryRoutes.post('/locations', authorize(UserRole.SUPER_ADMIN, UserRole.INVE
 
 inventoryRoutes.get('/location-hierarchy', (req, res, next) => inventoryController.getLocationHierarchy(req, res).catch(next));
 inventoryRoutes.get('/room-items', (req, res, next) => inventoryController.getRoomInstalledItems(req, res).catch(next));
-inventoryRoutes.post('/restock', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.ENGINEER), (req, res, next) => inventoryController.restockItem(req, res).catch(next));
-inventoryRoutes.post('/:id/restock', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.ENGINEER), (req, res, next) => inventoryController.restockItem(req, res).catch(next));
+inventoryRoutes.post('/restock', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.ENGINEER), (req, res, next) => inventoryController.replenishItem(req, res).catch(next));
+inventoryRoutes.post('/:id/restock', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.ENGINEER), (req, res, next) => inventoryController.replenishItem(req, res).catch(next));
+inventoryRoutes.patch('/:id/replenish', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.ENGINEER), (req, res, next) => inventoryController.replenishItem(req, res).catch(next));
+inventoryRoutes.post('/:id/replenish', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.ENGINEER), (req, res, next) => inventoryController.replenishItem(req, res).catch(next));
 
 // Replacement Serial Number In-Place Update Endpoint
 inventoryRoutes.post('/replace-serial', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.ENGINEER), (req, res, next) => inventoryController.replaceSerial(req, res).catch(next));
@@ -181,6 +183,15 @@ userRoutes.patch('/:id/reset-password', authorize(UserRole.SUPER_ADMIN, UserRole
 userRoutes.post('/:id/reset-password', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN), (req, res, next) => userController.resetPassword(req, res).catch(next));
 
 // ==============================================
+// STOCK ROUTES (/api/stock)
+// ==============================================
+const stockRoutes = Router();
+stockRoutes.use(authenticate);
+stockRoutes.patch('/:id/replenish', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.ENGINEER), (req, res, next) => inventoryController.replenishItem(req, res).catch(next));
+stockRoutes.post('/:id/replenish', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.ENGINEER), (req, res, next) => inventoryController.replenishItem(req, res).catch(next));
+stockRoutes.post('/:id/restock', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.ENGINEER), (req, res, next) => inventoryController.replenishItem(req, res).catch(next));
+
+// ==============================================
 // ACTIVITY LOG ROUTES
 // ==============================================
 const activityRoutes = Router();
@@ -190,6 +201,7 @@ activityRoutes.get('/', (req, res, next) => activityController.getAll(req, res).
 // Mount sub-routers
 router.use('/auth', authRoutes);
 router.use('/inventory', inventoryRoutes);
+router.use('/stock', stockRoutes);
 router.use('/dispatch', dispatchRoutes);
 router.use('/pickup', pickupRoutes);
 router.use('/rma', rmaRoutes);

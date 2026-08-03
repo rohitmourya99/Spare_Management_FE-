@@ -132,6 +132,11 @@ export class InventoryController {
     ApiResponse.success(res, item, 'Item re-stocked back to AVAILABLE status');
   }
 
+  async replenishItem(req: Request, res: Response): Promise<void> {
+    const item = await inventoryService.replenishItem(req.params.id, req.body, req.user!.userId);
+    ApiResponse.success(res, item, 'Stock item successfully re-stocked and set to AVAILABLE');
+  }
+
   async getLocationHierarchy(req: Request, res: Response): Promise<void> {
     const hierarchy = await inventoryService.getLocationHierarchy();
     ApiResponse.success(res, hierarchy);

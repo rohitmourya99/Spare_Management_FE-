@@ -39,6 +39,9 @@ export const StockListPage: React.FC = () => {
   const [locationDetails, setLocationDetails] = useState<any>(null);
   const [loadingLocation, setLoadingLocation] = useState(false);
 
+  // Toast Notification State
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
   // Add Replacement Serial Modal State
   const [replacementModalItem, setReplacementModalItem] = useState<InventoryItem | null>(null);
   const [replacementSerial, setReplacementSerial] = useState('');
@@ -50,13 +53,15 @@ export const StockListPage: React.FC = () => {
   const [restockRemarks, setRestockRemarks] = useState('');
 
   const restockMutation = useMutation({
-    mutationFn: async (payload: { id: string; serialNumber?: string; quantity?: number; remarks?: string }) => {
-      const res = await api.post(`/inventory/${payload.id}/restock`, payload);
+    mutationFn: async (payload: { id: string; serialNo?: string; serialNumber?: string; quantity?: number; pcs?: number; remarks?: string }) => {
+      const res = await api.patch(`/stock/${payload.id}/replenish`, payload);
       return res.data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      setToastMessage(data?.message || 'Stock item successfully re-stocked and status set to AVAILABLE.');
+      setTimeout(() => setToastMessage(null), 4000);
       setRestockModalItem(null);
       setRestockSerial('');
       setRestockQty(1);
@@ -269,6 +274,17 @@ export const StockListPage: React.FC = () => {
 
   return (
     <Layout title="Stock List Master">
+      {/* Success Toast Notification */}
+      {toastMessage && (
+        <div className="fixed top-5 right-5 z-50 bg-emerald-600 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 border border-emerald-500 toast text-xs font-bold">
+          <CheckCircle2 className="w-4 h-4 text-white" />
+          <span>{toastMessage}</span>
+          <button onClick={() => setToastMessage(null)} className="ml-2 text-white/80 hover:text-white">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Top Controls Header */}
       <div className="space-y-4 mb-6">
         {/* Row 1: Warehouse Tabs & Actions */}
@@ -466,7 +482,7 @@ export const StockListPage: React.FC = () => {
 
                       <td className="p-3.5 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
-                          {item.status === 'DISPATCHED' && (
+                          {item.status !== 'AVAILABLE' && (
                             <button
                               onClick={() => {
                                 setRestockModalItem(item);
@@ -477,18 +493,8 @@ export const StockListPage: React.FC = () => {
                               className="p-1.5 rounded bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-300 transition-colors text-xs flex items-center gap-1 font-bold shadow-sm"
                               title="Re-Stock / Add Serial - Reset Status to AVAILABLE"
                             >
-                              <RefreshCw className="w-3.5 h-3.5" />
-                              <span className="text-[10px]">Re-Stock</span>
-                            </button>
-                          )}
-                          {item.status !== 'AVAILABLE' && (
-                            <button
-                              onClick={() => { setReplacementModalItem(item); setReplacementSerial(''); }}
-                              className="p-1.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors text-xs flex items-center gap-1"
-                              title="Add Replacement Serial Part"
-                            >
-                              <Plus className="w-3 h-3" />
-                              <span className="text-[10px] font-bold">New Serial</span>
+                              <RefreshCw className="w-3 h-3" />
+                              <span className="text-[10px]">Re-Stock / Add Serial</span>
                             </button>
                           )}
                           <button
@@ -777,15 +783,17 @@ export const StockListPage: React.FC = () => {
       </Modal>
 
       {/* Re-Stock / Add Serial Modal */}
-      <Modal isOpen={!!restockModalItem} onClose={() => setRestockModalItem(null)} title="Re-Stock Dispatched Item" maxWidth="md">
+      <Modal isOpen={!!restockModalItem} onClose={() => setRestockModalItem(null)} title="Re-Stock / Add Serial Modal" maxWidth="md">
         {restockModalItem && (
           <form
             onSubmit={(e) => {
               e.preventDefault();
               restockMutation.mutate({
                 id: restockModalItem.id,
+                serialNo: restockSerial,
                 serialNumber: restockSerial,
                 quantity: restockQty,
+                pcs: restockQty,
                 remarks: restockRemarks,
               });
             }}
@@ -794,47 +802,50 @@ export const StockListPage: React.FC = () => {
             <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-950">
               <p className="font-bold flex items-center gap-1.5 mb-1">
                 <RefreshCw className="w-4 h-4 text-emerald-600" />
-                Re-Stocking Item to Available Stock:
+                Re-Stocking Item to AVAILABLE Status:
               </p>
               <p className="font-semibold text-emerald-900">{restockModalItem.productName} ({restockModalItem.spareId})</p>
-              <p className="text-[11px] text-emerald-700 mt-0.5">OEM: {restockModalItem.oem?.name} · Current Status: DISPATCHED</p>
+              <p className="text-[11px] text-emerald-700 mt-0.5">OEM: {restockModalItem.oem?.name} · Current Status: {restockModalItem.status}</p>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-800 mb-1">
-                {restockModalItem.isSerialized ? 'Enter NEW Serial No. *' : 'Serial Number (Optional)'}
-              </label>
-              <input
-                type="text"
-                required={restockModalItem.isSerialized}
-                value={restockSerial}
-                onChange={(e) => setRestockSerial(e.target.value)}
-                placeholder="e.g. SN-RSTK-998877"
-                className="w-full px-3 py-2 bg-white border border-slate-300 font-mono text-xs font-bold text-indigo-700 rounded-xl focus:outline-none focus:border-indigo-600"
-              />
-            </div>
-
-            {!restockModalItem.isSerialized && (
+            {restockModalItem.isSerialized ? (
               <div>
-                <label className="block text-xs font-bold text-slate-800 mb-1">Re-Stock Quantity *</label>
+                <label className="block text-xs font-bold text-slate-800 mb-1">
+                  New Serial Number *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={restockSerial}
+                  onChange={(e) => setRestockSerial(e.target.value)}
+                  placeholder="Enter new serial number (e.g. SN-RSTK-998877)"
+                  className="w-full px-3 py-2 bg-white border border-slate-300 font-mono text-xs font-bold text-indigo-700 rounded-xl focus:outline-none focus:border-indigo-600"
+                />
+              </div>
+            ) : (
+              <div>
+                <label className="block text-xs font-bold text-slate-800 mb-1">
+                  Quantity / Pcs to Add *
+                </label>
                 <input
                   type="number"
                   min={1}
                   required
                   value={restockQty}
                   onChange={(e) => setRestockQty(parseInt(e.target.value, 10))}
+                  placeholder="Enter quantity of pcs to add"
                   className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:border-indigo-600"
                 />
               </div>
             )}
 
             <div>
-              <label className="block text-xs font-bold text-slate-800 mb-1">Re-Stock Remarks</label>
+              <label className="block text-xs font-bold text-slate-800 mb-1">Remarks / Note (Optional)</label>
               <textarea
                 rows={2}
                 value={restockRemarks}
                 onChange={(e) => setRestockRemarks(e.target.value)}
-                placeholder="Notes regarding re-stocking or repair completion..."
+                placeholder="Enter any optional remarks or notes..."
                 className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-600"
               />
             </div>
@@ -844,7 +855,7 @@ export const StockListPage: React.FC = () => {
                 Cancel
               </Button>
               <Button variant="primary" size="sm" type="submit" isLoading={restockMutation.isPending}>
-                Confirm Re-Stock (Set AVAILABLE)
+                Save &amp; Set Available
               </Button>
             </div>
           </form>

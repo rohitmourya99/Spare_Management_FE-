@@ -759,11 +759,12 @@ export class InventoryService {
   }
 
   /**
-   * Re-stock DISPATCHED item back to AVAILABLE status with optional new serial number or quantity
+   * Re-stock / Replenish stock item back to AVAILABLE status
+   * Supports both Serialized (New Serial Number) & Non-Serialized (Quantity / Pcs)
    */
-  async restockItem(
+  async replenishItem(
     id: string,
-    data: { serialNumber?: string; quantity?: number; remarks?: string },
+    data: { serialNo?: string; serialNumber?: string; quantity?: number; pcs?: number; addedPcs?: number; remarks?: string },
     userId: string
   ) {
     const item = await prisma.inventoryItem.findFirst({
@@ -772,48 +773,110 @@ export class InventoryService {
     });
     if (!item) throw new AppError(404, 'Stock item not found');
 
-    const cleanSerial = data.serialNumber ? data.serialNumber.trim() : null;
-    const isSerialized = Boolean(cleanSerial || item.isSerialized);
-    const restockQty = data.quantity || 1;
-    const newAvail = item.isSerialized ? 1 : Math.max(item.availableQuantity + restockQty, restockQty);
+    const cleanSerial = (data.serialNo || data.serialNumber || '').trim();
+    if (cleanSerial && item.serialNumber && cleanSerial !== item.serialNumber) {
+      const existing = await prisma.inventoryItem.findUnique({
+        where: { serialNumber: cleanSerial },
+      });
+      if (existing && existing.id !== item.id) {
+        throw new AppError(400, `Item with serial number '${cleanSerial}' already exists in stock.`);
+      }
+    }
 
-    const updated = await prisma.inventoryItem.update({
-      where: { id: item.id },
-      data: {
-        status: 'AVAILABLE',
-        availableQuantity: newAvail,
-        serialNumber: cleanSerial || item.serialNumber,
-        isSerialized,
-        reservedFor: null,
-        dispatchedToRoomId: null,
-        remarks: data.remarks || `Re-stocked item back to AVAILABLE status`,
-        updatedById: userId,
-      },
-    });
+    const pcsToAdd = Number(data.quantity || data.pcs || data.addedPcs || 1);
 
-    await prisma.inventoryMovement.create({
-      data: {
-        inventoryItemId: item.id,
-        type: 'RESTOCK',
-        quantity: restockQty,
-        previousStock: item.availableQuantity,
-        newStock: newAvail,
-        performedById: userId,
-        remarks: `Item re-stocked back to AVAILABLE status ${cleanSerial ? '(New Serial: ' + cleanSerial + ')' : ''}`,
-      },
-    });
+    if (item.isSerialized || cleanSerial) {
+      // For Serialized Parts
+      const updated = await prisma.inventoryItem.update({
+        where: { id: item.id },
+        data: {
+          status: 'AVAILABLE',
+          availableQuantity: 1,
+          quantity: item.quantity > 0 ? item.quantity : 1,
+          serialNumber: cleanSerial || item.serialNumber,
+          isSerialized: true,
+          reservedFor: null,
+          dispatchedToRoomId: null,
+          replacedFaultySerialNo: null,
+          remarks: data.remarks || item.remarks || 'Re-stocked item set to AVAILABLE',
+          updatedById: userId,
+        },
+      });
 
-    await prisma.activityLog.create({
-      data: {
-        userId,
-        action: 'RESTOCK',
-        entity: 'InventoryItem',
-        entityId: item.id,
-        entityLabel: `Re-stocked item ${item.productName} (${item.spareId})`,
-      },
-    });
+      await prisma.inventoryMovement.create({
+        data: {
+          inventoryItemId: item.id,
+          type: 'RESTOCK',
+          quantity: 1,
+          previousStock: item.availableQuantity,
+          newStock: 1,
+          performedById: userId,
+          remarks: `Serialized part re-stocked to AVAILABLE ${cleanSerial ? '(New Serial No: ' + cleanSerial + ')' : ''}`,
+        },
+      });
 
-    return updated;
+      await prisma.activityLog.create({
+        data: {
+          userId,
+          action: 'RESTOCK',
+          entity: 'InventoryItem',
+          entityId: item.id,
+          entityLabel: `Re-stocked serialized item ${item.productName} (${item.spareId})`,
+        },
+      });
+
+      return updated;
+    } else {
+      // For Non-Serialized Parts
+      const newTotalQty = item.quantity + pcsToAdd;
+      const newAvail = item.availableQuantity + pcsToAdd;
+
+      const updated = await prisma.inventoryItem.update({
+        where: { id: item.id },
+        data: {
+          status: 'AVAILABLE',
+          quantity: newTotalQty,
+          availableQuantity: newAvail,
+          reservedFor: null,
+          dispatchedToRoomId: null,
+          remarks: data.remarks || item.remarks,
+          updatedById: userId,
+        },
+      });
+
+      await prisma.inventoryMovement.create({
+        data: {
+          inventoryItemId: item.id,
+          type: 'RESTOCK',
+          quantity: pcsToAdd,
+          previousStock: item.availableQuantity,
+          newStock: newAvail,
+          performedById: userId,
+          remarks: `Non-serialized part re-stocked by ${pcsToAdd} pcs (New Available Stock: ${newAvail})`,
+        },
+      });
+
+      await prisma.activityLog.create({
+        data: {
+          userId,
+          action: 'RESTOCK',
+          entity: 'InventoryItem',
+          entityId: item.id,
+          entityLabel: `Re-stocked ${pcsToAdd} pcs for ${item.productName} (${item.spareId})`,
+        },
+      });
+
+      return updated;
+    }
+  }
+
+  /** Alias for restockItem */
+  async restockItem(
+    id: string,
+    data: { serialNo?: string; serialNumber?: string; quantity?: number; pcs?: number; addedPcs?: number; remarks?: string },
+    userId: string
+  ) {
+    return this.replenishItem(id, data, userId);
   }
 
   /**

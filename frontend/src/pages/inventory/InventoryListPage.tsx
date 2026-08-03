@@ -370,17 +370,20 @@ export const InventoryListPage: React.FC = () => {
                   ) : (
                     installedItems.map((item, index) => {
                       const sequenceNo = ((page - 1) * 15) + index + 1;
+                      const serialDisplay = item.partSerialNo || 'XYZ';
+                      const formatDate = (d: string | null | undefined) =>
+                        d ? new Date(d).toLocaleDateString('en-IN') : null;
                       return (
                         <tr key={item.id} className="hover:bg-slate-50 transition-colors">
                           <td className="p-3 font-mono font-bold text-slate-700 text-center">{sequenceNo}</td>
                           <td className="p-3 text-slate-700 font-medium">
-                            {item.installationDate ? new Date(item.installationDate).toLocaleDateString('en-IN') : '—'}
+                            {formatDate(item.installationDate) ?? <span className="italic text-slate-400 font-normal text-[11px]">Not Set</span>}
                           </td>
                           <td className="p-3 font-bold text-slate-900">{item.oem}</td>
                           <td className="p-3 font-mono font-bold text-indigo-600">{item.partId}</td>
                           <td className="p-3 font-mono">
-                            <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded font-bold">
-                              {item.partSerialNo}
+                            <span className={`px-2 py-0.5 rounded font-bold border text-xs ${serialDisplay === 'XYZ' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-800 border-emerald-200'}`}>
+                              {serialDisplay}
                             </span>
                           </td>
                           <td className="p-3 font-mono text-slate-800 font-bold">{item.roomId}</td>
@@ -397,10 +400,10 @@ export const InventoryListPage: React.FC = () => {
                             </span>
                           </td>
                           <td className="p-3 text-slate-700">
-                            {item.contractStartDate ? new Date(item.contractStartDate).toLocaleDateString('en-IN') : '—'}
+                            {formatDate(item.contractStartDate) ?? <span className="italic text-slate-400 font-normal text-[11px]">Not Set</span>}
                           </td>
                           <td className="p-3 text-slate-700">
-                            {item.contractEndDate ? new Date(item.contractEndDate).toLocaleDateString('en-IN') : '—'}
+                            {formatDate(item.contractEndDate) ?? <span className="italic text-slate-400 font-normal text-[11px]">Not Set</span>}
                           </td>
                         </tr>
                       );

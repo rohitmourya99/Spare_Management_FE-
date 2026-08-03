@@ -516,7 +516,9 @@ export class ExcelService {
       try {
         const oem = getValue(row, ['OEM', 'oem', 'Manufacturer']);
         const partId = getValue(row, ['Part ID', 'partId', 'PartID', 'part_id', 'Part Code', 'partCode']);
-        const exactSerial = getValue(row, ['Part Serial No.', 'Part Serial No', 'partSerialNo', 'serialNumber', 'Serial No', 'serial_no', 'Serial']);
+        // Default missing / blank Part Serial No. to 'XYZ'
+        const rawSerial = getValue(row, ['Part Serial No.', 'Part Serial No', 'partSerialNo', 'serialNumber', 'Serial No', 'serial_no', 'Serial']);
+        const exactSerial = (!rawSerial || rawSerial === 'XYZ') ? 'XYZ' : rawSerial;
         const roomId = getValue(row, ['Room ID', 'roomId', 'RoomID', 'room_id']);
         const locationClass = getValue(row, ['Location Class', 'locationClass', 'LocationClass', 'location_class', 'Class']);
         const solutionType = getValue(row, ['Solution Type', 'solutionType', 'SolutionType', 'solution_type']);
@@ -527,9 +529,10 @@ export class ExcelService {
         const subUnit = getValue(row, ['Sub Unit', 'subUnit', 'SubUnit', 'sub_unit', 'Sub Location', 'sublocation']);
         const state = getValue(row, ['State', 'state']);
 
-        const installationDate = parseExcelDate(getValue(row, ['Installation Date', 'installationDate', 'installedDate']));
-        const contractStartDate = parseExcelDate(getValue(row, ['Contract Start Date', 'contractStartDate']));
-        const contractEndDate = parseExcelDate(getValue(row, ['Contract End Date', 'contractEndDate']));
+        // Safely parse dates — returns null for missing/blank/invalid without throwing
+        const installationDate = parseExcelDate(getValue(row, ['Installation Date', 'installationDate', 'installedDate'])) ?? null;
+        const contractStartDate = parseExcelDate(getValue(row, ['Contract Start Date', 'contractStartDate'])) ?? null;
+        const contractEndDate = parseExcelDate(getValue(row, ['Contract End Date', 'contractEndDate'])) ?? null;
 
         const rIdClean = roomId.toLowerCase();
         const pIdClean = partId.toLowerCase();
@@ -626,9 +629,9 @@ export class ExcelService {
       }
     }
 
-    // Step 4: Perform bulk inserts using prisma.locationInventory.createMany({ data: chunk, skipDuplicates: false }) in chunks of 500
+    // Step 4: Perform bulk inserts in chunks of 250 to keep memory usage low
     if (newRecordsToInsert.length > 0) {
-      const CHUNK_SIZE = 500;
+      const CHUNK_SIZE = 250;
       let totalCreated = 0;
       for (let i = 0; i < newRecordsToInsert.length; i += CHUNK_SIZE) {
         const chunk = newRecordsToInsert.slice(i, i + CHUNK_SIZE);
@@ -653,9 +656,9 @@ export class ExcelService {
       summary.imported = totalCreated;
     }
 
-    // Step 5: Perform updates inside prisma.$transaction() in chunks of 100 update promises per transaction
+    // Step 5: Perform updates inside prisma.$transaction() in chunks of 50 to keep memory usage low
     if (updatesToPerform.length > 0) {
-      const BATCH_SIZE = 100;
+      const BATCH_SIZE = 50;
       for (let i = 0; i < updatesToPerform.length; i += BATCH_SIZE) {
         const chunk = updatesToPerform.slice(i, i + BATCH_SIZE);
         try {

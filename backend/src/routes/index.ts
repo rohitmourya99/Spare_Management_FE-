@@ -34,7 +34,11 @@ const uploadFileFilter: multer.Options['fileFilter'] = (_req, file, cb) => {
   }
 };
 
-const upload = multer({ storage: multer.memoryStorage(), fileFilter: uploadFileFilter });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: uploadFileFilter,
+  limits: { fileSize: 30 * 1024 * 1024 }, // 30MB max file size
+});
 const router = Router();
 
 // ==============================================

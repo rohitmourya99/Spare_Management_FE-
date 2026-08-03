@@ -559,6 +559,7 @@ export class InventoryService {
    */
   async getLocationInventories(filters: {
     search?: string;
+    sublocation?: string;
     state?: string;
     buildingName?: string;
     roomId?: string;
@@ -573,6 +574,12 @@ export class InventoryService {
     if (filters.buildingName) where.buildingName = { contains: filters.buildingName };
     if (filters.roomId) where.roomId = { contains: filters.roomId };
     if (filters.partId) where.partId = { contains: filters.partId };
+    if (filters.sublocation) {
+      where.OR = [
+        { subUnit: { contains: filters.sublocation } },
+        { unit: { contains: filters.sublocation } },
+      ];
+    }
 
     if (filters.search) {
       where.OR = [
@@ -749,6 +756,117 @@ export class InventoryService {
     });
 
     return newItem;
+  }
+
+  /**
+   * Re-stock DISPATCHED item back to AVAILABLE status with optional new serial number or quantity
+   */
+  async restockItem(
+    id: string,
+    data: { serialNumber?: string; quantity?: number; remarks?: string },
+    userId: string
+  ) {
+    const item = await prisma.inventoryItem.findFirst({
+      where: { id, isDeleted: false },
+      include: { oem: true },
+    });
+    if (!item) throw new AppError(404, 'Stock item not found');
+
+    const cleanSerial = data.serialNumber ? data.serialNumber.trim() : null;
+    const isSerialized = Boolean(cleanSerial || item.isSerialized);
+    const restockQty = data.quantity || 1;
+    const newAvail = item.isSerialized ? 1 : Math.max(item.availableQuantity + restockQty, restockQty);
+
+    const updated = await prisma.inventoryItem.update({
+      where: { id: item.id },
+      data: {
+        status: 'AVAILABLE',
+        availableQuantity: newAvail,
+        serialNumber: cleanSerial || item.serialNumber,
+        isSerialized,
+        reservedFor: null,
+        dispatchedToRoomId: null,
+        remarks: data.remarks || `Re-stocked item back to AVAILABLE status`,
+        updatedById: userId,
+      },
+    });
+
+    await prisma.inventoryMovement.create({
+      data: {
+        inventoryItemId: item.id,
+        type: 'RESTOCK',
+        quantity: restockQty,
+        previousStock: item.availableQuantity,
+        newStock: newAvail,
+        performedById: userId,
+        remarks: `Item re-stocked back to AVAILABLE status ${cleanSerial ? '(New Serial: ' + cleanSerial + ')' : ''}`,
+      },
+    });
+
+    await prisma.activityLog.create({
+      data: {
+        userId,
+        action: 'RESTOCK',
+        entity: 'InventoryItem',
+        entityId: item.id,
+        entityLabel: `Re-stocked item ${item.productName} (${item.spareId})`,
+      },
+    });
+
+    return updated;
+  }
+
+  /**
+   * Fetch distinct site-to-room hierarchy data for cascading frontend dropdown selectors
+   */
+  async getLocationHierarchy() {
+    const items = await prisma.locationInventory.findMany({
+      select: {
+        unit: true,
+        subUnit: true,
+        state: true,
+        floor: true,
+        buildingName: true,
+        roomName: true,
+        solutionType: true,
+        locationClass: true,
+        roomId: true,
+      },
+    });
+
+    const units = Array.from(new Set(items.map(i => i.unit).filter(Boolean)));
+    const sublocations = Array.from(new Set(items.map(i => i.subUnit).filter(Boolean)));
+    const states = Array.from(new Set(items.map(i => i.state).filter(Boolean)));
+    const floors = Array.from(new Set(items.map(i => i.floor).filter(Boolean)));
+    const buildingNames = Array.from(new Set(items.map(i => i.buildingName).filter(Boolean)));
+    const roomNames = Array.from(new Set(items.map(i => i.roomName).filter(Boolean)));
+    const solutionTypes = Array.from(new Set(items.map(i => i.solutionType).filter(Boolean)));
+    const locationClasses = Array.from(new Set(items.map(i => i.locationClass).filter(Boolean)));
+    const roomIds = Array.from(new Set(items.map(i => i.roomId).filter(Boolean)));
+
+    return {
+      units,
+      sublocations,
+      states,
+      floors,
+      buildingNames,
+      roomNames,
+      solutionTypes,
+      locationClasses,
+      roomIds,
+      items,
+    };
+  }
+
+  /**
+   * Dynamically fetch installed items in a given Room ID
+   */
+  async getRoomInstalledItems(roomId: string) {
+    const items = await prisma.locationInventory.findMany({
+      where: { roomId: { equals: roomId, mode: 'insensitive' } },
+      orderBy: { installationDate: 'desc' },
+    });
+    return items;
   }
 }
 

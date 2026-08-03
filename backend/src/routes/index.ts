@@ -75,6 +75,11 @@ inventoryRoutes.post('/categories', authorize(UserRole.SUPER_ADMIN, UserRole.INV
 inventoryRoutes.get('/locations', (req, res, next) => inventoryController.getLocations(req, res).catch(next));
 inventoryRoutes.post('/locations', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN), (req, res, next) => inventoryController.createLocation(req, res).catch(next));
 
+inventoryRoutes.get('/location-hierarchy', (req, res, next) => inventoryController.getLocationHierarchy(req, res).catch(next));
+inventoryRoutes.get('/room-items', (req, res, next) => inventoryController.getRoomInstalledItems(req, res).catch(next));
+inventoryRoutes.post('/restock', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.ENGINEER), (req, res, next) => inventoryController.restockItem(req, res).catch(next));
+inventoryRoutes.post('/:id/restock', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.ENGINEER), (req, res, next) => inventoryController.restockItem(req, res).catch(next));
+
 // Replacement Serial Number In-Place Update Endpoint
 inventoryRoutes.post('/replace-serial', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.ENGINEER), (req, res, next) => inventoryController.replaceSerial(req, res).catch(next));
 inventoryRoutes.put('/:id/replace-serial', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.ENGINEER), (req, res, next) => inventoryController.replaceSerial(req, res).catch(next));

@@ -40,6 +40,15 @@ export const DispatchListPage: React.FC = () => {
   const [form, setForm] = useState({
     inventoryItemId: '',
     siteId: '',
+    unit: '',
+    sublocation: '',
+    state: '',
+    floor: '',
+    buildingName: '',
+    roomName: '',
+    solutionType: '',
+    locationClass: '',
+    roomId: '',
     quantity: 1,
     courierName: '',
     trackingNo: '',
@@ -85,6 +94,24 @@ export const DispatchListPage: React.FC = () => {
     enabled: isModalOpen && itemSearch.length > 0,
   });
 
+  const { data: hierarchyData } = useQuery({
+    queryKey: ['location-hierarchy'],
+    queryFn: async () => {
+      const res = await api.get('/inventory/location-hierarchy');
+      return res.data.data;
+    },
+    enabled: isModalOpen,
+  });
+
+  const { data: roomItemsData, isLoading: roomItemsLoading } = useQuery({
+    queryKey: ['room-items', form.roomId],
+    queryFn: async () => {
+      const res = await api.get('/inventory/room-items', { params: { roomId: form.roomId } });
+      return res.data.data;
+    },
+    enabled: isModalOpen && Boolean(form.roomId && form.roomId.trim()),
+  });
+
   const createMutation = useMutation({
     mutationFn: async (payload: typeof form) => {
       const res = await api.post('/dispatch', payload);
@@ -93,6 +120,7 @@ export const DispatchListPage: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dispatches'] });
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['location-inventory'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
       setIsModalOpen(false);
       resetForm();
@@ -112,8 +140,7 @@ export const DispatchListPage: React.FC = () => {
 
   const resetForm = () => {
     setForm({
-      inventoryItemId: '', siteId: '', quantity: 1, courierName: '',
-      trackingNo: '', dispatchDate: new Date().toISOString().split('T')[0], expectedDelivery: '', remarks: '',
+      inventoryItemId: '', siteId: '', unit: '', sublocation: '', state: '', floor: '', buildingName: '', roomName: '', solutionType: '', locationClass: '', roomId: '', quantity: 1, courierName: '', trackingNo: '', dispatchDate: new Date().toISOString().split('T')[0], expectedDelivery: '', remarks: '',
     });
     setSelectedItem(null);
     setSelectedSite(null);
@@ -122,13 +149,24 @@ export const DispatchListPage: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.inventoryItemId || !form.siteId) return;
+    if (!form.inventoryItemId) return;
     createMutation.mutate(form);
   };
 
   const handleSelectSite = (siteId: string) => {
     setForm(f => ({ ...f, siteId }));
     const found = (sitesData || []).find(s => s.id === siteId) || null;
+    if (found) {
+      setForm(f => ({
+        ...f,
+        siteId: found.id,
+        buildingName: found.siteName || f.buildingName,
+        state: found.state || f.state,
+        sublocation: found.subLocation || f.sublocation,
+        unit: found.unitDivision || f.unit,
+        locationClass: found.locationClass || f.locationClass,
+      }));
+    }
     setSelectedSite(found);
   };
 
@@ -470,19 +508,198 @@ export const DispatchListPage: React.FC = () => {
             )}
           </div>
 
+          {/* Cascading Destination Site Selectors */}
+          <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+            <p className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+              <Building2 className="w-4 h-4 text-indigo-600" />
+              Integrated Site-to-Room Selector
+            </p>
+
+            <div className="grid grid-cols-3 gap-2.5">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Unit</label>
+                <input
+                  type="text"
+                  list="unit-options"
+                  placeholder="e.g. EDN / BHEL"
+                  value={form.unit}
+                  onChange={(e) => setForm(f => ({ ...f, unit: e.target.value }))}
+                  className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:border-indigo-600"
+                />
+                <datalist id="unit-options">
+                  {(hierarchyData?.units || []).map((u: string) => <option key={u} value={u} />)}
+                </datalist>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Sublocation</label>
+                <input
+                  type="text"
+                  list="sublocation-options"
+                  placeholder="e.g. ESD / Sub-Unit"
+                  value={form.sublocation}
+                  onChange={(e) => setForm(f => ({ ...f, sublocation: e.target.value }))}
+                  className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:border-indigo-600"
+                />
+                <datalist id="sublocation-options">
+                  {(hierarchyData?.sublocations || []).map((s: string) => <option key={s} value={s} />)}
+                </datalist>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">State</label>
+                <input
+                  type="text"
+                  list="state-options"
+                  placeholder="e.g. Karnataka"
+                  value={form.state}
+                  onChange={(e) => setForm(f => ({ ...f, state: e.target.value }))}
+                  className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:border-indigo-600"
+                />
+                <datalist id="state-options">
+                  {(hierarchyData?.states || []).map((st: string) => <option key={st} value={st} />)}
+                </datalist>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2.5">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Floor</label>
+                <input
+                  type="text"
+                  list="floor-options"
+                  placeholder="e.g. 2nd Floor"
+                  value={form.floor}
+                  onChange={(e) => setForm(f => ({ ...f, floor: e.target.value }))}
+                  className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:border-indigo-600"
+                />
+                <datalist id="floor-options">
+                  {(hierarchyData?.floors || []).map((fl: string) => <option key={fl} value={fl} />)}
+                </datalist>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Building Name *</label>
+                <input
+                  type="text"
+                  required
+                  list="building-options"
+                  placeholder="e.g. Main Server Building"
+                  value={form.buildingName}
+                  onChange={(e) => setForm(f => ({ ...f, buildingName: e.target.value }))}
+                  className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 focus:outline-none focus:border-indigo-600"
+                />
+                <datalist id="building-options">
+                  {(hierarchyData?.buildingNames || []).map((b: string) => <option key={b} value={b} />)}
+                </datalist>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Room Name</label>
+                <input
+                  type="text"
+                  list="roomname-options"
+                  placeholder="e.g. Control Room 1"
+                  value={form.roomName}
+                  onChange={(e) => setForm(f => ({ ...f, roomName: e.target.value }))}
+                  className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:border-indigo-600"
+                />
+                <datalist id="roomname-options">
+                  {(hierarchyData?.roomNames || []).map((rn: string) => <option key={rn} value={rn} />)}
+                </datalist>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2.5">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Solution Type</label>
+                <input
+                  type="text"
+                  list="solution-options"
+                  placeholder="e.g. Networking"
+                  value={form.solutionType}
+                  onChange={(e) => setForm(f => ({ ...f, solutionType: e.target.value }))}
+                  className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:border-indigo-600"
+                />
+                <datalist id="solution-options">
+                  {(hierarchyData?.solutionTypes || []).map((sol: string) => <option key={sol} value={sol} />)}
+                </datalist>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Location Class</label>
+                <input
+                  type="text"
+                  list="class-options"
+                  placeholder="e.g. Class A"
+                  value={form.locationClass}
+                  onChange={(e) => setForm(f => ({ ...f, locationClass: e.target.value }))}
+                  className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:border-indigo-600"
+                />
+                <datalist id="class-options">
+                  {(hierarchyData?.locationClasses || []).map((lc: string) => <option key={lc} value={lc} />)}
+                </datalist>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Room ID *</label>
+                <input
+                  type="text"
+                  required
+                  list="roomid-options"
+                  placeholder="e.g. ROOM-102"
+                  value={form.roomId}
+                  onChange={(e) => setForm(f => ({ ...f, roomId: e.target.value }))}
+                  className="w-full px-2.5 py-1.5 bg-white border border-indigo-300 rounded-lg text-xs font-mono font-bold text-indigo-700 focus:outline-none focus:border-indigo-600"
+                />
+                <datalist id="roomid-options">
+                  {(hierarchyData?.roomIds || []).map((rm: string) => <option key={rm} value={rm} />)}
+                </datalist>
+              </div>
+            </div>
+          </div>
+
+          {/* Dynamic Room Inspection Panel */}
+          {form.roomId && form.roomId.trim() !== '' && (
+            <div className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-2">
+              <p className="text-xs font-bold text-indigo-950 flex items-center justify-between">
+                <span>🔍 Installed Items Inspection in Room: <strong>{form.roomId}</strong></span>
+                {roomItemsLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-600" />}
+              </p>
+              {roomItemsData && roomItemsData.length > 0 ? (
+                <div className="max-h-36 overflow-y-auto bg-white border border-indigo-200 rounded-lg p-2 divide-y divide-slate-100 text-xs">
+                  {roomItemsData.map((item: any) => (
+                    <div key={item.id} className="py-1.5 flex items-center justify-between">
+                      <div>
+                        <span className="font-bold text-slate-900">{item.partId}</span>
+                        <span className="text-slate-500 ml-2 font-mono text-[11px]">SN: {item.partSerialNo}</span>
+                      </div>
+                      <div className="text-right text-[11px]">
+                        <span className="text-slate-600 font-semibold">{item.oem}</span>
+                        <span className="text-slate-400 ml-2">
+                          {item.installationDate ? new Date(item.installationDate).toLocaleDateString('en-IN') : '—'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[11px] text-slate-600 italic">No existing inventory items installed in room {form.roomId}. New dispatch item will be registered to this room.</p>
+              )}
+            </div>
+          )}
+
+          {/* Dedicated Remarks/Comment Field */}
           <div>
-            <label className="block text-xs font-bold text-slate-800 mb-1">Destination BHEL Site *</label>
-            <select
+            <label className="block text-xs font-bold text-slate-800 mb-1">Dispatch Comments / Remarks *</label>
+            <textarea
+              rows={2}
               required
-              value={form.siteId}
-              onChange={(e) => handleSelectSite(e.target.value)}
-              className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 font-bold focus:outline-none focus:border-indigo-600"
-            >
-              <option value="">Select Destination Site...</option>
-              {(sitesData || []).map(s => (
-                <option key={s.id} value={s.id}>{s.siteName} ({s.city}) - Class {s.locationClass}</option>
-              ))}
-            </select>
+              value={form.remarks}
+              onChange={(e) => setForm(f => ({ ...f, remarks: e.target.value }))}
+              placeholder="Enter dispatch notes, engineer instructions, or reasons..."
+              className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-600"
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-3">

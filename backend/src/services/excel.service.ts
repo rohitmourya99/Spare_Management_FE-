@@ -1,4 +1,5 @@
 import xlsx from 'xlsx';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { generateQRCode } from '../utils/qrcode.util';
 import { logger } from '../config/logger';
@@ -387,6 +388,16 @@ export class ExcelService {
 
     const seenSerials = new Set<string>();
 
+    // Single batch query to map existing records by partSerialNo
+    const existingLocItems = await prisma.locationInventory.findMany({
+      select: { id: true, partSerialNo: true },
+    });
+    const existingMap = new Map<string, string>();
+    existingLocItems.forEach((item) => existingMap.set(item.partSerialNo.toLowerCase(), item.id));
+
+    const recordsToCreate: Array<Prisma.LocationInventoryCreateInput> = [];
+    const updatesToPerform: Array<{ id: string; data: Prisma.LocationInventoryUpdateInput }> = [];
+
     for (let i = 0; i < rawData.length; i++) {
       const row = rawData[i];
       const rowNum = i + 2;
@@ -402,7 +413,7 @@ export class ExcelService {
         const roomName = String(getVal(row, 'Room Name') || '').trim();
         const floor = String(getVal(row, 'Floor') || '').trim();
         const unit = String(getVal(row, 'Unit') || '').trim();
-        const subUnit = String(getVal(row, 'Sub Unit') || '').trim();
+        const subUnit = String(getVal(row, 'Sub Unit') || getVal(row, 'SubUnit') || getVal(row, 'Sub Location') || '').trim();
         const state = String(getVal(row, 'State') || '').trim();
 
         const installationDate = parseExcelDate(getVal(row, 'Installation Date'));
@@ -432,13 +443,11 @@ export class ExcelService {
 
         seenSerials.add(partSerialNo.toLowerCase());
 
-        const existing = await prisma.locationInventory.findUnique({
-          where: { partSerialNo },
-        });
+        const existingId = existingMap.get(partSerialNo.toLowerCase());
 
-        if (existing) {
-          await prisma.locationInventory.update({
-            where: { id: existing.id },
+        if (existingId) {
+          updatesToPerform.push({
+            id: existingId,
             data: {
               installationDate,
               oem,
@@ -456,29 +465,25 @@ export class ExcelService {
               contractEndDate,
             },
           });
-          summary.updated++;
         } else {
-          await prisma.locationInventory.create({
-            data: {
-              installationDate,
-              oem,
-              partId,
-              partSerialNo,
-              roomId,
-              locationClass,
-              solutionType,
-              buildingName,
-              roomName,
-              floor,
-              unit,
-              subUnit,
-              state,
-              contractStartDate,
-              contractEndDate,
-              status: 'INSTALLED',
-            },
+          recordsToCreate.push({
+            installationDate,
+            oem,
+            partId,
+            partSerialNo,
+            roomId,
+            locationClass,
+            solutionType,
+            buildingName,
+            roomName,
+            floor,
+            unit,
+            subUnit,
+            state,
+            contractStartDate,
+            contractEndDate,
+            status: 'INSTALLED',
           });
-          summary.imported++;
         }
       } catch (err: any) {
         summary.failed++;
@@ -487,6 +492,27 @@ export class ExcelService {
           reason: err.message || `Error processing Row ${rowNum}`,
         });
       }
+    }
+
+    // High-Speed Batch Create using createMany
+    if (recordsToCreate.length > 0) {
+      const createRes = await prisma.locationInventory.createMany({
+        data: recordsToCreate,
+        skipDuplicates: true,
+      });
+      summary.imported = createRes.count;
+    }
+
+    // Process updates in fast transaction batches
+    if (updatesToPerform.length > 0) {
+      const BATCH_SIZE = 100;
+      for (let i = 0; i < updatesToPerform.length; i += BATCH_SIZE) {
+        const batch = updatesToPerform.slice(i, i + BATCH_SIZE);
+        await prisma.$transaction(
+          batch.map((u) => prisma.locationInventory.update({ where: { id: u.id }, data: u.data }))
+        );
+      }
+      summary.updated = updatesToPerform.length;
     }
 
     await prisma.activityLog.create({

@@ -53,22 +53,30 @@ export class ReportsService {
           },
           orderBy: { createdAt: 'desc' },
         });
-        return dispatches.map((d) => ({
-          'Dispatch No': d.dispatchNo,
-          'Spare ID': d.inventoryItem.spareId,
-          'Product Name': d.inventoryItem.productName,
-          OEM: d.inventoryItem.oem.name,
-          'Serial Number': d.inventoryItem.serialNumber || 'N/A',
-          'BHEL Site': d.site.siteName,
-          City: d.site.city || '',
-          'Contact Person': d.site.contactPerson || '',
-          Quantity: d.quantity,
-          Courier: d.courierName || '',
-          'Tracking No': d.trackingNo || '',
-          Status: d.status,
-          'Dispatched By': d.createdBy.name,
-          Date: d.createdAt.toISOString().split('T')[0],
-        }));
+        return dispatches.map((d) => {
+          let dispatchedSerial = d.inventoryItem.serialNumber || 'N/A';
+          let remarksClean = d.remarks || '';
+          if (d.remarks && d.remarks.includes('[Dispatched SN:')) {
+            const match = d.remarks.match(/\[Dispatched SN:\s*([^\]]+)\]/);
+            if (match && match[1]) {
+              dispatchedSerial = match[1].trim();
+            }
+          }
+
+          return {
+            'Part ID': d.inventoryItem.partCode || d.inventoryItem.partId || d.inventoryItem.productName,
+            'Dispatched Serial No': dispatchedSerial,
+            'Installed Room ID': d.roomId || d.inventoryItem.dispatchedToRoomId || 'N/A',
+            'Sublocation': d.sublocation || d.site?.subLocation || 'N/A',
+            'State': d.state || d.site?.state || 'N/A',
+            'Building Name': d.buildingName || d.site?.siteName || 'N/A',
+            'Floor': d.floor || 'N/A',
+            'Room Name': d.roomName || 'N/A',
+            'Dispatch Date': d.dispatchDate ? new Date(d.dispatchDate).toISOString().replace('T', ' ').substring(0, 19) : d.createdAt.toISOString().replace('T', ' ').substring(0, 19),
+            'Dispatched By': d.createdBy.name,
+            'Comments / Remarks': remarksClean,
+          };
+        });
       }
 
       case 'pickup': {
@@ -200,15 +208,16 @@ export class ReportsService {
 
         return auditLogs.map((log) => ({
           'Part ID': log.partId,
-          'Replaced Faulty Serial No': log.oldFaultySerialNo,
-          'New Spare Serial No': log.newSpareSerialNo,
-          'State / Location': log.state,
+          'Dispatched Serial No': log.newSpareSerialNo,
+          'Installed Room ID': log.roomId,
+          'Sublocation': 'N/A',
+          'State': log.state,
           'Building Name': log.buildingName,
-          'Room ID': log.roomId,
-          'Room Name': log.roomName || '—',
-          'Swap Date': new Date(log.swapDate).toISOString().replace('T', ' ').substring(0, 19),
+          'Floor': 'N/A',
+          'Room Name': log.roomName || 'N/A',
+          'Dispatch Date': new Date(log.swapDate).toISOString().replace('T', ' ').substring(0, 19),
           'Dispatched By': log.dispatchedByName || log.dispatchedBy?.name || 'System Dispatcher',
-          'OEM Turnaround Duration (Days)': log.turnaroundDays !== null && log.turnaroundDays !== undefined ? `${log.turnaroundDays} Days` : 'N/A',
+          'Comments / Remarks': `Swapped out Faulty Serial No: ${log.oldFaultySerialNo}`,
         }));
       }
 

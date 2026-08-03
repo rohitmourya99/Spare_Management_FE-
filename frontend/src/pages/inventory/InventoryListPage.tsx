@@ -50,7 +50,9 @@ export const InventoryListPage: React.FC = () => {
   // Search & Filter state for Location Inventory
   const [search, setSearch] = useState('');
   const [filterState, setFilterState] = useState('');
+  const [filterSublocation, setFilterSublocation] = useState('');
   const [filterBuilding, setFilterBuilding] = useState('');
+  const [filterRoomId, setFilterRoomId] = useState('');
   const [page, setPage] = useState(1);
 
   // Search state for Replacement Audit Log
@@ -63,10 +65,41 @@ export const InventoryListPage: React.FC = () => {
   const [uploadSummary, setUploadSummary] = useState<any>(null);
   const excelFileInputRef = useRef<HTMLInputElement>(null);
 
+  // Location Hierarchy Query
+  const { data: hierarchyData } = useQuery({
+    queryKey: ['location-hierarchy'],
+    queryFn: async () => {
+      const res = await api.get('/inventory/location-hierarchy');
+      return res.data.data;
+    },
+    enabled: activeTab === 'location-inventory',
+  });
+
+  const hierarchyItems: any[] = hierarchyData?.items || [];
+  const sublocationOptions: string[] = hierarchyData?.sublocations?.length
+    ? hierarchyData.sublocations
+    : Array.from(new Set(hierarchyItems.map(i => i.subUnit).filter(Boolean)));
+
+  const availableBuildings: string[] = Array.from(
+    new Set(
+      hierarchyItems
+        .filter(i => !filterSublocation || i.subUnit === filterSublocation || i.unit === filterSublocation)
+        .map(i => i.buildingName)
+        .filter(Boolean)
+    )
+  );
+
+  const availableRooms = hierarchyItems
+    .filter(i => (!filterSublocation || i.subUnit === filterSublocation || i.unit === filterSublocation) && (!filterBuilding || i.buildingName === filterBuilding))
+    .map(i => ({ roomId: i.roomId, roomName: i.roomName }))
+    .filter((v, idx, self) => v.roomId && self.findIndex(t => t.roomId === v.roomId) === idx);
+
   // Query Location Inventory
   const locationParams: any = { search, page, limit: 15 };
   if (filterState) locationParams.state = filterState;
+  if (filterSublocation) locationParams.sublocation = filterSublocation;
   if (filterBuilding) locationParams.buildingName = filterBuilding;
+  if (filterRoomId) locationParams.roomId = filterRoomId;
 
   const { data: locationData, isLoading: locationLoading } = useQuery({
     queryKey: ['location-inventory', locationParams],
@@ -167,39 +200,109 @@ export const InventoryListPage: React.FC = () => {
       {/* ============================== TAB 1: LOCATION INVENTORY (15-FIELD SPEC) ============================== */}
       {activeTab === 'location-inventory' && (
         <>
-          {/* Search & Filter Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl mb-5">
-            <div className="relative w-full sm:w-80">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-              <input
-                type="text"
-                placeholder="Search Serial, Part ID, Building, Room ID..."
-                value={search}
-                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-                className="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-600 font-medium"
-              />
-              {search && (
-                <button onClick={() => setSearch('')} className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-700">
-                  <X className="w-3.5 h-3.5" />
+          {/* Structured Hierarchical Folder-Wise Navigation Filter Bar */}
+          <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl mb-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                <Layers className="w-4 h-4 text-indigo-600" />
+                Folder-Wise Location Hierarchy Navigation
+              </p>
+              {(filterSublocation || filterBuilding || filterRoomId || filterState || search) && (
+                <button
+                  onClick={() => {
+                    setFilterSublocation('');
+                    setFilterBuilding('');
+                    setFilterRoomId('');
+                    setFilterState('');
+                    setSearch('');
+                    setPage(1);
+                  }}
+                  className="text-xs text-rose-600 font-bold hover:underline flex items-center gap-1"
+                >
+                  <X className="w-3.5 h-3.5" /> Clear Hierarchy Filters
                 </button>
               )}
             </div>
 
-            <div className="flex items-center gap-2.5">
-              <input
-                type="text"
-                placeholder="Filter State (e.g. MH, KA)..."
-                value={filterState}
-                onChange={(e) => { setFilterState(e.target.value); setPage(1); }}
-                className="px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:border-indigo-600"
-              />
-              <input
-                type="text"
-                placeholder="Filter Building Name..."
-                value={filterBuilding}
-                onChange={(e) => { setFilterBuilding(e.target.value); setPage(1); }}
-                className="px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:border-indigo-600"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+              {/* Sublocation Dropdown */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">1. Sublocation / Unit</label>
+                <select
+                  value={filterSublocation}
+                  onChange={(e) => {
+                    setFilterSublocation(e.target.value);
+                    setFilterBuilding('');
+                    setFilterRoomId('');
+                    setPage(1);
+                  }}
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:border-indigo-600 cursor-pointer"
+                >
+                  <option value="">📁 All Sublocations...</option>
+                  {sublocationOptions.map(sub => (
+                    <option key={sub} value={sub}>{sub}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Building Name Dropdown */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">2. Building Name</label>
+                <select
+                  value={filterBuilding}
+                  onChange={(e) => {
+                    setFilterBuilding(e.target.value);
+                    setFilterRoomId('');
+                    setPage(1);
+                  }}
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:border-indigo-600 cursor-pointer"
+                >
+                  <option value="">🏢 All Buildings...</option>
+                  {availableBuildings.map(b => (
+                    <option key={b} value={b}>{b}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Room Name / Room ID List */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">3. Room Name / Room ID</label>
+                <select
+                  value={filterRoomId}
+                  onChange={(e) => {
+                    setFilterRoomId(e.target.value);
+                    setPage(1);
+                  }}
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-indigo-700 focus:outline-none focus:border-indigo-600 cursor-pointer"
+                >
+                  <option value="">🚪 All Rooms / Room IDs...</option>
+                  {availableRooms.map(rm => (
+                    <option key={rm.roomId} value={rm.roomId}>
+                      {rm.roomId} {rm.roomName ? `(${rm.roomName})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Search Bar */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Search Serial / Part ID</label>
+                <div className="relative">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    placeholder="Search Serial, Part ID..."
+                    value={search}
+                    onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                    className="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-600 font-medium"
+                  />
+                  {search && (
+                    <button onClick={() => setSearch('')} className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-700">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 

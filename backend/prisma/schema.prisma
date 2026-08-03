@@ -282,6 +282,16 @@ model Dispatch {
   status           String    @default("DRAFT")
   remarks          String?
 
+  unit          String?
+  sublocation   String?
+  state         String?
+  floor         String?
+  buildingName  String?
+  roomName      String?
+  roomId        String?
+  solutionType  String?
+  locationClass String?
+
   createdById  String
   createdBy    User         @relation("CreatedByUser", fields: [createdById], references: [id])
   approvedById String?

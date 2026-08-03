@@ -127,6 +127,26 @@ export class InventoryController {
     ApiResponse.success(res, updated, 'Serial number updated and item set to AVAILABLE');
   }
 
+  async restockItem(req: Request, res: Response): Promise<void> {
+    const item = await inventoryService.restockItem(req.params.id, req.body, req.user!.userId);
+    ApiResponse.success(res, item, 'Item re-stocked back to AVAILABLE status');
+  }
+
+  async getLocationHierarchy(req: Request, res: Response): Promise<void> {
+    const hierarchy = await inventoryService.getLocationHierarchy();
+    ApiResponse.success(res, hierarchy);
+  }
+
+  async getRoomInstalledItems(req: Request, res: Response): Promise<void> {
+    const roomId = (req.query.roomId as string) || (req.params.roomId as string);
+    if (!roomId) {
+      ApiResponse.success(res, []);
+      return;
+    }
+    const items = await inventoryService.getRoomInstalledItems(roomId);
+    ApiResponse.success(res, items);
+  }
+
   // Exports
   async exportExcel(req: Request, res: Response): Promise<void> {
     const { items } = await inventoryService.getAll({ ...req.query as any, limit: '10000' });

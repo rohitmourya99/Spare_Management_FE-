@@ -6,8 +6,17 @@ import { parsePagination, buildPagination } from '../utils/response.util';
 
 export interface CreateDispatchDto {
   inventoryItemId: string;
-  siteId: string;
-  quantity: number;
+  siteId?: string;
+  unit?: string;
+  sublocation?: string;
+  state?: string;
+  floor?: string;
+  buildingName?: string;
+  roomName?: string;
+  roomId?: string;
+  solutionType?: string;
+  locationClass?: string;
+  quantity?: number;
   courierName?: string;
   trackingNo?: string;
   dispatchDate?: string;
@@ -35,6 +44,8 @@ export class DispatchService {
         { trackingNo: { contains: filters.search } },
         { site: { siteName: { contains: filters.search } } },
         { inventoryItem: { productName: { contains: filters.search } } },
+        { buildingName: { contains: filters.search } },
+        { roomId: { contains: filters.search } },
       ];
     }
 
@@ -102,6 +113,7 @@ export class DispatchService {
   async create(data: CreateDispatchDto, userId: string) {
     const item = await prisma.inventoryItem.findFirst({
       where: { id: data.inventoryItemId, isDeleted: false },
+      include: { oem: true },
     });
     if (!item) throw new AppError(404, 'Inventory item not found');
 
@@ -113,13 +125,43 @@ export class DispatchService {
       );
     }
 
+    // Resolve or find/create Site if siteId is missing
+    let targetSiteId = data.siteId;
+    if (!targetSiteId) {
+      const siteName = data.buildingName
+        ? `${data.buildingName} ${data.roomName ? '- ' + data.roomName : ''} (${data.roomId || 'Site'})`.trim()
+        : 'Default Site';
+      
+      let existingSite = await prisma.site.findFirst({
+        where: { siteName: { equals: siteName } },
+      });
+
+      if (!existingSite) {
+        existingSite = await prisma.site.findFirst();
+      }
+
+      if (!existingSite) {
+        existingSite = await prisma.site.create({
+          data: {
+            siteName,
+            unitDivision: data.unit || 'Main Unit',
+            subLocation: data.sublocation || 'Main Sublocation',
+            locationClass: data.locationClass || 'Class A',
+            city: data.state || 'Delhi',
+            state: data.state || 'Delhi',
+          },
+        });
+      }
+      targetSiteId = existingSite.id;
+    }
+
     const count = await prisma.dispatch.count();
     const dispatchNo = `DS-${new Date().getFullYear()}-${String(count + 1).padStart(5, '0')}`;
 
-    const newAvail = item.availableQuantity - qtyToDispatch;
-    const newStatus = newAvail <= 0 ? 'RESERVED' : item.status;
+    const newAvail = Math.max(0, item.availableQuantity - qtyToDispatch);
+    const newStatus = 'DISPATCHED';
 
-    // Capture exact live real-time timestamp (current date and time of dispatch)
+    // Capture exact live timestamp
     const now = new Date();
     let dispatchTimestamp = now;
     if (data.dispatchDate) {
@@ -130,7 +172,7 @@ export class DispatchService {
       }
     }
 
-    // Lock original serial number permanently in remarks
+    // Lock original serial number in remarks
     const originalSerial = item.serialNumber || 'Bulk';
     const lockedRemarks = `[Dispatched SN: ${originalSerial}]${data.remarks ? ' ' + data.remarks : ''}`;
 
@@ -140,13 +182,22 @@ export class DispatchService {
         data: {
           dispatchNo,
           inventoryItemId: data.inventoryItemId,
-          siteId: data.siteId,
+          siteId: targetSiteId,
           quantity: qtyToDispatch,
           courierName: data.courierName,
           trackingNo: data.trackingNo,
           dispatchDate: dispatchTimestamp,
           expectedDelivery: data.expectedDelivery ? new Date(data.expectedDelivery) : null,
           remarks: lockedRemarks,
+          unit: data.unit,
+          sublocation: data.sublocation,
+          state: data.state,
+          floor: data.floor,
+          buildingName: data.buildingName,
+          roomName: data.roomName,
+          roomId: data.roomId,
+          solutionType: data.solutionType,
+          locationClass: data.locationClass,
           status: DispatchStatus.DISPATCHED,
           createdById: userId,
           approvedById: userId,
@@ -162,6 +213,9 @@ export class DispatchService {
         data: {
           availableQuantity: newAvail,
           status: newStatus,
+          dispatchedToRoomId: data.roomId || null,
+          dispatchDate: dispatchTimestamp,
+          remarks: data.remarks || item.remarks,
           updatedById: userId,
         },
       }),
@@ -174,10 +228,72 @@ export class DispatchService {
           newStock: newAvail,
           referenceId: dispatchNo,
           performedById: userId,
-          remarks: `Dispatched to site (Dispatch #${dispatchNo})`,
+          remarks: `Dispatched to site ${data.buildingName ? '(' + data.buildingName + ' / Room ' + (data.roomId || '') + ')' : ''} (Dispatch #${dispatchNo})`,
         },
       }),
     ]);
+
+    // Automation: append/update room inventory in LocationInventory
+    if (data.roomId || data.buildingName) {
+      const partSerialNo = item.serialNumber || item.spareId;
+      const partId = item.partCode || item.partId || item.productName;
+      const oemName = item.oem?.name || 'Standard OEM';
+
+      const existingLocInv = await prisma.locationInventory.findUnique({
+        where: { partSerialNo },
+      });
+
+      if (existingLocInv) {
+        await prisma.locationInventory.update({
+          where: { id: existingLocInv.id },
+          data: {
+            installationDate: dispatchTimestamp,
+            oem: oemName,
+            partId,
+            roomId: data.roomId || existingLocInv.roomId,
+            locationClass: data.locationClass || existingLocInv.locationClass,
+            solutionType: data.solutionType || existingLocInv.solutionType,
+            buildingName: data.buildingName || existingLocInv.buildingName,
+            roomName: data.roomName || existingLocInv.roomName,
+            floor: data.floor || existingLocInv.floor,
+            unit: data.unit || existingLocInv.unit,
+            subUnit: data.sublocation || existingLocInv.subUnit,
+            state: data.state || existingLocInv.state,
+            status: 'INSTALLED',
+          },
+        });
+      } else {
+        await prisma.locationInventory.create({
+          data: {
+            installationDate: dispatchTimestamp,
+            oem: oemName,
+            partId,
+            partSerialNo,
+            roomId: data.roomId || 'ROOM-101',
+            locationClass: data.locationClass || 'Standard',
+            solutionType: data.solutionType || 'General',
+            buildingName: data.buildingName || 'Main Building',
+            roomName: data.roomName || 'Main Room',
+            floor: data.floor || 'G',
+            unit: data.unit || 'Unit 1',
+            subUnit: data.sublocation || 'Sub 1',
+            state: data.state || 'State 1',
+            status: 'INSTALLED',
+          },
+        });
+      }
+    }
+
+    // Save comments in Comment model if remarks supplied
+    if (data.remarks && data.remarks.trim()) {
+      await prisma.comment.create({
+        data: {
+          inventoryItemId: data.inventoryItemId,
+          userId,
+          comment: `[DISPATCH REMARK - #${dispatchNo}] ${data.remarks.trim()}`,
+        },
+      });
+    }
 
     await prisma.activityLog.create({
       data: {

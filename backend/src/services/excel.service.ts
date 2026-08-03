@@ -426,18 +426,55 @@ export class ExcelService {
       console.warn('Batch serial cleanup warning:', e);
     }
 
-    // Step 1: Fetch ALL existing LocationInventory records in ONE database query
+    // Step 1: Sort all raw Excel rows sequentially before processing using strict hierarchy:
+    // 1. Unit (Ascending), 2. Sub Unit (Ascending), 3. State (Ascending),
+    // 4. Building Name (Ascending), 5. Room Name (Ascending), 6. Room ID (Ascending), 7. Part ID (Ascending)
+    rawData.sort((a, b) => {
+      const getS = (row: any, keys: string[]) => getValue(row, keys).toLowerCase();
+
+      const unitA = getS(a, ['Unit', 'unit', 'Unit Division']);
+      const unitB = getS(b, ['Unit', 'unit', 'Unit Division']);
+      if (unitA !== unitB) return unitA.localeCompare(unitB);
+
+      const subA = getS(a, ['Sub Unit', 'subUnit', 'SubUnit', 'sub_unit', 'Sub Location', 'sublocation']);
+      const subB = getS(b, ['Sub Unit', 'subUnit', 'SubUnit', 'sub_unit', 'Sub Location', 'sublocation']);
+      if (subA !== subB) return subA.localeCompare(subB);
+
+      const stateA = getS(a, ['State', 'state']);
+      const stateB = getS(b, ['State', 'state']);
+      if (stateA !== stateB) return stateA.localeCompare(stateB);
+
+      const bldgA = getS(a, ['Building Name', 'buildingName', 'BuildingName', 'building_name', 'Building']);
+      const bldgB = getS(b, ['Building Name', 'buildingName', 'BuildingName', 'building_name', 'Building']);
+      if (bldgA !== bldgB) return bldgA.localeCompare(bldgB);
+
+      const roomNA = getS(a, ['Room Name', 'roomName', 'RoomName', 'room_name', 'Room']);
+      const roomNB = getS(b, ['Room Name', 'roomName', 'RoomName', 'room_name', 'Room']);
+      if (roomNA !== roomNB) return roomNA.localeCompare(roomNB);
+
+      const rIDA = getS(a, ['Room ID', 'roomId', 'RoomID', 'room_id']);
+      const rIDB = getS(b, ['Room ID', 'roomId', 'RoomID', 'room_id']);
+      if (rIDA !== rIDB) return rIDA.localeCompare(rIDB);
+
+      const pIDA = getS(a, ['Part ID', 'partId', 'PartID', 'part_id', 'Part Code', 'partCode']);
+      const pIDB = getS(b, ['Part ID', 'partId', 'PartID', 'part_id', 'Part Code', 'partCode']);
+      return pIDA.localeCompare(pIDB);
+    });
+
+    // Step 2: Fetch ALL existing LocationInventory records in ONE database query
     const allExistingLocItems = await prisma.locationInventory.findMany().catch(() => []);
 
-    // Step 2: Create In-Memory lookup maps using `${roomId}_${partId}` for O(1) instant comparison
-    const roomPartMap = new Map<string, typeof allExistingLocItems[0]>();
+    // Group existing DB records into lists by `${roomId}_${partId}` to support multiple identical items per room
+    const roomPartListMap = new Map<string, Array<typeof allExistingLocItems[0]>>();
     const serialMap = new Map<string, typeof allExistingLocItems[0]>();
 
     allExistingLocItems.forEach((item) => {
       const key = `${(item.roomId || '').trim().toLowerCase()}_${(item.partId || '').trim().toLowerCase()}`;
-      if (!roomPartMap.has(key)) {
-        roomPartMap.set(key, item);
+      if (!roomPartListMap.has(key)) {
+        roomPartListMap.set(key, []);
       }
+      roomPartListMap.get(key)!.push(item);
+
       if (item.partSerialNo) {
         serialMap.set(item.partSerialNo.trim().toLowerCase(), item);
       }
@@ -460,10 +497,11 @@ export class ExcelService {
       console.warn('Replacement logs lookup warning:', e);
     }
 
-    const newRecords: Array<Prisma.LocationInventoryCreateInput> = [];
+    const occurrenceTracker = new Map<string, number>();
+    const newRecordsToInsert: Array<Prisma.LocationInventoryCreateInput> = [];
     const updatesToPerform: Array<{ id: string; data: Prisma.LocationInventoryUpdateInput }> = [];
 
-    // Step 3: Iterate Excel rows in memory
+    // Step 3: Iterate sorted Excel rows in memory
     for (let i = 0; i < rawData.length; i++) {
       const row = rawData[i];
       const rowNum = i + 2;
@@ -487,7 +525,11 @@ export class ExcelService {
         const contractEndDate = parseExcelDate(getValue(row, ['Contract End Date', 'contractEndDate']));
 
         const roomPartKey = `${roomId.toLowerCase()}_${partId.toLowerCase()}`;
-        const existingRecord = roomPartMap.get(roomPartKey) || serialMap.get(exactSerial.toLowerCase());
+        const occIndex = occurrenceTracker.get(roomPartKey) || 0;
+        occurrenceTracker.set(roomPartKey, occIndex + 1);
+
+        const existingList = roomPartListMap.get(roomPartKey) || [];
+        const existingRecord = existingList[occIndex] || serialMap.get(exactSerial.toLowerCase());
 
         if (existingRecord) {
           // Check if this device was replaced or dispatched in app software
@@ -543,7 +585,7 @@ export class ExcelService {
           }
         } else {
           // Case C: New record: Add to bulk insert queue with exact Excel details and "XYZ" for blank cells
-          newRecords.push({
+          newRecordsToInsert.push({
             installationDate,
             oem: oem || 'XYZ',
             partId: partId || 'XYZ',
@@ -571,16 +613,16 @@ export class ExcelService {
       }
     }
 
-    // Step 4: Execute new insertions in bulk using createMany({ data: newRecords, skipDuplicates: true }) in chunks of 500
-    if (newRecords.length > 0) {
+    // Step 4: Perform bulk inserts using prisma.locationInventory.createMany({ data: chunk, skipDuplicates: false }) in chunks of 500
+    if (newRecordsToInsert.length > 0) {
       const CHUNK_SIZE = 500;
       let totalCreated = 0;
-      for (let i = 0; i < newRecords.length; i += CHUNK_SIZE) {
-        const chunk = newRecords.slice(i, i + CHUNK_SIZE);
+      for (let i = 0; i < newRecordsToInsert.length; i += CHUNK_SIZE) {
+        const chunk = newRecordsToInsert.slice(i, i + CHUNK_SIZE);
         try {
           const createRes = await prisma.locationInventory.createMany({
             data: chunk,
-            skipDuplicates: true,
+            skipDuplicates: false,
           });
           totalCreated += createRes.count;
         } catch (err: any) {
@@ -598,19 +640,25 @@ export class ExcelService {
       summary.imported = totalCreated;
     }
 
-    // Step 5: Execute updates using parallel batch promises in chunks of 50
+    // Step 5: Perform updates inside prisma.$transaction() in chunks of 100 update promises per transaction
     if (updatesToPerform.length > 0) {
-      const BATCH_SIZE = 50;
+      const BATCH_SIZE = 100;
       for (let i = 0; i < updatesToPerform.length; i += BATCH_SIZE) {
         const chunk = updatesToPerform.slice(i, i + BATCH_SIZE);
-        await Promise.all(
-          chunk.map((u) =>
-            prisma.locationInventory.update({
-              where: { id: u.id },
-              data: u.data,
-            }).catch(() => null)
-          )
-        );
+        try {
+          await prisma.$transaction(
+            chunk.map((u) => prisma.locationInventory.update({ where: { id: u.id }, data: u.data }))
+          );
+        } catch (err: any) {
+          // Fallback item-by-item update
+          for (const u of chunk) {
+            try {
+              await prisma.locationInventory.update({ where: { id: u.id }, data: u.data });
+            } catch (e) {
+              // Ignore single update failure
+            }
+          }
+        }
       }
       summary.updated = updatesToPerform.length;
     }
@@ -621,7 +669,7 @@ export class ExcelService {
           userId,
           action: 'IMPORT',
           entity: 'LocationInventory',
-          entityLabel: `Master Location Inventory Upload (${summary.imported} created, ${summary.updated} updated)`,
+          entityLabel: `Sequenced Ultra-Fast Location Inventory Upload (${summary.imported} created, ${summary.updated} updated)`,
           newValue: JSON.stringify(summary),
         },
       });

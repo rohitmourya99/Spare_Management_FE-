@@ -413,18 +413,65 @@ export class ExcelService {
       return !isNaN(parsed.getTime()) ? parsed : null;
     };
 
-    // Generate unique timestamp for batch upload serial handling
-    const batchId = Date.now();
-
-    // Query existing serials in DB to guarantee zero duplicate crash on repeat uploads
-    const existingLocItems = await prisma.locationInventory.findMany({
-      select: { partSerialNo: true },
+    // 1. Clean up existing duplicate rows in LocationInventory (keeping latest per roomId + partId)
+    const allLocInventories = await prisma.locationInventory.findMany({
+      orderBy: { updatedAt: 'desc' },
     });
-    const existingSerials = new Set<string>();
-    existingLocItems.forEach((item) => existingSerials.add(item.partSerialNo.toLowerCase()));
 
+    const seenRoomPartDedupe = new Map<string, string>();
+    const duplicateIdsToDelete: string[] = [];
+
+    for (const item of allLocInventories) {
+      const key = `${(item.roomId || '').trim().toLowerCase()}_${(item.partId || '').trim().toLowerCase()}`;
+      if (seenRoomPartDedupe.has(key)) {
+        duplicateIdsToDelete.push(item.id);
+      } else {
+        seenRoomPartDedupe.set(key, item.id);
+      }
+    }
+
+    if (duplicateIdsToDelete.length > 0) {
+      const CHUNK_SIZE = 500;
+      for (let i = 0; i < duplicateIdsToDelete.length; i += CHUNK_SIZE) {
+        const chunk = duplicateIdsToDelete.slice(i, i + CHUNK_SIZE);
+        await prisma.locationInventory.deleteMany({
+          where: { id: { in: chunk } },
+        });
+      }
+    }
+
+    // 2. Fetch Replacement Audit Logs to protect app-replaced/dispatched devices
+    const replacementLogs = await prisma.replacementAuditLog.findMany({
+      select: { roomId: true, partId: true, newSpareSerialNo: true, oldFaultySerialNo: true },
+    });
+    const replacedSet = new Set<string>();
+    replacementLogs.forEach((log) => {
+      replacedSet.add(`${log.roomId.trim().toLowerCase()}_${log.partId.trim().toLowerCase()}`);
+      if (log.newSpareSerialNo) replacedSet.add(log.newSpareSerialNo.trim().toLowerCase());
+      if (log.oldFaultySerialNo) replacedSet.add(log.oldFaultySerialNo.trim().toLowerCase());
+    });
+
+    // 3. Fetch remaining LocationInventory records after cleanup
+    const currentLocItems = await prisma.locationInventory.findMany();
+    const roomPartMap = new Map<string, typeof currentLocItems[0]>();
+    const serialMap = new Map<string, typeof currentLocItems[0]>();
+    const allExistingSerials = new Set<string>();
+
+    currentLocItems.forEach((item) => {
+      const key = `${(item.roomId || '').trim().toLowerCase()}_${(item.partId || '').trim().toLowerCase()}`;
+      if (!roomPartMap.has(key)) {
+        roomPartMap.set(key, item);
+      }
+      if (item.partSerialNo) {
+        serialMap.set(item.partSerialNo.trim().toLowerCase(), item);
+        allExistingSerials.add(item.partSerialNo.trim().toLowerCase());
+      }
+    });
+
+    const batchId = Date.now();
     const seenInBatch = new Set<string>();
     const recordsToCreate: Array<Prisma.LocationInventoryCreateInput> = [];
+    const updatesToPerform: Array<{ id: string; data: Prisma.LocationInventoryUpdateInput }> = [];
 
     for (let i = 0; i < rawData.length; i++) {
       const row = rawData[i];
@@ -434,15 +481,9 @@ export class ExcelService {
         const oem = getVal(row, 'OEM');
         const partId = getVal(row, 'Part ID');
         let rawSerial = getVal(row, 'Part Serial No.');
-        if (rawSerial === 'XYZ') {
-          rawSerial = getVal(row, 'Part Serial No');
-        }
-        if (rawSerial === 'XYZ') {
-          rawSerial = getVal(row, 'Serial No');
-        }
-        if (rawSerial === 'XYZ') {
-          rawSerial = `SN-XYZ-${i + 1}`;
-        }
+        if (rawSerial === 'XYZ') rawSerial = getVal(row, 'Part Serial No');
+        if (rawSerial === 'XYZ') rawSerial = getVal(row, 'Serial No');
+        if (rawSerial === 'XYZ') rawSerial = `SN-XYZ-${i + 1}`;
 
         const roomId = getVal(row, 'Room ID');
         const locationClass = getVal(row, 'Location Class');
@@ -460,34 +501,98 @@ export class ExcelService {
         const contractStartDate = parseExcelDate(getVal(row, 'Contract Start Date'));
         const contractEndDate = parseExcelDate(getVal(row, 'Contract End Date'));
 
-        // Dynamic Serial Uniqueness Logic: append batch identifier if serial exists or is repeated
-        let finalSerial = rawSerial;
-        const lowerSerial = rawSerial.toLowerCase();
-        if (existingSerials.has(lowerSerial) || seenInBatch.has(lowerSerial)) {
-          finalSerial = `${rawSerial}_BATCH_${batchId}_${i + 1}`;
+        const roomPartKey = `${roomId.toLowerCase()}_${partId.toLowerCase()}`;
+        const existingRecord = roomPartMap.get(roomPartKey) || serialMap.get(rawSerial.toLowerCase());
+
+        if (existingRecord) {
+          // Check if this device was replaced or dispatched in app
+          const isReplacedInApp =
+            existingRecord.status === 'REPLACED' ||
+            existingRecord.status === 'FAULTY' ||
+            replacedSet.has(roomPartKey) ||
+            replacedSet.has(existingRecord.partSerialNo.toLowerCase());
+
+          if (isReplacedInApp) {
+            // CRITICAL: DO NOT overwrite partSerialNo for app-replaced devices! Keep active software serial.
+            updatesToPerform.push({
+              id: existingRecord.id,
+              data: {
+                installationDate: installationDate || existingRecord.installationDate,
+                oem,
+                partId,
+                roomId,
+                locationClass,
+                solutionType,
+                buildingName,
+                roomName,
+                floor,
+                unit,
+                subUnit,
+                state,
+                contractStartDate: contractStartDate || existingRecord.contractStartDate,
+                contractEndDate: contractEndDate || existingRecord.contractEndDate,
+              },
+            });
+          } else {
+            // UNTOUCHED: Update location fields AND partSerialNo
+            let serialToSet = existingRecord.partSerialNo;
+            if (rawSerial !== 'XYZ' && rawSerial.toLowerCase() !== existingRecord.partSerialNo.toLowerCase()) {
+              if (!allExistingSerials.has(rawSerial.toLowerCase())) {
+                serialToSet = rawSerial;
+                allExistingSerials.add(rawSerial.toLowerCase());
+              }
+            }
+            updatesToPerform.push({
+              id: existingRecord.id,
+              data: {
+                installationDate: installationDate || existingRecord.installationDate,
+                oem,
+                partId,
+                partSerialNo: serialToSet,
+                roomId,
+                locationClass,
+                solutionType,
+                buildingName,
+                roomName,
+                floor,
+                unit,
+                subUnit,
+                state,
+                contractStartDate: contractStartDate || existingRecord.contractStartDate,
+                contractEndDate: contractEndDate || existingRecord.contractEndDate,
+              },
+            });
+          }
+        } else {
+          // DOES NOT EXIST: Insert as new InstalledInventory record
+          let finalSerial = rawSerial;
+          const lowerSerial = rawSerial.toLowerCase();
+          if (allExistingSerials.has(lowerSerial) || seenInBatch.has(lowerSerial)) {
+            finalSerial = `${rawSerial}_BATCH_${batchId}_${i + 1}`;
+          }
+
+          seenInBatch.add(lowerSerial);
+          allExistingSerials.add(finalSerial.toLowerCase());
+
+          recordsToCreate.push({
+            installationDate,
+            oem: oem || 'XYZ',
+            partId: partId || 'XYZ',
+            partSerialNo: finalSerial,
+            roomId: roomId || 'XYZ',
+            locationClass: locationClass || 'XYZ',
+            solutionType: solutionType || 'XYZ',
+            buildingName: buildingName || 'XYZ',
+            roomName: roomName || 'XYZ',
+            floor: floor || 'XYZ',
+            unit: unit || 'XYZ',
+            subUnit: subUnit || 'XYZ',
+            state: state || 'XYZ',
+            contractStartDate,
+            contractEndDate,
+            status: 'INSTALLED',
+          });
         }
-
-        seenInBatch.add(lowerSerial);
-        existingSerials.add(finalSerial.toLowerCase());
-
-        recordsToCreate.push({
-          installationDate,
-          oem: oem || 'XYZ',
-          partId: partId || 'XYZ',
-          partSerialNo: finalSerial,
-          roomId: roomId || 'XYZ',
-          locationClass: locationClass || 'XYZ',
-          solutionType: solutionType || 'XYZ',
-          buildingName: buildingName || 'XYZ',
-          roomName: roomName || 'XYZ',
-          floor: floor || 'XYZ',
-          unit: unit || 'XYZ',
-          subUnit: subUnit || 'XYZ',
-          state: state || 'XYZ',
-          contractStartDate,
-          contractEndDate,
-          status: 'INSTALLED',
-        });
       } catch (err: any) {
         summary.failed++;
         summary.errors.push({
@@ -497,7 +602,7 @@ export class ExcelService {
       }
     }
 
-    // High-Speed Batch Create using createMany with chunk size of 500 & skipDuplicates: false
+    // High-Speed Batch Create using createMany with chunk size of 500
     if (recordsToCreate.length > 0) {
       const CHUNK_SIZE = 500;
       let totalCreated = 0;
@@ -512,12 +617,24 @@ export class ExcelService {
       summary.imported = totalCreated;
     }
 
+    // Fast Transaction Updates
+    if (updatesToPerform.length > 0) {
+      const BATCH_SIZE = 100;
+      for (let i = 0; i < updatesToPerform.length; i += BATCH_SIZE) {
+        const batch = updatesToPerform.slice(i, i + BATCH_SIZE);
+        await prisma.$transaction(
+          batch.map((u) => prisma.locationInventory.update({ where: { id: u.id }, data: u.data }))
+        );
+      }
+      summary.updated = updatesToPerform.length;
+    }
+
     await prisma.activityLog.create({
       data: {
         userId,
         action: 'IMPORT',
         entity: 'LocationInventory',
-        entityLabel: `Unlimited Location Inventory Excel Upload (${summary.imported} records created)`,
+        entityLabel: `Smart Location Inventory Import (${summary.imported} created, ${summary.updated} updated)`,
         newValue: JSON.stringify(summary),
       },
     });

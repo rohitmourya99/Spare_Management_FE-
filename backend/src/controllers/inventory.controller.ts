@@ -66,16 +66,26 @@ export class InventoryController {
   }
 
   async importLocationInventory(req: Request, res: Response): Promise<void> {
-    if (!req.file) {
-      throw new AppError(400, 'Please upload an Excel file (.xlsx or .xls)');
+    try {
+      if (!req.file) {
+        res.status(400).json({ success: false, message: 'Please upload an Excel file (.xlsx or .xls)' });
+        return;
+      }
+      const summary = await excelService.importLocationInventory(req.file.buffer, req.user!.userId);
+      const count = (summary.imported || 0) + (summary.updated || 0);
+      res.status(200).json({
+        success: true,
+        message: `Successfully processed Excel upload! ${summary.imported} created, ${summary.updated} updated.`,
+        uploadedCount: count,
+        data: summary,
+      });
+    } catch (error: any) {
+      console.error('Error in importLocationInventory:', error);
+      res.status(500).json({
+        success: false,
+        message: error?.message || 'Failed to process Excel upload',
+      });
     }
-    const summary = await excelService.importLocationInventory(req.file.buffer, req.user!.userId);
-    res.status(200).json({
-      success: true,
-      message: `Successfully uploaded all ${summary.imported} records!`,
-      uploadedCount: summary.imported,
-      data: summary,
-    });
   }
 
   async getLocationInventories(req: Request, res: Response): Promise<void> {

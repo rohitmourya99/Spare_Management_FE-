@@ -467,8 +467,28 @@ export class ExcelService {
       return pIDA.localeCompare(pIDB);
     });
 
-    // Step 2: Fetch ALL existing LocationInventory records in ONE database query
-    const allExistingLocItems = await prisma.locationInventory.findMany().catch(() => []);
+    // Step 2: Fetch ALL existing LocationInventory records in ONE lightweight database query
+    const allExistingLocItems = await prisma.locationInventory.findMany({
+      select: {
+        id: true,
+        roomId: true,
+        partId: true,
+        partSerialNo: true,
+        status: true,
+        oem: true,
+        locationClass: true,
+        solutionType: true,
+        buildingName: true,
+        roomName: true,
+        floor: true,
+        unit: true,
+        subUnit: true,
+        state: true,
+        installationDate: true,
+        contractStartDate: true,
+        contractEndDate: true,
+      },
+    }).catch(() => []);
 
     // Group existing DB records into occurrence map ${roomId}_${partId}_${partSerialNo}_${occurrenceIndex}
     const occurrenceMap = new Map<string, typeof allExistingLocItems[0]>();
@@ -663,26 +683,28 @@ export class ExcelService {
       summary.imported = totalCreated;
     }
 
-    // Step 5: High-performance parallel updates (50 items per batch via Promise.all)
+    // Step 5: High-performance parallel updates (all 50-item batches executed concurrently via Promise.all)
     if (updatesToPerform.length > 0) {
       const UPDATE_BATCH_SIZE = 50;
-      let totalUpdated = 0;
+      const batchPromises = [];
       for (let i = 0; i < updatesToPerform.length; i += UPDATE_BATCH_SIZE) {
         const chunk = updatesToPerform.slice(i, i + UPDATE_BATCH_SIZE);
-        await Promise.all(
-          chunk.map((item) =>
-            prisma.locationInventory.update({
-              where: { id: item.id },
-              data: item.data,
-            }).then(() => {
-              totalUpdated++;
-            }).catch((err) => {
-              console.warn(`[Excel Upload] Item update error for ID ${item.id}:`, err?.message);
-            })
+        batchPromises.push(
+          Promise.all(
+            chunk.map((item) =>
+              prisma.locationInventory.update({
+                where: { id: item.id },
+                data: item.data,
+              }).then(() => true).catch((err) => {
+                console.warn(`[Excel Upload] Item update error for ID ${item.id}:`, err?.message);
+                return false;
+              })
+            )
           )
         );
       }
-      summary.updated = totalUpdated;
+      const results = await Promise.all(batchPromises);
+      summary.updated = results.flat().filter(Boolean).length;
     }
 
     try {

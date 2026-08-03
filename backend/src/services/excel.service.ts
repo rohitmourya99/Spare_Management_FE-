@@ -370,7 +370,7 @@ export class ExcelService {
     // Resilient non-throwing date parser
     const parseExcelDate = (val: any): Date | null => {
       try {
-        if (!val || val === 'XYZ') return null;
+        if (!val) return null;
         if (val instanceof Date && !isNaN(val.getTime())) return val;
         if (typeof val === 'number') {
           const dateObj = xlsx.SSF.parse_date_code(val);
@@ -380,7 +380,7 @@ export class ExcelService {
           }
         }
         const str = String(val).trim();
-        if (!str || str === 'XYZ') return null;
+        if (!str || ['XYZ', 'NULL', 'NOT SET', 'UNDEFINED'].includes(str.toUpperCase())) return null;
 
         // Support DD/MM/YYYY, DD-MM-YYYY, or DD.MM.YYYY
         if (/^\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}$/.test(str)) {
@@ -389,7 +389,7 @@ export class ExcelService {
           const month = parseInt(parts[1], 10) - 1;
           let year = parseInt(parts[2], 10);
           if (year < 100) year += 2000;
-          const d = new Date(year, month, day);
+          const d = new Date(Date.UTC(year, month, day));
           return !isNaN(d.getTime()) ? d : null;
         }
 
@@ -561,49 +561,50 @@ export class ExcelService {
             replacedSet.has(keyBase) ||
             replacedSet.has(existingRecord.partSerialNo.toLowerCase());
 
-          if (isReplacedInApp) {
-            // Case A: Record exists & replaced/dispatched in app: Update location metadata only, KEEP active software serial untouched
+          const targetSerial = isReplacedInApp ? existingRecord.partSerialNo : exactSerial;
+          const updatePayload: Prisma.LocationInventoryUpdateInput = {
+            installationDate: installationDate || existingRecord.installationDate,
+            oem: oem || 'XYZ',
+            partId: partId || 'XYZ',
+            partSerialNo: targetSerial,
+            roomId: roomId || 'XYZ',
+            locationClass: locationClass || 'XYZ',
+            solutionType: solutionType || 'XYZ',
+            buildingName: buildingName || 'XYZ',
+            roomName: roomName || 'XYZ',
+            floor: floor || 'XYZ',
+            unit: unit || 'XYZ',
+            subUnit: subUnit || 'XYZ',
+            state: state || 'XYZ',
+            contractStartDate: contractStartDate || existingRecord.contractStartDate,
+            contractEndDate: contractEndDate || existingRecord.contractEndDate,
+          };
+
+          // Diff-checking: ONLY push to updatesToPerform if data values have actually changed!
+          const hasChanged =
+            (existingRecord.oem || 'XYZ') !== updatePayload.oem ||
+            (existingRecord.partId || 'XYZ') !== updatePayload.partId ||
+            (existingRecord.partSerialNo || 'XYZ') !== updatePayload.partSerialNo ||
+            (existingRecord.roomId || 'XYZ') !== updatePayload.roomId ||
+            (existingRecord.locationClass || 'XYZ') !== updatePayload.locationClass ||
+            (existingRecord.solutionType || 'XYZ') !== updatePayload.solutionType ||
+            (existingRecord.buildingName || 'XYZ') !== updatePayload.buildingName ||
+            (existingRecord.roomName || 'XYZ') !== updatePayload.roomName ||
+            (existingRecord.floor || 'XYZ') !== updatePayload.floor ||
+            (existingRecord.unit || 'XYZ') !== updatePayload.unit ||
+            (existingRecord.subUnit || 'XYZ') !== updatePayload.subUnit ||
+            (existingRecord.state || 'XYZ') !== updatePayload.state ||
+            (existingRecord.installationDate ? new Date(existingRecord.installationDate).getTime() : null) !== (updatePayload.installationDate ? new Date(updatePayload.installationDate as any).getTime() : null) ||
+            (existingRecord.contractStartDate ? new Date(existingRecord.contractStartDate).getTime() : null) !== (updatePayload.contractStartDate ? new Date(updatePayload.contractStartDate as any).getTime() : null) ||
+            (existingRecord.contractEndDate ? new Date(existingRecord.contractEndDate).getTime() : null) !== (updatePayload.contractEndDate ? new Date(updatePayload.contractEndDate as any).getTime() : null);
+
+          if (hasChanged) {
             updatesToPerform.push({
               id: existingRecord.id,
-              data: {
-                installationDate: installationDate || existingRecord.installationDate,
-                oem,
-                partId,
-                roomId,
-                locationClass,
-                solutionType,
-                buildingName,
-                roomName,
-                floor,
-                unit,
-                subUnit,
-                state,
-                contractStartDate: contractStartDate || existingRecord.contractStartDate,
-                contractEndDate: contractEndDate || existingRecord.contractEndDate,
-              },
+              data: updatePayload,
             });
           } else {
-            // Case B: Record exists & untouched: Update location metadata AND update partSerialNo with EXACT Excel value
-            updatesToPerform.push({
-              id: existingRecord.id,
-              data: {
-                installationDate: installationDate || existingRecord.installationDate,
-                oem,
-                partId,
-                partSerialNo: exactSerial,
-                roomId,
-                locationClass,
-                solutionType,
-                buildingName,
-                roomName,
-                floor,
-                unit,
-                subUnit,
-                state,
-                contractStartDate: contractStartDate || existingRecord.contractStartDate,
-                contractEndDate: contractEndDate || existingRecord.contractEndDate,
-              },
-            });
+            summary.skipped++;
           }
         } else {
           // Case C: New record: Add to bulk insert queue with exact Excel details and "XYZ" for blank cells
@@ -635,9 +636,9 @@ export class ExcelService {
       }
     }
 
-    // Step 4: Perform bulk inserts in chunks of 250 to keep memory usage low
+    // Step 4: High-performance chunked bulk inserts (500 items per batch)
     if (newRecordsToInsert.length > 0) {
-      const CHUNK_SIZE = 250;
+      const CHUNK_SIZE = 500;
       let totalCreated = 0;
       for (let i = 0; i < newRecordsToInsert.length; i += CHUNK_SIZE) {
         const chunk = newRecordsToInsert.slice(i, i + CHUNK_SIZE);
@@ -662,38 +663,26 @@ export class ExcelService {
       summary.imported = totalCreated;
     }
 
-    // Step 5: Fire ALL update chunks in PARALLEL using Promise.all
-    // This reduces update time from ~40s sequential → <2s parallel (50 items per batch)
+    // Step 5: High-performance parallel updates (50 items per batch via Promise.all)
     if (updatesToPerform.length > 0) {
-      const BATCH_SIZE = 50;
-      const updateChunks: Array<Array<{ id: string; data: Prisma.LocationInventoryUpdateInput }>> = [];
-      for (let i = 0; i < updatesToPerform.length; i += BATCH_SIZE) {
-        updateChunks.push(updatesToPerform.slice(i, i + BATCH_SIZE));
+      const UPDATE_BATCH_SIZE = 50;
+      let totalUpdated = 0;
+      for (let i = 0; i < updatesToPerform.length; i += UPDATE_BATCH_SIZE) {
+        const chunk = updatesToPerform.slice(i, i + UPDATE_BATCH_SIZE);
+        await Promise.all(
+          chunk.map((item) =>
+            prisma.locationInventory.update({
+              where: { id: item.id },
+              data: item.data,
+            }).then(() => {
+              totalUpdated++;
+            }).catch((err) => {
+              console.warn(`[Excel Upload] Item update error for ID ${item.id}:`, err?.message);
+            })
+          )
+        );
       }
-
-      // All chunks fire simultaneously — no sequential awaiting
-      const chunkResults = await Promise.allSettled(
-        updateChunks.map((chunk) =>
-          prisma.$transaction(
-            chunk.map((u) => prisma.locationInventory.update({ where: { id: u.id }, data: u.data }))
-          ).catch(async () => {
-            // Fallback: item-by-item for this chunk if transaction fails
-            await Promise.allSettled(
-              chunk.map((u) =>
-                prisma.locationInventory.update({ where: { id: u.id }, data: u.data }).catch(() => null)
-              )
-            );
-          })
-        )
-      );
-
-      // Count how many chunks succeeded
-      const failedChunks = chunkResults.filter((r) => r.status === 'rejected').length;
-      if (failedChunks > 0) {
-        console.warn(`[Excel Upload] ${failedChunks} update chunk(s) had errors and fell back to item-by-item mode.`);
-      }
-
-      summary.updated = updatesToPerform.length;
+      summary.updated = totalUpdated;
     }
 
     try {

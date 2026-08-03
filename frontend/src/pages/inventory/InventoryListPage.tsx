@@ -588,17 +588,29 @@ export const InventoryListPage: React.FC = () => {
           )}
 
           {uploadSummary && (
-            <div className={`p-4 rounded-xl text-xs space-y-2 border ${uploadSummary.success ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-rose-50 border-rose-200 text-rose-900'}`}>
+            <div className={`p-4 rounded-xl text-xs space-y-3 border ${uploadSummary.success ? 'bg-slate-50 border-slate-200 text-slate-900' : 'bg-rose-50 border-rose-200 text-rose-900'}`}>
               <p className="font-bold text-sm flex items-center gap-1.5">
                 {uploadSummary.success ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <AlertTriangle className="w-4 h-4 text-rose-600" />}
                 {uploadSummary.message}
               </p>
               {uploadSummary.data && (
-                <div className="text-xs font-semibold space-y-0.5">
-                  <p>Total Rows: {uploadSummary.data.totalRows}</p>
-                  <p className="text-emerald-700">Imported: {uploadSummary.data.imported}</p>
-                  <p className="text-indigo-700">Updated: {uploadSummary.data.updated}</p>
-                  <p className="text-rose-700">Failed: {uploadSummary.data.failed}</p>
+                <div className="grid grid-cols-2 gap-2 text-xs font-semibold p-3 bg-white rounded-xl border border-slate-200">
+                  <div><span className="text-slate-500">Total File Rows:</span> <span className="font-mono font-bold text-slate-900">{uploadSummary.data.totalRows}</span></div>
+                  <div><span className="text-slate-500">Valid Processed:</span> <span className="font-mono font-bold text-indigo-600">{uploadSummary.data.validRows ?? uploadSummary.data.totalRows}</span></div>
+                  <div><span className="text-slate-500">New Inserted:</span> <span className="font-mono font-bold text-emerald-600">{uploadSummary.data.imported}</span></div>
+                  <div><span className="text-slate-500">Updated:</span> <span className="font-mono font-bold text-blue-600">{uploadSummary.data.updated}</span></div>
+                  <div><span className="text-slate-500">Skipped (Unchanged):</span> <span className="font-mono font-bold text-slate-600">{uploadSummary.data.skipped}</span></div>
+                  <div><span className="text-slate-500">Failed Records:</span> <span className="font-mono font-bold text-rose-600">{uploadSummary.data.failed}</span></div>
+                </div>
+              )}
+              {uploadSummary.data?.failedDetails && uploadSummary.data.failedDetails.length > 0 && (
+                <div className="mt-2 pt-2 border-t border-rose-200 space-y-1">
+                  <p className="font-bold text-rose-800">Failed Records Log:</p>
+                  <div className="max-h-32 overflow-y-auto bg-rose-100 p-2 rounded-lg text-[11px] font-mono space-y-0.5">
+                    {uploadSummary.data.failedDetails.map((f: any, idx: number) => (
+                      <p key={idx} className="text-rose-900">• {f.reason || f}</p>
+                    ))}
+                  </div>
                 </div>
               )}
               {uploadSummary.errors && uploadSummary.errors.length > 0 && (

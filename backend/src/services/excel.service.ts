@@ -6,10 +6,13 @@ import { logger } from '../config/logger';
 
 export interface ImportSummary {
   totalRows: number;
+  validRows: number;
   imported: number;
   updated: number;
   skipped: number;
   failed: number;
+  skippedDetails: Array<{ row: number; reason: string }>;
+  failedDetails: Array<{ row: number; reason: string }>;
   errors: Array<{ row: number; reason: string }>;
 }
 
@@ -29,10 +32,13 @@ export class ExcelService {
 
     const summary: ImportSummary = {
       totalRows: rawData.length,
+      validRows: rawData.length,
       imported: 0,
       updated: 0,
       skipped: 0,
       failed: 0,
+      skippedDetails: [],
+      failedDetails: [],
       errors: [],
     };
 
@@ -215,10 +221,13 @@ export class ExcelService {
 
     const summary: ImportSummary = {
       totalRows: rawData.length,
+      validRows: rawData.length,
       imported: 0,
       updated: 0,
       skipped: 0,
       failed: 0,
+      skippedDetails: [],
+      failedDetails: [],
       errors: [],
     };
 
@@ -314,10 +323,13 @@ export class ExcelService {
   async importLocationInventory(fileBuffer: Buffer, userId: string): Promise<ImportSummary> {
     const summary: ImportSummary = {
       totalRows: 0,
+      validRows: 0,
       imported: 0,
       updated: 0,
       skipped: 0,
       failed: 0,
+      skippedDetails: [],
+      failedDetails: [],
       errors: [],
     };
 
@@ -336,7 +348,6 @@ export class ExcelService {
         return summary;
       }
       const sheet = workbook.Sheets[sheetName];
-      // Default all blank/empty cells to "XYZ"
       rawData = xlsx.utils.sheet_to_json<Record<string, any>>(sheet, { defval: 'XYZ' });
     } catch (e: any) {
       summary.errors.push({ row: 1, reason: `Failed to parse Excel file: ${e?.message || 'Invalid format'}` });
@@ -348,6 +359,15 @@ export class ExcelService {
       summary.errors.push({ row: 1, reason: 'Uploaded Excel sheet contains 0 data rows' });
       return summary;
     }
+
+    // Filter out completely empty rows
+    const nonBlankRows = rawData.filter((row) => {
+      const values = Object.values(row).map((v) => String(v).trim());
+      return values.some((v) => v !== '' && v !== 'XYZ');
+    });
+
+    summary.validRows = nonBlankRows.length > 0 ? nonBlankRows.length : rawData.length;
+    const processRows = nonBlankRows.length > 0 ? nonBlankRows : rawData;
 
     // Dynamic flexible key finder
     const getValue = (row: Record<string, any>, possibleKeys: string[]): string => {
@@ -362,7 +382,6 @@ export class ExcelService {
           }
         }
       } catch (e) {
-        // Fallback
       }
       return 'XYZ';
     };
@@ -382,7 +401,6 @@ export class ExcelService {
         const str = String(val).trim();
         if (!str || ['XYZ', 'NULL', 'NOT SET', 'UNDEFINED'].includes(str.toUpperCase())) return null;
 
-        // Support DD/MM/YYYY, DD-MM-YYYY, or DD.MM.YYYY
         if (/^\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}$/.test(str)) {
           const parts = str.split(/[\/\-\.]/);
           const day = parseInt(parts[0], 10);
@@ -393,7 +411,6 @@ export class ExcelService {
           return !isNaN(d.getTime()) ? d : null;
         }
 
-        // Support Excel numeric string serial codes (e.g. "45123")
         if (/^\d{4,6}$/.test(str)) {
           const num = parseFloat(str);
           if (!isNaN(num)) {
@@ -412,30 +429,8 @@ export class ExcelService {
       }
     };
 
-    // Step 0: Clean up existing '_BATCH_' suffixes in partSerialNo to restore exact serial numbers
-    try {
-      const batchRecords = await prisma.locationInventory.findMany({
-        where: { partSerialNo: { contains: '_BATCH_' } },
-      });
-      if (batchRecords.length > 0) {
-        await Promise.all(
-          batchRecords.map((r) => {
-            const cleanSerial = r.partSerialNo.split('_BATCH_')[0];
-            return prisma.locationInventory.update({
-              where: { id: r.id },
-              data: { partSerialNo: cleanSerial },
-            }).catch(() => null);
-          })
-        );
-      }
-    } catch (e) {
-      console.warn('Batch serial cleanup warning:', e);
-    }
-
-    // Step 1: Sort all raw Excel rows sequentially before processing using strict hierarchy:
-    // 1. Unit (Ascending), 2. Sub Unit (Ascending), 3. State (Ascending),
-    // 4. Building Name (Ascending), 5. Room Name (Ascending), 6. Room ID (Ascending), 7. Part ID (Ascending)
-    rawData.sort((a, b) => {
+    // Step 1: Sort all processable Excel rows sequentially
+    processRows.sort((a, b) => {
       const getS = (row: any, keys: string[]) => getValue(row, keys).toLowerCase();
 
       const unitA = getS(a, ['Unit', 'unit', 'Unit Division']);
@@ -467,7 +462,6 @@ export class ExcelService {
       return pIDA.localeCompare(pIDB);
     });
 
-    // Step 2: Fetch ALL existing LocationInventory records in ONE lightweight database query
     const allExistingLocItems = await prisma.locationInventory.findMany({
       select: {
         id: true,
@@ -490,11 +484,10 @@ export class ExcelService {
       },
     }).catch(() => []);
 
-    // Group existing DB records into occurrence map ${roomId}_${partId}_${partSerialNo}_${occurrenceIndex}
     const occurrenceMap = new Map<string, typeof allExistingLocItems[0]>();
     const roomPartOccurrenceCount = new Map<string, number>();
     const serialMap = new Map<string, typeof allExistingLocItems[0]>();
-
+    const existingSerialSet = new Set<string>();
     const matchedDbIds = new Set<string>();
 
     allExistingLocItems.forEach((item) => {
@@ -502,13 +495,15 @@ export class ExcelService {
       const pId = (item.partId || '').trim().toLowerCase();
       const sNo = (item.partSerialNo || '').trim().toLowerCase();
 
+      if (sNo) {
+        existingSerialSet.add(sNo);
+      }
+
       const keyBase = `${rId}_${pId}`;
       const count = roomPartOccurrenceCount.get(keyBase) || 0;
       roomPartOccurrenceCount.set(keyBase, count + 1);
 
-      // Key 1: roomId_partId_occurrenceIndex
       occurrenceMap.set(`${keyBase}_${count}`, item);
-      // Key 2: roomId_partId_partSerialNo_occurrenceIndex (exclude generic serials like 'xyz')
       if (sNo && !['xyz', 'n/a', 'na', 'null', 'none'].includes(sNo)) {
         occurrenceMap.set(`${keyBase}_${sNo}_${count}`, item);
         if (!serialMap.has(sNo)) {
@@ -517,7 +512,6 @@ export class ExcelService {
       }
     });
 
-    // Fetch Replacement Audit Logs to protect app-replaced/dispatched devices
     const replacedSet = new Set<string>();
     try {
       const replacementLogs = await prisma.replacementAuditLog.findMany({
@@ -530,23 +524,20 @@ export class ExcelService {
         if (log.newSpareSerialNo) replacedSet.add(log.newSpareSerialNo.trim().toLowerCase());
         if (log.oldFaultySerialNo) replacedSet.add(log.oldFaultySerialNo.trim().toLowerCase());
       });
-    } catch (e) {
-      console.warn('Replacement logs lookup warning:', e);
-    }
+    } catch (e) {}
 
     const excelOccurrenceTracker = new Map<string, number>();
     const newRecordsToInsert: Array<Prisma.LocationInventoryCreateInput> = [];
     const updatesToPerform: Array<{ id: string; data: Prisma.LocationInventoryUpdateInput }> = [];
 
-    // Step 3: Iterate sorted Excel rows in memory
-    for (let i = 0; i < rawData.length; i++) {
-      const row = rawData[i];
+    // Step 3: Iterate sorted Excel rows
+    for (let i = 0; i < processRows.length; i++) {
+      const row = processRows[i];
       const rowNum = i + 2;
 
       try {
         const oem = getValue(row, ['OEM', 'oem', 'Manufacturer']);
         const partId = getValue(row, ['Part ID', 'partId', 'PartID', 'part_id', 'Part Code', 'partCode']);
-        // Default missing / blank Part Serial No. to 'XYZ'
         const rawSerial = getValue(row, ['Part Serial No.', 'Part Serial No', 'partSerialNo', 'serialNumber', 'Serial No', 'serial_no', 'Serial']);
         const exactSerial = (!rawSerial || rawSerial === 'XYZ') ? 'XYZ' : rawSerial;
         const roomId = getValue(row, ['Room ID', 'roomId', 'RoomID', 'room_id']);
@@ -559,7 +550,6 @@ export class ExcelService {
         const subUnit = getValue(row, ['Sub Unit', 'subUnit', 'SubUnit', 'sub_unit', 'Sub Location', 'sublocation']);
         const state = getValue(row, ['State', 'state']);
 
-        // Safely parse dates — returns null for missing/blank/invalid without throwing
         const installationDate = parseExcelDate(getValue(row, ['Installation Date', 'installationDate', 'installedDate'])) ?? null;
         const contractStartDate = parseExcelDate(getValue(row, ['Contract Start Date', 'contractStartDate'])) ?? null;
         const contractEndDate = parseExcelDate(getValue(row, ['Contract End Date', 'contractEndDate'])) ?? null;
@@ -572,34 +562,20 @@ export class ExcelService {
         const occIndex = excelOccurrenceTracker.get(keyBase) || 0;
         excelOccurrenceTracker.set(keyBase, occIndex + 1);
 
-        // Find candidate existing record without double-matching any single DB row
         let existingRecord: typeof allExistingLocItems[0] | undefined = undefined;
-
-        // Try 1: Exact room + part + serial + occurrence index
         const candidate1 = occurrenceMap.get(`${keyBase}_${sNoClean}_${occIndex}`);
-        if (candidate1 && !matchedDbIds.has(candidate1.id)) {
-          existingRecord = candidate1;
-        }
-
-        // Try 2: Exact room + part + occurrence index
+        if (candidate1 && !matchedDbIds.has(candidate1.id)) existingRecord = candidate1;
         if (!existingRecord) {
           const candidate2 = occurrenceMap.get(`${keyBase}_${occIndex}`);
-          if (candidate2 && !matchedDbIds.has(candidate2.id)) {
-            existingRecord = candidate2;
-          }
+          if (candidate2 && !matchedDbIds.has(candidate2.id)) existingRecord = candidate2;
         }
-
-        // Try 3: Unique serial lookup (ONLY for valid non-generic serial numbers)
         if (!existingRecord && sNoClean && !['xyz', 'n/a', 'na', 'null', 'none'].includes(sNoClean)) {
           const candidate3 = serialMap.get(sNoClean);
-          if (candidate3 && !matchedDbIds.has(candidate3.id)) {
-            existingRecord = candidate3;
-          }
+          if (candidate3 && !matchedDbIds.has(candidate3.id)) existingRecord = candidate3;
         }
 
         if (existingRecord) {
           matchedDbIds.add(existingRecord.id);
-          // Check if this device was replaced or dispatched in app software
           const isReplacedInApp =
             existingRecord.status === 'REPLACED' ||
             existingRecord.status === 'FAULTY' ||
@@ -625,7 +601,6 @@ export class ExcelService {
             contractEndDate: contractEndDate || existingRecord.contractEndDate,
           };
 
-          // Diff-checking: ONLY push to updatesToPerform if data values have actually changed!
           const hasChanged =
             (existingRecord.oem || 'XYZ') !== updatePayload.oem ||
             (existingRecord.partId || 'XYZ') !== updatePayload.partId ||
@@ -644,20 +619,28 @@ export class ExcelService {
             (existingRecord.contractEndDate ? new Date(existingRecord.contractEndDate).getTime() : null) !== (updatePayload.contractEndDate ? new Date(updatePayload.contractEndDate as any).getTime() : null);
 
           if (hasChanged) {
-            updatesToPerform.push({
-              id: existingRecord.id,
-              data: updatePayload,
-            });
+            updatesToPerform.push({ id: existingRecord.id, data: updatePayload });
           } else {
             summary.skipped++;
+            summary.skippedDetails.push({
+              row: rowNum,
+              reason: `Row ${rowNum} (${buildingName} - ${roomName} / ${partId}): Unchanged, record in DB is up-to-date.`,
+            });
           }
         } else {
-          // Case C: New record: Add to bulk insert queue with exact Excel details and "XYZ" for blank cells
+          let finalSerial = exactSerial;
+          if (!finalSerial || finalSerial === 'XYZ' || finalSerial.trim() === '') {
+            finalSerial = `XYZ_${roomId}_${partId}_${occIndex + 1}`;
+          } else if (existingSerialSet.has(finalSerial.toLowerCase())) {
+            finalSerial = `${exactSerial}_${roomId}_${occIndex + 1}`;
+          }
+          existingSerialSet.add(finalSerial.toLowerCase());
+
           newRecordsToInsert.push({
             installationDate,
             oem: oem || 'XYZ',
             partId: partId || 'XYZ',
-            partSerialNo: exactSerial || 'XYZ',
+            partSerialNo: finalSerial,
             roomId: roomId || 'XYZ',
             locationClass: locationClass || 'XYZ',
             solutionType: solutionType || 'XYZ',
@@ -674,14 +657,14 @@ export class ExcelService {
         }
       } catch (err: any) {
         summary.failed++;
-        summary.errors.push({
+        summary.failedDetails.push({
           row: rowNum,
-          reason: err.message || `Error processing Row ${rowNum}`,
+          reason: `Row ${rowNum} processing error: ${err.message || 'Unknown row error'}`,
         });
       }
     }
 
-    // Step 4: High-performance chunked bulk inserts (500 items per batch)
+    // Step 4: Bulk inserts
     if (newRecordsToInsert.length > 0) {
       const CHUNK_SIZE = 500;
       let totalCreated = 0;
@@ -694,13 +677,16 @@ export class ExcelService {
           });
           totalCreated += createRes.count;
         } catch (err: any) {
-          // Fallback item-by-item insert
           for (const item of chunk) {
             try {
               await prisma.locationInventory.create({ data: item });
               totalCreated++;
-            } catch (e) {
+            } catch (e: any) {
               summary.failed++;
+              summary.failedDetails.push({
+                row: 0,
+                reason: `DB insert error for ${item.partId} (${item.buildingName}): ${e?.message || 'Unique constraint error'}`,
+              });
             }
           }
         }
@@ -708,7 +694,7 @@ export class ExcelService {
       summary.imported = totalCreated;
     }
 
-    // Step 5: High-performance parallel updates (all 50-item batches executed concurrently via Promise.all)
+    // Step 5: Parallel updates
     if (updatesToPerform.length > 0) {
       const UPDATE_BATCH_SIZE = 50;
       const batchPromises = [];
@@ -721,7 +707,11 @@ export class ExcelService {
                 where: { id: item.id },
                 data: item.data,
               }).then(() => true).catch((err) => {
-                console.warn(`[Excel Upload] Item update error for ID ${item.id}:`, err?.message);
+                summary.failed++;
+                summary.failedDetails.push({
+                  row: 0,
+                  reason: `Update error for DB ID ${item.id}: ${err?.message}`,
+                });
                 return false;
               })
             )
@@ -738,13 +728,18 @@ export class ExcelService {
           userId,
           action: 'IMPORT',
           entity: 'LocationInventory',
-          entityLabel: `Sequenced Ultra-Fast Location Inventory Upload (${summary.imported} created, ${summary.updated} updated)`,
-          newValue: JSON.stringify(summary),
+          entityLabel: `Sequenced Ultra-Fast Location Inventory Upload (${summary.imported} created, ${summary.updated} updated, ${summary.skipped} skipped, ${summary.failed} failed)`,
+          newValue: JSON.stringify({
+            totalRows: summary.totalRows,
+            validRows: summary.validRows,
+            imported: summary.imported,
+            updated: summary.updated,
+            skipped: summary.skipped,
+            failed: summary.failed,
+          }),
         },
       });
-    } catch (e) {
-      // Ignore log creation error
-    }
+    } catch (e) {}
 
     return summary;
   }

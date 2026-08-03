@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import {
-  Truck, Plus, Search, CheckCircle2, X, RefreshCw,
+  Truck, Plus, Search, CheckCircle2, XCircle, X, RefreshCw,
   Building2, MapPin, User, Phone, Mail, Eye, Tag, Cpu, Clock, Calendar, Hash,
 } from 'lucide-react';
 import api from '../../api';
@@ -37,12 +37,13 @@ export const DispatchListPage: React.FC = () => {
   const [itemSearch, setItemSearch] = useState('');
   const [detailsDispatch, setDetailsDispatch] = useState<any | null>(null);
 
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastType, setToastType] = useState<'success' | 'error'>('success');
+
   const [form, setForm] = useState({
     inventoryItemId: '',
     siteId: '',
-    unit: '',
     sublocation: '',
-    state: '',
     floor: '',
     buildingName: '',
     roomName: '',
@@ -112,18 +113,54 @@ export const DispatchListPage: React.FC = () => {
     enabled: isModalOpen && Boolean(form.roomId && form.roomId.trim()),
   });
 
+  // Auto-fetch location details from existing inventory when roomId is selected
+  useEffect(() => {
+    if (roomItemsData && roomItemsData.length > 0) {
+      const first = roomItemsData[0];
+      setForm(f => ({
+        ...f,
+        buildingName: f.buildingName || first.buildingName || '',
+        floor: f.floor || first.floor || '',
+        solutionType: f.solutionType || first.solutionType || '',
+        locationClass: f.locationClass || first.locationClass || '',
+        roomName: f.roomName || first.roomName || '',
+        sublocation: f.sublocation || first.subUnit || first.sublocation || '',
+      }));
+    } else if (hierarchyData?.items && form.roomId) {
+      const matched = hierarchyData.items.find((i: any) => i.roomId === form.roomId);
+      if (matched) {
+        setForm(f => ({
+          ...f,
+          buildingName: f.buildingName || matched.buildingName || '',
+          floor: f.floor || matched.floor || '',
+          solutionType: f.solutionType || matched.solutionType || '',
+          locationClass: f.locationClass || matched.locationClass || '',
+          roomName: f.roomName || matched.roomName || '',
+          sublocation: f.sublocation || matched.subUnit || '',
+        }));
+      }
+    }
+  }, [roomItemsData, hierarchyData, form.roomId]);
+
   const createMutation = useMutation({
     mutationFn: async (payload: typeof form) => {
       const res = await api.post('/dispatch', payload);
       return res.data.data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['dispatches'] });
-      queryClient.invalidateQueries({ queryKey: ['inventory'] });
-      queryClient.invalidateQueries({ queryKey: ['location-inventory'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['dispatches'] });
+      await queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      await queryClient.invalidateQueries({ queryKey: ['location-inventory'] });
+      await queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      setToastType('success');
+      setToastMessage('Dispatch confirmed successfully!');
+      setTimeout(() => setToastMessage(null), 4000);
       setIsModalOpen(false);
       resetForm();
+    },
+    onError: (err: any) => {
+      setToastType('error');
+      setToastMessage(err?.response?.data?.message || err?.message || 'Failed to confirm dispatch');
     },
   });
 
@@ -140,7 +177,7 @@ export const DispatchListPage: React.FC = () => {
 
   const resetForm = () => {
     setForm({
-      inventoryItemId: '', siteId: '', unit: '', sublocation: '', state: '', floor: '', buildingName: '', roomName: '', solutionType: '', locationClass: '', roomId: '', quantity: 1, courierName: '', trackingNo: '', dispatchDate: new Date().toISOString().split('T')[0], expectedDelivery: '', remarks: '',
+      inventoryItemId: '', siteId: '', sublocation: '', floor: '', buildingName: '', roomName: '', solutionType: '', locationClass: '', roomId: '', quantity: 1, courierName: '', trackingNo: '', dispatchDate: new Date().toISOString().split('T')[0], expectedDelivery: '', remarks: '',
     });
     setSelectedItem(null);
     setSelectedSite(null);
@@ -161,9 +198,7 @@ export const DispatchListPage: React.FC = () => {
         ...f,
         siteId: found.id,
         buildingName: found.siteName || f.buildingName,
-        state: found.state || f.state,
         sublocation: found.subLocation || f.sublocation,
-        unit: found.unitDivision || f.unit,
         locationClass: found.locationClass || f.locationClass,
       }));
     }
@@ -208,6 +243,19 @@ export const DispatchListPage: React.FC = () => {
 
   return (
     <Layout title="Outbound Dispatches">
+      {/* Success / Error Toast Notification */}
+      {toastMessage && (
+        <div className={`fixed top-5 right-5 z-50 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 text-xs font-bold ${
+          toastType === 'error' ? 'bg-rose-600 border border-rose-500' : 'bg-emerald-600 border border-emerald-500'
+        } toast`}>
+          {toastType === 'error' ? <XCircle className="w-4 h-4 text-white" /> : <CheckCircle2 className="w-4 h-4 text-white" />}
+          <span>{toastMessage}</span>
+          <button onClick={() => setToastMessage(null)} className="ml-2 text-white/80 hover:text-white">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Top Header & Search */}
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <div className="relative w-full sm:w-80">
@@ -508,35 +556,20 @@ export const DispatchListPage: React.FC = () => {
             )}
           </div>
 
-          {/* Cascading Destination Site Selectors */}
+          {/* Simplified Site-to-Room Selector */}
           <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
             <p className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
               <Building2 className="w-4 h-4 text-indigo-600" />
-              Integrated Site-to-Room Selector
+              Simplified Location &amp; Room Selector
             </p>
 
-            <div className="grid grid-cols-3 gap-2.5">
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">Unit</label>
-                <input
-                  type="text"
-                  list="unit-options"
-                  placeholder="e.g. EDN / BHEL"
-                  value={form.unit}
-                  onChange={(e) => setForm(f => ({ ...f, unit: e.target.value }))}
-                  className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:border-indigo-600"
-                />
-                <datalist id="unit-options">
-                  {(hierarchyData?.units || []).map((u: string) => <option key={u} value={u} />)}
-                </datalist>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">Sublocation</label>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">1. Sublocation</label>
                 <input
                   type="text"
                   list="sublocation-options"
-                  placeholder="e.g. ESD / Sub-Unit"
+                  placeholder="Select or type Sublocation..."
                   value={form.sublocation}
                   onChange={(e) => setForm(f => ({ ...f, sublocation: e.target.value }))}
                   className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:border-indigo-600"
@@ -547,24 +580,40 @@ export const DispatchListPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">State</label>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">2. Room ID *</label>
                 <input
                   type="text"
-                  list="state-options"
-                  placeholder="e.g. Karnataka"
-                  value={form.state}
-                  onChange={(e) => setForm(f => ({ ...f, state: e.target.value }))}
-                  className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:border-indigo-600"
+                  required
+                  list="roomid-options"
+                  placeholder="Select or type Room ID..."
+                  value={form.roomId}
+                  onChange={(e) => setForm(f => ({ ...f, roomId: e.target.value }))}
+                  className="w-full px-2.5 py-1.5 bg-white border border-indigo-300 rounded-lg text-xs font-mono font-bold text-indigo-700 focus:outline-none focus:border-indigo-600"
                 />
-                <datalist id="state-options">
-                  {(hierarchyData?.states || []).map((st: string) => <option key={st} value={st} />)}
+                <datalist id="roomid-options">
+                  {(hierarchyData?.roomIds || []).map((rm: string) => <option key={rm} value={rm} />)}
                 </datalist>
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-2.5">
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">Floor</label>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Building Name (Auto-Filled / Editable)</label>
+                <input
+                  type="text"
+                  list="building-options"
+                  placeholder="e.g. Main Server Building"
+                  value={form.buildingName}
+                  onChange={(e) => setForm(f => ({ ...f, buildingName: e.target.value }))}
+                  className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:border-indigo-600"
+                />
+                <datalist id="building-options">
+                  {(hierarchyData?.buildingNames || []).map((b: string) => <option key={b} value={b} />)}
+                </datalist>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Floor (Auto-Filled / Editable)</label>
                 <input
                   type="text"
                   list="floor-options"
@@ -575,37 +624,6 @@ export const DispatchListPage: React.FC = () => {
                 />
                 <datalist id="floor-options">
                   {(hierarchyData?.floors || []).map((fl: string) => <option key={fl} value={fl} />)}
-                </datalist>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">Building Name *</label>
-                <input
-                  type="text"
-                  required
-                  list="building-options"
-                  placeholder="e.g. Main Server Building"
-                  value={form.buildingName}
-                  onChange={(e) => setForm(f => ({ ...f, buildingName: e.target.value }))}
-                  className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 focus:outline-none focus:border-indigo-600"
-                />
-                <datalist id="building-options">
-                  {(hierarchyData?.buildingNames || []).map((b: string) => <option key={b} value={b} />)}
-                </datalist>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">Room Name</label>
-                <input
-                  type="text"
-                  list="roomname-options"
-                  placeholder="e.g. Control Room 1"
-                  value={form.roomName}
-                  onChange={(e) => setForm(f => ({ ...f, roomName: e.target.value }))}
-                  className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:border-indigo-600"
-                />
-                <datalist id="roomname-options">
-                  {(hierarchyData?.roomNames || []).map((rn: string) => <option key={rn} value={rn} />)}
                 </datalist>
               </div>
             </div>
@@ -642,18 +660,17 @@ export const DispatchListPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">Room ID *</label>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Room Name</label>
                 <input
                   type="text"
-                  required
-                  list="roomid-options"
-                  placeholder="e.g. ROOM-102"
-                  value={form.roomId}
-                  onChange={(e) => setForm(f => ({ ...f, roomId: e.target.value }))}
-                  className="w-full px-2.5 py-1.5 bg-white border border-indigo-300 rounded-lg text-xs font-mono font-bold text-indigo-700 focus:outline-none focus:border-indigo-600"
+                  list="roomname-options"
+                  placeholder="e.g. Control Room 1"
+                  value={form.roomName}
+                  onChange={(e) => setForm(f => ({ ...f, roomName: e.target.value }))}
+                  className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:border-indigo-600"
                 />
-                <datalist id="roomid-options">
-                  {(hierarchyData?.roomIds || []).map((rm: string) => <option key={rm} value={rm} />)}
+                <datalist id="roomname-options">
+                  {(hierarchyData?.roomNames || []).map((rn: string) => <option key={rn} value={rn} />)}
                 </datalist>
               </div>
             </div>
@@ -689,15 +706,14 @@ export const DispatchListPage: React.FC = () => {
             </div>
           )}
 
-          {/* Dedicated Remarks/Comment Field */}
+          {/* Dedicated Remarks/Comment Field (Optional) */}
           <div>
-            <label className="block text-xs font-bold text-slate-800 mb-1">Dispatch Comments / Remarks *</label>
+            <label className="block text-xs font-bold text-slate-800 mb-1">Dispatch Comments / Remarks (Optional)</label>
             <textarea
               rows={2}
-              required
               value={form.remarks}
               onChange={(e) => setForm(f => ({ ...f, remarks: e.target.value }))}
-              placeholder="Enter dispatch notes, engineer instructions, or reasons..."
+              placeholder="Enter optional dispatch notes, engineer instructions, or reasons..."
               className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-600"
             />
           </div>

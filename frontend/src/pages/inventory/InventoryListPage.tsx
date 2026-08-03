@@ -143,11 +143,13 @@ export const InventoryListPage: React.FC = () => {
 
     try {
       const res = await api.post('/inventory/upload-location-excel', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
         onUploadProgress: (progressEvent) => {
-          const total = progressEvent.total || progressEvent.loaded || 1;
-          const percent = Math.round((progressEvent.loaded * 100) / total);
-          setUploadProgress(percent);
+          if (progressEvent.total && progressEvent.total > 0) {
+            const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            setUploadProgress(percent);
+          } else {
+            setUploadProgress(50);
+          }
         },
       });
       setUploadSummary(res.data);

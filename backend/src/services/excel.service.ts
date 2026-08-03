@@ -464,19 +464,26 @@ export class ExcelService {
     // Step 2: Fetch ALL existing LocationInventory records in ONE database query
     const allExistingLocItems = await prisma.locationInventory.findMany().catch(() => []);
 
-    // Group existing DB records into lists by `${roomId}_${partId}` to support multiple identical items per room
-    const roomPartListMap = new Map<string, Array<typeof allExistingLocItems[0]>>();
+    // Group existing DB records into occurrence map ${roomId}_${partId}_${partSerialNo}_${occurrenceIndex}
+    const occurrenceMap = new Map<string, typeof allExistingLocItems[0]>();
+    const roomPartOccurrenceCount = new Map<string, number>();
     const serialMap = new Map<string, typeof allExistingLocItems[0]>();
 
     allExistingLocItems.forEach((item) => {
-      const key = `${(item.roomId || '').trim().toLowerCase()}_${(item.partId || '').trim().toLowerCase()}`;
-      if (!roomPartListMap.has(key)) {
-        roomPartListMap.set(key, []);
-      }
-      roomPartListMap.get(key)!.push(item);
+      const rId = (item.roomId || '').trim().toLowerCase();
+      const pId = (item.partId || '').trim().toLowerCase();
+      const sNo = (item.partSerialNo || '').trim().toLowerCase();
 
-      if (item.partSerialNo) {
-        serialMap.set(item.partSerialNo.trim().toLowerCase(), item);
+      const keyBase = `${rId}_${pId}`;
+      const count = roomPartOccurrenceCount.get(keyBase) || 0;
+      roomPartOccurrenceCount.set(keyBase, count + 1);
+
+      // Key 1: roomId_partId_occurrenceIndex
+      occurrenceMap.set(`${keyBase}_${count}`, item);
+      // Key 2: roomId_partId_partSerialNo_occurrenceIndex
+      if (sNo && sNo !== 'xyz') {
+        occurrenceMap.set(`${keyBase}_${sNo}_${count}`, item);
+        serialMap.set(sNo, item);
       }
     });
 
@@ -497,7 +504,7 @@ export class ExcelService {
       console.warn('Replacement logs lookup warning:', e);
     }
 
-    const occurrenceTracker = new Map<string, number>();
+    const excelOccurrenceTracker = new Map<string, number>();
     const newRecordsToInsert: Array<Prisma.LocationInventoryCreateInput> = [];
     const updatesToPerform: Array<{ id: string; data: Prisma.LocationInventoryUpdateInput }> = [];
 
@@ -524,19 +531,25 @@ export class ExcelService {
         const contractStartDate = parseExcelDate(getValue(row, ['Contract Start Date', 'contractStartDate']));
         const contractEndDate = parseExcelDate(getValue(row, ['Contract End Date', 'contractEndDate']));
 
-        const roomPartKey = `${roomId.toLowerCase()}_${partId.toLowerCase()}`;
-        const occIndex = occurrenceTracker.get(roomPartKey) || 0;
-        occurrenceTracker.set(roomPartKey, occIndex + 1);
+        const rIdClean = roomId.toLowerCase();
+        const pIdClean = partId.toLowerCase();
+        const sNoClean = exactSerial.toLowerCase();
+        const keyBase = `${rIdClean}_${pIdClean}`;
 
-        const existingList = roomPartListMap.get(roomPartKey) || [];
-        const existingRecord = existingList[occIndex] || serialMap.get(exactSerial.toLowerCase());
+        const occIndex = excelOccurrenceTracker.get(keyBase) || 0;
+        excelOccurrenceTracker.set(keyBase, occIndex + 1);
+
+        const existingRecord =
+          occurrenceMap.get(`${keyBase}_${sNoClean}_${occIndex}`) ||
+          occurrenceMap.get(`${keyBase}_${occIndex}`) ||
+          serialMap.get(sNoClean);
 
         if (existingRecord) {
           // Check if this device was replaced or dispatched in app software
           const isReplacedInApp =
             existingRecord.status === 'REPLACED' ||
             existingRecord.status === 'FAULTY' ||
-            replacedSet.has(roomPartKey) ||
+            replacedSet.has(keyBase) ||
             replacedSet.has(existingRecord.partSerialNo.toLowerCase());
 
           if (isReplacedInApp) {

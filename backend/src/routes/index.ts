@@ -48,9 +48,9 @@ inventoryRoutes.use(authenticate);
 // Static / Specific Inventory Routes (Placed ABOVE dynamic routes)
 inventoryRoutes.get('/dashboard-stats', (req, res, next) => inventoryController.getDashboardStats(req, res).catch(next));
 inventoryRoutes.get('/', (req, res, next) => inventoryController.getAll(req, res).catch(next));
-inventoryRoutes.post('/import', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN), upload.single('file'), (req, res, next) => inventoryController.importExcel(req, res).catch(next));
-inventoryRoutes.post('/location-inventory/import', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN), upload.single('file'), (req, res, next) => inventoryController.importLocationInventory(req, res).catch(next));
-inventoryRoutes.post('/upload-location-excel', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN), upload.single('file'), (req, res, next) => inventoryController.importLocationInventory(req, res).catch(next));
+inventoryRoutes.post('/import', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.ENGINEER), upload.single('file'), (req, res, next) => inventoryController.importExcel(req, res).catch(next));
+inventoryRoutes.post('/location-inventory/import', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.ENGINEER), upload.single('file'), (req, res, next) => inventoryController.importLocationInventory(req, res).catch(next));
+inventoryRoutes.post('/upload-location-excel', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.ENGINEER), upload.single('file'), (req, res, next) => inventoryController.importLocationInventory(req, res).catch(next));
 inventoryRoutes.get('/location-inventory', (req, res, next) => inventoryController.getLocationInventories(req, res).catch(next));
 inventoryRoutes.get('/replacement-audit-logs', (req, res, next) => inventoryController.getReplacementAuditLogs(req, res).catch(next));
 inventoryRoutes.get('/replacement-history', (req, res, next) => inventoryController.getReplacementAuditLogs(req, res).catch(next));

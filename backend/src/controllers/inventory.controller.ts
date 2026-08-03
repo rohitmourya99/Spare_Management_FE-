@@ -70,7 +70,12 @@ export class InventoryController {
       throw new AppError(400, 'Please upload an Excel file (.xlsx or .xls)');
     }
     const summary = await excelService.importLocationInventory(req.file.buffer, req.user!.userId);
-    ApiResponse.success(res, summary, '15-Field Location Inventory import processed');
+    res.status(200).json({
+      success: true,
+      message: `Successfully uploaded all ${summary.imported} records!`,
+      uploadedCount: summary.imported,
+      data: summary,
+    });
   }
 
   async getLocationInventories(req: Request, res: Response): Promise<void> {

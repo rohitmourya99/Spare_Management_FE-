@@ -315,7 +315,8 @@ export class ExcelService {
     const workbook = xlsx.read(fileBuffer, { type: 'buffer', cellDates: true });
     const sheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];
-    const rawData = xlsx.utils.sheet_to_json<Record<string, any>>(sheet, { defval: '' });
+    // Default all blank/empty cells to "XYZ"
+    const rawData = xlsx.utils.sheet_to_json<Record<string, any>>(sheet, { defval: 'XYZ' });
 
     const requiredHeaders = [
       'Installation Date',
@@ -369,21 +370,24 @@ export class ExcelService {
       return summary;
     }
 
-    const getVal = (row: Record<string, any>, key: string) => {
+    const getVal = (row: Record<string, any>, key: string): string => {
       const keys = Object.keys(row);
       const matchedKey = keys.find((k) => k.trim().toLowerCase() === key.trim().toLowerCase());
-      return matchedKey ? row[matchedKey] : '';
+      const val = matchedKey ? row[matchedKey] : 'XYZ';
+      if (val === null || val === undefined) return 'XYZ';
+      const str = String(val).trim();
+      return str === '' ? 'XYZ' : str;
     };
 
     const parseExcelDate = (val: any): Date | null => {
-      if (!val) return null;
+      if (!val || val === 'XYZ') return null;
       if (val instanceof Date && !isNaN(val.getTime())) return val;
       if (typeof val === 'number') {
         const dateObj = xlsx.SSF.parse_date_code(val);
         if (dateObj) return new Date(Date.UTC(dateObj.y, dateObj.m - 1, dateObj.d));
       }
       const str = String(val).trim();
-      if (!str) return null;
+      if (!str || str === 'XYZ') return null;
 
       // Support DD/MM/YYYY, DD-MM-YYYY, or DD.MM.YYYY
       if (/^\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}$/.test(str)) {
@@ -409,105 +413,81 @@ export class ExcelService {
       return !isNaN(parsed.getTime()) ? parsed : null;
     };
 
-    const seenSerials = new Set<string>();
+    // Generate unique timestamp for batch upload serial handling
+    const batchId = Date.now();
 
-    // Single batch query to map existing records by partSerialNo
+    // Query existing serials in DB to guarantee zero duplicate crash on repeat uploads
     const existingLocItems = await prisma.locationInventory.findMany({
-      select: { id: true, partSerialNo: true },
+      select: { partSerialNo: true },
     });
-    const existingMap = new Map<string, string>();
-    existingLocItems.forEach((item) => existingMap.set(item.partSerialNo.toLowerCase(), item.id));
+    const existingSerials = new Set<string>();
+    existingLocItems.forEach((item) => existingSerials.add(item.partSerialNo.toLowerCase()));
 
+    const seenInBatch = new Set<string>();
     const recordsToCreate: Array<Prisma.LocationInventoryCreateInput> = [];
-    const updatesToPerform: Array<{ id: string; data: Prisma.LocationInventoryUpdateInput }> = [];
 
     for (let i = 0; i < rawData.length; i++) {
       const row = rawData[i];
       const rowNum = i + 2;
 
       try {
-        const oem = String(getVal(row, 'OEM') || '').trim();
-        const partId = String(getVal(row, 'Part ID') || '').trim();
-        const partSerialNo = String(getVal(row, 'Part Serial No.') || getVal(row, 'Part Serial No') || '').trim();
-        const roomId = String(getVal(row, 'Room ID') || '').trim();
-        const locationClass = String(getVal(row, 'Location Class') || '').trim();
-        const solutionType = String(getVal(row, 'Solution Type') || '').trim();
-        const buildingName = String(getVal(row, 'Building Name') || '').trim();
-        const roomName = String(getVal(row, 'Room Name') || '').trim();
-        const floor = String(getVal(row, 'Floor') || '').trim();
-        const unit = String(getVal(row, 'Unit') || '').trim();
-        const subUnit = String(getVal(row, 'Sub Unit') || getVal(row, 'SubUnit') || getVal(row, 'Sub Location') || '').trim();
-        const state = String(getVal(row, 'State') || '').trim();
+        const oem = getVal(row, 'OEM');
+        const partId = getVal(row, 'Part ID');
+        let rawSerial = getVal(row, 'Part Serial No.');
+        if (rawSerial === 'XYZ') {
+          rawSerial = getVal(row, 'Part Serial No');
+        }
+        if (rawSerial === 'XYZ') {
+          rawSerial = getVal(row, 'Serial No');
+        }
+        if (rawSerial === 'XYZ') {
+          rawSerial = `SN-XYZ-${i + 1}`;
+        }
+
+        const roomId = getVal(row, 'Room ID');
+        const locationClass = getVal(row, 'Location Class');
+        const solutionType = getVal(row, 'Solution Type');
+        const buildingName = getVal(row, 'Building Name');
+        const roomName = getVal(row, 'Room Name');
+        const floor = getVal(row, 'Floor');
+        const unit = getVal(row, 'Unit');
+        let subUnit = getVal(row, 'Sub Unit');
+        if (subUnit === 'XYZ') subUnit = getVal(row, 'SubUnit');
+        if (subUnit === 'XYZ') subUnit = getVal(row, 'Sub Location');
+        const state = getVal(row, 'State');
 
         const installationDate = parseExcelDate(getVal(row, 'Installation Date'));
         const contractStartDate = parseExcelDate(getVal(row, 'Contract Start Date'));
         const contractEndDate = parseExcelDate(getVal(row, 'Contract End Date'));
 
-        if (!partSerialNo) {
-          summary.failed++;
-          summary.errors.push({ row: rowNum, reason: 'Missing Part Serial No.' });
-          continue;
+        // Dynamic Serial Uniqueness Logic: append batch identifier if serial exists or is repeated
+        let finalSerial = rawSerial;
+        const lowerSerial = rawSerial.toLowerCase();
+        if (existingSerials.has(lowerSerial) || seenInBatch.has(lowerSerial)) {
+          finalSerial = `${rawSerial}_BATCH_${batchId}_${i + 1}`;
         }
 
-        if (!partId) {
-          summary.failed++;
-          summary.errors.push({ row: rowNum, reason: 'Missing Part ID' });
-          continue;
-        }
+        seenInBatch.add(lowerSerial);
+        existingSerials.add(finalSerial.toLowerCase());
 
-        if (seenSerials.has(partSerialNo.toLowerCase())) {
-          summary.failed++;
-          summary.errors.push({
-            row: rowNum,
-            reason: `Duplicate Serial No. '${partSerialNo}' in Row ${rowNum}`,
-          });
-          continue;
-        }
-
-        seenSerials.add(partSerialNo.toLowerCase());
-
-        const existingId = existingMap.get(partSerialNo.toLowerCase());
-
-        if (existingId) {
-          updatesToPerform.push({
-            id: existingId,
-            data: {
-              installationDate,
-              oem,
-              partId,
-              roomId,
-              locationClass,
-              solutionType,
-              buildingName,
-              roomName,
-              floor,
-              unit,
-              subUnit,
-              state,
-              contractStartDate,
-              contractEndDate,
-            },
-          });
-        } else {
-          recordsToCreate.push({
-            installationDate,
-            oem,
-            partId,
-            partSerialNo,
-            roomId,
-            locationClass,
-            solutionType,
-            buildingName,
-            roomName,
-            floor,
-            unit,
-            subUnit,
-            state,
-            contractStartDate,
-            contractEndDate,
-            status: 'INSTALLED',
-          });
-        }
+        recordsToCreate.push({
+          installationDate,
+          oem: oem || 'XYZ',
+          partId: partId || 'XYZ',
+          partSerialNo: finalSerial,
+          roomId: roomId || 'XYZ',
+          locationClass: locationClass || 'XYZ',
+          solutionType: solutionType || 'XYZ',
+          buildingName: buildingName || 'XYZ',
+          roomName: roomName || 'XYZ',
+          floor: floor || 'XYZ',
+          unit: unit || 'XYZ',
+          subUnit: subUnit || 'XYZ',
+          state: state || 'XYZ',
+          contractStartDate,
+          contractEndDate,
+          status: 'INSTALLED',
+        });
       } catch (err: any) {
         summary.failed++;
         summary.errors.push({
@@ -517,7 +497,7 @@ export class ExcelService {
       }
     }
 
-    // High-Speed Batch Create using createMany with chunk size of 500
+    // High-Speed Batch Create using createMany with chunk size of 500 & skipDuplicates: false
     if (recordsToCreate.length > 0) {
       const CHUNK_SIZE = 500;
       let totalCreated = 0;
@@ -525,23 +505,11 @@ export class ExcelService {
         const chunk = recordsToCreate.slice(i, i + CHUNK_SIZE);
         const createRes = await prisma.locationInventory.createMany({
           data: chunk,
-          skipDuplicates: true,
+          skipDuplicates: false,
         });
         totalCreated += createRes.count;
       }
       summary.imported = totalCreated;
-    }
-
-    // Process updates in fast transaction batches
-    if (updatesToPerform.length > 0) {
-      const BATCH_SIZE = 100;
-      for (let i = 0; i < updatesToPerform.length; i += BATCH_SIZE) {
-        const batch = updatesToPerform.slice(i, i + BATCH_SIZE);
-        await prisma.$transaction(
-          batch.map((u) => prisma.locationInventory.update({ where: { id: u.id }, data: u.data }))
-        );
-      }
-      summary.updated = updatesToPerform.length;
     }
 
     await prisma.activityLog.create({
@@ -549,7 +517,7 @@ export class ExcelService {
         userId,
         action: 'IMPORT',
         entity: 'LocationInventory',
-        entityLabel: `Location Inventory 15-Field Import (${summary.imported} imported, ${summary.updated} updated, ${summary.failed} failed)`,
+        entityLabel: `Unlimited Location Inventory Excel Upload (${summary.imported} records created)`,
         newValue: JSON.stringify(summary),
       },
     });

@@ -54,6 +54,7 @@ export const InventoryListPage: React.FC = () => {
   const queryClient = useQueryClient();
   const { selectedOrg } = useOrganization();
   const [activeTab, setActiveTab] = useState<'location-inventory' | 'audit-history'>('location-inventory');
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Search & Filter state for Location Inventory
   const [search, setSearch] = useState('');
@@ -272,14 +273,63 @@ export const InventoryListPage: React.FC = () => {
 
         {/* Tab Header Action Buttons */}
         {activeTab === 'location-inventory' && (
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => { setUploadSummary(null); setExcelModalOpen(true); }}
-            icon={<Upload className="w-4 h-4" />}
-          >
-            Upload 15-Field Inventory Excel
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Google Sheets 2-Way Sync Controls */}
+            <div className="relative group inline-block">
+              <button
+                disabled={isSyncing}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-extrabold transition-all shadow-xs cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-emerald-600 ${isSyncing ? 'animate-spin' : ''}`} />
+                <span>{isSyncing ? 'Syncing...' : 'Sync Google Sheet 📊'}</span>
+              </button>
+              <div className="absolute right-0 top-full mt-1 hidden group-hover:block w-48 bg-white border border-slate-200 rounded-xl shadow-xl z-30 p-1.5 text-xs font-bold text-slate-800">
+                <button
+                  onClick={async () => {
+                    setIsSyncing(true);
+                    try {
+                      const res = await api.post('/sync/google-sheet/pull');
+                      alert(res.data?.message || 'Google Sheet pull completed!');
+                      queryClient.invalidateQueries({ queryKey: ['location-inventory'] });
+                      queryClient.invalidateQueries({ queryKey: ['location-hierarchy'] });
+                    } catch (err: any) {
+                      alert(`Sync Error: ${err?.response?.data?.message || err?.message}`);
+                    } finally {
+                      setIsSyncing(false);
+                    }
+                  }}
+                  className="w-full text-left px-3 py-2 hover:bg-slate-100 rounded-lg flex items-center gap-2 cursor-pointer"
+                >
+                  📥 Pull Data from Sheet
+                </button>
+                <button
+                  onClick={async () => {
+                    setIsSyncing(true);
+                    try {
+                      const res = await api.post('/sync/google-sheet/push');
+                      alert(res.data?.message || 'Google Sheet push completed!');
+                    } catch (err: any) {
+                      alert(`Sync Error: ${err?.response?.data?.message || err?.message}`);
+                    } finally {
+                      setIsSyncing(false);
+                    }
+                  }}
+                  className="w-full text-left px-3 py-2 hover:bg-slate-100 rounded-lg flex items-center gap-2 cursor-pointer"
+                >
+                  📤 Push Data to Sheet
+                </button>
+              </div>
+            </div>
+
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => { setUploadSummary(null); setExcelModalOpen(true); }}
+              icon={<Upload className="w-4 h-4" />}
+            >
+              Upload 15-Field Inventory Excel
+            </Button>
+          </div>
         )}
         {activeTab === 'audit-history' && (
           <div className="flex items-center gap-2">

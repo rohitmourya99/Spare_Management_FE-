@@ -17,12 +17,13 @@ datasource db {
 // ==============================================
 
 model Organization {
-  id        String   @id @default("BHEL")
-  name      String   @unique
-  code      String   @unique
-  status    String   @default("ACTIVE") // ACTIVE | INACTIVE
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String   @id @default("BHEL")
+  name          String   @unique
+  code          String   @unique
+  status        String   @default("ACTIVE") // ACTIVE | INACTIVE
+  googleSheetId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   users          User[]
   inventoryItems InventoryItem[]

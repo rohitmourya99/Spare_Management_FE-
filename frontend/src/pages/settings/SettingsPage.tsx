@@ -14,7 +14,8 @@ export const SettingsPage: React.FC = () => {
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [formData, setFormData] = useState({ name: '', code: '', primaryWarehouseName: '' });
+  const [editingOrg, setEditingOrg] = useState<any | null>(null);
+  const [formData, setFormData] = useState({ name: '', code: '', primaryWarehouseName: '', googleSheetId: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -29,7 +30,7 @@ export const SettingsPage: React.FC = () => {
     queryFn: async () => (await api.get('/inventory/locations')).data.data,
   });
 
-  const handleAddOrgSubmit = async (e: React.FormEvent) => {
+  const handleOrgSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setModalError(null);
     setSuccessMsg(null);
@@ -37,6 +38,7 @@ export const SettingsPage: React.FC = () => {
     const cleanName = formData.name.trim();
     const cleanCode = formData.code.trim();
     const cleanWarehouse = formData.primaryWarehouseName.trim();
+    const cleanSheetId = formData.googleSheetId.trim();
 
     if (!cleanName || !cleanCode) {
       setModalError('Organization Name and Code are required.');
@@ -45,27 +47,44 @@ export const SettingsPage: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      const res = await api.post('/organizations', {
-        name: cleanName,
-        code: cleanCode,
-        primaryWarehouseName: cleanWarehouse || undefined,
-      });
-
-      if (res.data?.success || res.status === 201 || res.status === 200) {
-        const createdOrg = res.data?.organization || res.data?.data;
-        const newOrgId = createdOrg?.id || cleanCode.toUpperCase();
-
-        await refetchOrganizations();
-        setIsAddModalOpen(false);
-        setFormData({ name: '', code: '', primaryWarehouseName: '' });
-        setSuccessMsg(`Organization '${cleanName}' created successfully!`);
-
-        setTimeout(() => setSuccessMsg(null), 4000);
+      if (editingOrg) {
+        // Update existing org
+        const res = await api.put(`/organizations/${editingOrg.id}`, {
+          name: cleanName,
+          code: cleanCode,
+          googleSheetId: cleanSheetId || null,
+        });
+        if (res.data?.success || res.status === 200) {
+          await refetchOrganizations();
+          setEditingOrg(null);
+          setFormData({ name: '', code: '', primaryWarehouseName: '', googleSheetId: '' });
+          setSuccessMsg(`Organization '${cleanName}' updated successfully!`);
+          setTimeout(() => setSuccessMsg(null), 4000);
+        } else {
+          setModalError(res.data?.message || 'Failed to update organization.');
+        }
       } else {
-        setModalError(res.data?.message || 'Failed to create organization.');
+        // Create new org
+        const res = await api.post('/organizations', {
+          name: cleanName,
+          code: cleanCode,
+          primaryWarehouseName: cleanWarehouse || undefined,
+          googleSheetId: cleanSheetId || undefined,
+        });
+
+        if (res.data?.success || res.status === 201 || res.status === 200) {
+          await refetchOrganizations();
+          setIsAddModalOpen(false);
+          setFormData({ name: '', code: '', primaryWarehouseName: '', googleSheetId: '' });
+          setSuccessMsg(`Organization '${cleanName}' created successfully!`);
+
+          setTimeout(() => setSuccessMsg(null), 4000);
+        } else {
+          setModalError(res.data?.message || 'Failed to create organization.');
+        }
       }
     } catch (err: any) {
-      const serverMsg = err?.response?.data?.message || err?.message || 'Failed to create organization.';
+      const serverMsg = err?.response?.data?.message || err?.message || 'Failed to submit organization.';
       setModalError(serverMsg);
     } finally {
       setIsSubmitting(false);
@@ -117,6 +136,7 @@ export const SettingsPage: React.FC = () => {
                 <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-black text-slate-600 uppercase tracking-wider">
                   <th className="py-3 px-4">Organization Name</th>
                   <th className="py-3 px-4">Org Code</th>
+                  <th className="py-3 px-4">Google Sheet ID / URL</th>
                   <th className="py-3 px-4">Status</th>
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
@@ -136,13 +156,38 @@ export const SettingsPage: React.FC = () => {
                         )}
                       </td>
                       <td className="py-3.5 px-4 font-mono font-bold text-slate-600 uppercase">{org.code || org.id}</td>
+                      <td className="py-3.5 px-4 text-slate-600 font-mono text-[11px]">
+                        {org.googleSheetId ? (
+                          <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 font-bold rounded border border-emerald-200">
+                            {org.googleSheetId.length > 20 ? `${org.googleSheetId.substring(0, 18)}...` : org.googleSheetId}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 italic">Not Linked</span>
+                        )}
+                      </td>
                       <td className="py-3.5 px-4">
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                           {org.status || 'ACTIVE'}
                         </span>
                       </td>
-                      <td className="py-3.5 px-4 text-right">
+                      <td className="py-3.5 px-4 text-right space-x-2">
+                        {isSuperAdmin && (
+                          <button
+                            onClick={() => {
+                              setEditingOrg(org);
+                              setFormData({
+                                name: org.name,
+                                code: org.code || org.id,
+                                primaryWarehouseName: '',
+                                googleSheetId: org.googleSheetId || '',
+                              });
+                            }}
+                            className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                          >
+                            Edit
+                          </button>
+                        )}
                         {isCurrent ? (
                           <span className="text-xs font-bold text-indigo-600">Selected</span>
                         ) : (
@@ -191,8 +236,8 @@ export const SettingsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Modal: + Add Organization */}
-      {isAddModalOpen && (
+      {/* Modal: + Add / Edit Organization */}
+      {(isAddModalOpen || editingOrg) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-md w-full p-6 animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-100">
@@ -201,12 +246,14 @@ export const SettingsPage: React.FC = () => {
                   <Building2 className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-base font-black text-slate-900">Add New Organization</h3>
-                  <p className="text-xs text-slate-500 font-medium">Create a multi-tenant client profile</p>
+                  <h3 className="text-base font-black text-slate-900">
+                    {editingOrg ? `Edit ${editingOrg.name}` : 'Add New Organization'}
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">Create or manage client profile & sheet integration</p>
                 </div>
               </div>
               <button
-                onClick={() => setIsAddModalOpen(false)}
+                onClick={() => { setIsAddModalOpen(false); setEditingOrg(null); }}
                 className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
@@ -220,7 +267,7 @@ export const SettingsPage: React.FC = () => {
               </div>
             )}
 
-            <form onSubmit={handleAddOrgSubmit} className="space-y-4">
+            <form onSubmit={handleOrgSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   Organization Name <span className="text-rose-500">*</span>
@@ -249,23 +296,38 @@ export const SettingsPage: React.FC = () => {
                 />
               </div>
 
+              {!editingOrg && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Primary Warehouse Name <span className="text-slate-400 font-normal">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Pune Hub / Main Warehouse"
+                    value={formData.primaryWarehouseName}
+                    onChange={(e) => setFormData({ ...formData, primaryWarehouseName: e.target.value })}
+                    className="w-full px-3.5 py-2 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-500 focus:outline-none transition-all"
+                  />
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Primary Warehouse Name <span className="text-slate-400 font-normal">(Optional)</span>
+                  Google Sheet ID / URL <span className="text-slate-400 font-normal">(Optional)</span>
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Pune Hub / Main Warehouse"
-                  value={formData.primaryWarehouseName}
-                  onChange={(e) => setFormData({ ...formData, primaryWarehouseName: e.target.value })}
-                  className="w-full px-3.5 py-2 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-500 focus:outline-none transition-all"
+                  placeholder="e.g. 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
+                  value={formData.googleSheetId}
+                  onChange={(e) => setFormData({ ...formData, googleSheetId: e.target.value })}
+                  className="w-full px-3.5 py-2 text-xs font-semibold font-mono bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-500 focus:outline-none transition-all"
                 />
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setIsAddModalOpen(false)}
+                  onClick={() => { setIsAddModalOpen(false); setEditingOrg(null); }}
                   className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
                 >
                   Cancel
@@ -275,7 +337,7 @@ export const SettingsPage: React.FC = () => {
                   disabled={isSubmitting}
                   className="px-4 py-2 text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-xl shadow-sm transition-all flex items-center gap-2 cursor-pointer"
                 >
-                  {isSubmitting ? 'Creating...' : 'Create Organization'}
+                  {isSubmitting ? 'Submitting...' : editingOrg ? 'Update Organization' : 'Create Organization'}
                 </button>
               </div>
             </form>

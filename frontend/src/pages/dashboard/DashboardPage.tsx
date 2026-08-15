@@ -347,13 +347,77 @@ export const DashboardPage: React.FC = () => {
     return items;
   }, [data?.recentActivities, searchQuery]);
 
-  const isStockCategory = ['TOTAL_SPARE_PARTS', 'SERIALIZED_PARTS', 'NON_SERIALIZED', 'TOTAL_OEM', 'DELHI_STORE', 'BENGALURU_STORE', 'LOW_STOCK', 'OUT_OF_STOCK'].includes(activeCardFilter);
+  // Real-time OEM Breakdown Calculation
+  const oemBreakdown = useMemo(() => {
+    if (!inventoryItemsData || !Array.isArray(inventoryItemsData)) {
+      return {
+        oemList: [],
+        grandTotalSerialized: 0,
+        grandTotalNonSerialized: 0,
+        grandTotalParts: 0,
+      };
+    }
+
+    const map = new Map<string, {
+      oemName: string;
+      serializedCount: number;
+      nonSerializedCount: number;
+      totalParts: number;
+    }>();
+
+    for (const item of inventoryItemsData) {
+      const oemName = (item.oem?.name || item.oemName || item.oem || 'Standard OEM').trim();
+      const existing = map.get(oemName) || {
+        oemName,
+        serializedCount: 0,
+        nonSerializedCount: 0,
+        totalParts: 0,
+      };
+
+      const qty = getAvailableQty(item);
+      const isSer = isItemSerialized(item);
+
+      if (isSer) {
+        existing.serializedCount += qty;
+      } else {
+        existing.nonSerializedCount += qty;
+      }
+      existing.totalParts += qty;
+
+      map.set(oemName, existing);
+    }
+
+    let oemList = Array.from(map.values());
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      oemList = oemList.filter((oem) => oem.oemName.toLowerCase().includes(q));
+    }
+
+    oemList.sort((a, b) => a.oemName.localeCompare(b.oemName));
+
+    const grandTotalSerialized = oemList.reduce((sum, o) => sum + o.serializedCount, 0);
+    const grandTotalNonSerialized = oemList.reduce((sum, o) => sum + o.nonSerializedCount, 0);
+    const grandTotalParts = oemList.reduce((sum, o) => sum + o.totalParts, 0);
+
+    return {
+      oemList,
+      grandTotalSerialized,
+      grandTotalNonSerialized,
+      grandTotalParts,
+    };
+  }, [inventoryItemsData, searchQuery]);
+
+  const isOemCategory = activeCardFilter === 'TOTAL_OEM';
+  const isStockCategory = ['TOTAL_SPARE_PARTS', 'SERIALIZED_PARTS', 'NON_SERIALIZED', 'DELHI_STORE', 'BENGALURU_STORE', 'LOW_STOCK', 'OUT_OF_STOCK'].includes(activeCardFilter);
   const isActivityCategory = ['TODAYS_ACTIVITIES', 'AUDIT_LOGS'].includes(activeCardFilter);
   const isDispatchCategory = activeCardFilter === 'TODAYS_DISPATCH';
   const isPickupCategory = activeCardFilter === 'TODAYS_PICKUP';
   const isFailedLoginsCategory = activeCardFilter === 'FAILED_LOGINS';
 
-  const currentListLength = isStockCategory
+  const currentListLength = isOemCategory
+    ? oemBreakdown.oemList.length
+    : isStockCategory
     ? filteredInventoryItems.length
     : isActivityCategory
     ? filteredActivities.length
@@ -455,7 +519,11 @@ export const DashboardPage: React.FC = () => {
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="font-extrabold text-slate-900 text-sm">
-                  Showing results for: <span className="text-indigo-600 font-black">{activeCardObj.title}</span>
+                  Showing results for: <span className="text-indigo-600 font-black">
+                    {isOemCategory
+                      ? `OEM Breakdown (${oemBreakdown.oemList.length} OEMs | Grand Total: ${oemBreakdown.grandTotalParts.toLocaleString('en-IN')} Parts)`
+                      : activeCardObj.title}
+                  </span>
                 </h3>
                 <span className="text-xs bg-indigo-100 text-indigo-800 font-extrabold px-2.5 py-0.5 rounded-full border border-indigo-200">
                   {currentListLength} {currentListLength === 1 ? 'item' : 'items'}
@@ -501,6 +569,16 @@ export const DashboardPage: React.FC = () => {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/70 text-[11px] font-extrabold text-slate-700 uppercase tracking-wider">
+                {isOemCategory && (
+                  <>
+                    <th className="p-3">#</th>
+                    <th className="p-3">OEM Vendor Name</th>
+                    <th className="p-3 text-center">Serialized Parts</th>
+                    <th className="p-3 text-center">Non-Serialized Parts</th>
+                    <th className="p-3 text-center">Total Spare Parts</th>
+                    <th className="p-3 text-right">Actions</th>
+                  </>
+                )}
                 {isStockCategory && (
                   <>
                     <th className="p-3">Spare Part</th>
@@ -551,23 +629,100 @@ export const DashboardPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-xs text-slate-900">
-              {isLoadingInventory ? (
-                <tr>
-                  <td colSpan={7} className="p-8 text-center text-slate-500 font-semibold">
-                    <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-                    Loading drill-down data...
-                  </td>
-                </tr>
-              ) : isStockCategory ? (
-                filteredInventoryItems.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="p-8 text-center text-slate-500 font-semibold">
-                      <Package className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                      No spare parts matching selected filter <span className="font-bold text-slate-800">"{activeCardObj.title}"</span>.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredInventoryItems.slice(0, 15).map((item: any) => (
+              {(() => {
+                if (isLoadingInventory) {
+                  return (
+                    <tr>
+                      <td colSpan={7} className="p-8 text-center text-slate-500 font-semibold">
+                        <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                        Loading drill-down data...
+                      </td>
+                    </tr>
+                  );
+                }
+
+                if (isOemCategory) {
+                  if (oemBreakdown.oemList.length === 0) {
+                    return (
+                      <tr>
+                        <td colSpan={6} className="p-8 text-center text-slate-500 font-semibold">
+                          <Cpu className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                          No OEM vendors found matching search query.
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  return (
+                    <>
+                      {oemBreakdown.oemList.map((oem, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="p-3 font-bold text-slate-400">{idx + 1}</td>
+                          <td className="p-3 font-extrabold text-slate-900 flex items-center gap-2">
+                            <Cpu className="w-4 h-4 text-cyan-600 shrink-0" />
+                            <span>{oem.oemName}</span>
+                          </td>
+                          <td className="p-3 text-center font-mono">
+                            <span className="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-lg border border-indigo-200 font-extrabold text-xs">
+                              {oem.serializedCount.toLocaleString('en-IN')}
+                            </span>
+                          </td>
+                          <td className="p-3 text-center font-mono">
+                            <span className="bg-purple-50 text-purple-700 px-2.5 py-1 rounded-lg border border-purple-200 font-extrabold text-xs">
+                              {oem.nonSerializedCount.toLocaleString('en-IN')}
+                            </span>
+                          </td>
+                          <td className="p-3 text-center font-black text-slate-900 text-sm">
+                            {oem.totalParts.toLocaleString('en-IN')} PCS
+                          </td>
+                          <td className="p-3 text-right">
+                            <button
+                              onClick={() => navigate(`/stock-list?search=${encodeURIComponent(oem.oemName)}`)}
+                              className="px-2.5 py-1 rounded-lg bg-cyan-50 text-cyan-700 hover:bg-cyan-100 text-xs font-bold border border-cyan-200 transition-colors inline-flex items-center gap-1"
+                            >
+                              Filter OEM <ChevronRight className="w-3 h-3" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                      <tr className="bg-slate-900 text-white font-black border-t-2 border-slate-700">
+                        <td className="p-3 text-xs uppercase tracking-wider text-slate-400">Σ</td>
+                        <td className="p-3 text-sm font-black text-white uppercase tracking-wider">
+                          GRAND TOTAL SUMMARY ({oemBreakdown.oemList.length} OEMs)
+                        </td>
+                        <td className="p-3 text-center font-mono text-xs">
+                          <span className="bg-indigo-950 text-indigo-200 px-3 py-1 rounded-lg border border-indigo-700 font-black">
+                            {oemBreakdown.grandTotalSerialized.toLocaleString('en-IN')} Serialized
+                          </span>
+                        </td>
+                        <td className="p-3 text-center font-mono text-xs">
+                          <span className="bg-purple-950 text-purple-200 px-3 py-1 rounded-lg border border-purple-700 font-black">
+                            {oemBreakdown.grandTotalNonSerialized.toLocaleString('en-IN')} Non-Serialized
+                          </span>
+                        </td>
+                        <td className="p-3 text-center text-sm font-black text-emerald-400">
+                          {oemBreakdown.grandTotalParts.toLocaleString('en-IN')} TOTAL PARTS
+                        </td>
+                        <td className="p-3 text-right text-[11px] text-slate-400 font-bold">
+                          All Vendors Combined
+                        </td>
+                      </tr>
+                    </>
+                  );
+                }
+
+                if (isStockCategory) {
+                  if (filteredInventoryItems.length === 0) {
+                    return (
+                      <tr>
+                        <td colSpan={7} className="p-8 text-center text-slate-500 font-semibold">
+                          <Package className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                          No spare parts matching selected filter <span className="font-bold text-slate-800">"{activeCardObj.title}"</span>.
+                        </td>
+                      </tr>
+                    );
+                  }
+                  return filteredInventoryItems.slice(0, 15).map((item: any) => (
                     <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="p-3 font-bold text-slate-900">
                         <div>{item.productName}</div>
@@ -612,18 +767,21 @@ export const DashboardPage: React.FC = () => {
                         </button>
                       </td>
                     </tr>
-                  ))
-                )
-              ) : isActivityCategory ? (
-                filteredActivities.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="p-8 text-center text-slate-500 font-semibold">
-                      <History className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                      No audit activities recorded for <span className="font-bold text-slate-800">"{activeCardObj.title}"</span>.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredActivities.slice(0, 15).map((log: any, i: number) => (
+                  ));
+                }
+
+                if (isActivityCategory) {
+                  if (filteredActivities.length === 0) {
+                    return (
+                      <tr>
+                        <td colSpan={5} className="p-8 text-center text-slate-500 font-semibold">
+                          <History className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                          No audit activities recorded for <span className="font-bold text-slate-800">"{activeCardObj.title}"</span>.
+                        </td>
+                      </tr>
+                    );
+                  }
+                  return filteredActivities.slice(0, 15).map((log: any, i: number) => (
                     <tr key={i} className="hover:bg-slate-50/80 transition-colors">
                       <td className="p-3 font-bold text-slate-900">
                         <div>{log.userName || log.user?.name || 'System'}</div>
@@ -652,18 +810,21 @@ export const DashboardPage: React.FC = () => {
                         {new Date(log.createdAt).toLocaleString('en-IN')}
                       </td>
                     </tr>
-                  ))
-                )
-              ) : isDispatchCategory ? (
-                filteredDispatches.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="p-8 text-center text-slate-500 font-semibold">
-                      <Truck className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                      No dispatch records found for <span className="font-bold text-slate-800">"{activeCardObj.title}"</span>.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredDispatches.slice(0, 15).map((d: any, i: number) => (
+                  ));
+                }
+
+                if (isDispatchCategory) {
+                  if (filteredDispatches.length === 0) {
+                    return (
+                      <tr>
+                        <td colSpan={5} className="p-8 text-center text-slate-500 font-semibold">
+                          <Truck className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                          No dispatch records found for <span className="font-bold text-slate-800">"{activeCardObj.title}"</span>.
+                        </td>
+                      </tr>
+                    );
+                  }
+                  return filteredDispatches.slice(0, 15).map((d: any, i: number) => (
                     <tr key={i} className="hover:bg-slate-50/80 transition-colors">
                       <td className="p-3 font-mono font-extrabold text-blue-700">{d.dispatchNo}</td>
                       <td className="p-3 font-bold text-slate-900">{d.inventoryItem?.productName || 'Spare Part'}</td>
@@ -671,18 +832,21 @@ export const DashboardPage: React.FC = () => {
                       <td className="p-3"><Badge variant="warning">RESERVED</Badge></td>
                       <td className="p-3 text-right font-mono text-slate-500 text-[11px]">{new Date(d.createdAt).toLocaleString('en-IN')}</td>
                     </tr>
-                  ))
-                )
-              ) : isPickupCategory ? (
-                filteredPickups.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="p-8 text-center text-slate-500 font-semibold">
-                      <RotateCcw className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                      No pickup records found for <span className="font-bold text-slate-800">"{activeCardObj.title}"</span>.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredPickups.slice(0, 15).map((p: any, i: number) => (
+                  ));
+                }
+
+                if (isPickupCategory) {
+                  if (filteredPickups.length === 0) {
+                    return (
+                      <tr>
+                        <td colSpan={5} className="p-8 text-center text-slate-500 font-semibold">
+                          <RotateCcw className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                          No pickup records found for <span className="font-bold text-slate-800">"{activeCardObj.title}"</span>.
+                        </td>
+                      </tr>
+                    );
+                  }
+                  return filteredPickups.slice(0, 15).map((p: any, i: number) => (
                     <tr key={i} className="hover:bg-slate-50/80 transition-colors">
                       <td className="p-3 font-mono font-extrabold text-emerald-700">{p.pickupNo}</td>
                       <td className="p-3 font-bold text-slate-900">{p.inventoryItem?.productName || 'Spare Part'}</td>
@@ -690,28 +854,29 @@ export const DashboardPage: React.FC = () => {
                       <td className="p-3"><Badge variant="success">AVAILABLE</Badge></td>
                       <td className="p-3 text-right font-mono text-slate-500 text-[11px]">{new Date(p.createdAt).toLocaleString('en-IN')}</td>
                     </tr>
-                  ))
-                )
-              ) : (
-                filteredFailedLogins.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="p-8 text-center text-slate-500 font-semibold">
-                      <CheckCircle2 className="w-8 h-8 mx-auto mb-2 text-emerald-500" />
-                      No failed login attempts recorded. System security status is 100% healthy.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredFailedLogins.slice(0, 15).map((act: any, i: number) => (
-                    <tr key={i} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="p-3 font-bold text-slate-900">{act.userName || 'Unknown User'}</td>
-                      <td className="p-3 font-extrabold text-rose-600">{act.action}</td>
-                      <td className="p-3 text-slate-600 font-mono text-[11px]">{act.entityLabel || 'Auth System'}</td>
-                      <td className="p-3"><Badge variant="danger">SECURITY EVENT</Badge></td>
-                      <td className="p-3 text-right font-mono text-slate-500 text-[11px]">{new Date(act.createdAt).toLocaleString('en-IN')}</td>
+                  ));
+                }
+
+                if (filteredFailedLogins.length === 0) {
+                  return (
+                    <tr>
+                      <td colSpan={5} className="p-8 text-center text-slate-500 font-semibold">
+                        <CheckCircle2 className="w-8 h-8 mx-auto mb-2 text-emerald-500" />
+                        No failed login attempts recorded. System security status is 100% healthy.
+                      </td>
                     </tr>
-                  ))
-                )
-              )}
+                  );
+                }
+                return filteredFailedLogins.slice(0, 15).map((act: any, i: number) => (
+                  <tr key={i} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="p-3 font-bold text-slate-900">{act.userName || 'Unknown User'}</td>
+                    <td className="p-3 font-extrabold text-rose-600">{act.action}</td>
+                    <td className="p-3 text-slate-600 font-mono text-[11px]">{act.entityLabel || 'Auth System'}</td>
+                    <td className="p-3"><Badge variant="danger">SECURITY EVENT</Badge></td>
+                    <td className="p-3 text-right font-mono text-slate-500 text-[11px]">{new Date(act.createdAt).toLocaleString('en-IN')}</td>
+                  </tr>
+                ));
+              })()}
             </tbody>
           </table>
           {currentListLength > 15 && isStockCategory && (

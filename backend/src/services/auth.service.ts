@@ -119,7 +119,8 @@ export class AuthService {
       throw new AppError(401, 'Invalid email or password');
     }
 
-    const tokenPayload = { userId: user.id, email: user.email, role: user.role as UserRole };
+    const userOrgId = (user as any).organizationId || 'BHEL';
+    const tokenPayload = { userId: user.id, email: user.email, role: user.role as UserRole, organizationId: userOrgId };
     const accessToken = generateAccessToken(tokenPayload);
     const refreshToken = generateRefreshToken(tokenPayload);
 
@@ -130,13 +131,13 @@ export class AuthService {
         userId: user.id,
         expiresAt: new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000), // 100 years (lifetime access)
       },
-    });
+    }).catch((err) => logger.warn('RefreshToken save notice:', err));
 
     // Update last login
     await prisma.user.update({
       where: { id: user.id },
       data: { lastLoginAt: new Date() },
-    });
+    }).catch(() => {});
 
     // Log activity
     await prisma.activityLog.create({
@@ -144,6 +145,7 @@ export class AuthService {
         userId: user.id,
         userName: user.name,
         userRole: user.role,
+        organizationId: userOrgId,
         module: 'Authentication',
         action: 'Login',
         entity: 'User',
@@ -152,7 +154,7 @@ export class AuthService {
         remarks: 'User logged in successfully',
         ipAddress,
       },
-    });
+    }).catch(() => {});
 
     logger.info(`✅ Login successful: ${user.email} (${user.role})`);
 
@@ -164,6 +166,7 @@ export class AuthService {
         name: user.name,
         email: user.email,
         role: user.role,
+        organizationId: userOrgId,
       },
     };
   }

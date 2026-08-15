@@ -15,6 +15,7 @@ export interface JwtPayload {
   email: string;
   role: UserRole;
   status?: string;
+  organizationId?: string;
   iat?: number;
   exp?: number;
 }
@@ -23,6 +24,7 @@ declare global {
   namespace Express {
     interface Request {
       user?: JwtPayload;
+      organizationId?: string;
     }
   }
 }
@@ -57,15 +59,27 @@ export const authenticate = async (
     }
 
     // Verify user still exists and is active
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-      select: { id: true, name: true, email: true, role: true, status: true, isActive: true },
-    });
+    let user: any = null;
+    try {
+      user = await prisma.user.findUnique({
+        where: { id: decoded.userId },
+        select: { id: true, name: true, email: true, role: true, status: true, isActive: true, organizationId: true },
+      });
+    } catch {
+      // Fallback query if organizationId select is not present
+      user = await prisma.user.findUnique({
+        where: { id: decoded.userId },
+        select: { id: true, name: true, email: true, role: true, status: true, isActive: true },
+      }).catch(() => null);
+    }
 
     if (!user || !user.isActive || user.status === 'SUSPENDED' || user.status === 'DISABLED') {
       ApiResponse.unauthorized(res, 'User account is deactivated, suspended, or disabled');
       return;
     }
+
+    const headerOrg = (req.headers['x-organization-id'] as string) || '';
+    const userOrg = user.organizationId || headerOrg || 'BHEL';
 
     req.user = {
       userId: user.id,
@@ -73,7 +87,9 @@ export const authenticate = async (
       email: user.email,
       role: user.role as UserRole,
       status: user.status,
+      organizationId: userOrg,
     };
+    req.organizationId = headerOrg || userOrg || 'BHEL';
 
     next();
   } catch (error) {

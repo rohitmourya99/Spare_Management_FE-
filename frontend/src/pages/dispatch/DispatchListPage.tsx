@@ -6,6 +6,8 @@ import {
   Building2, MapPin, User, Phone, Mail, Eye, Tag, Cpu, Clock, Calendar, Hash,
 } from 'lucide-react';
 import api from '../../api';
+import { useAuthStore } from '../../store/useAuthStore';
+import { useOrganization } from '../../context/OrganizationContext';
 import { Layout } from '../../components/layout';
 import { Button, Card, Badge, Modal } from '../../components/ui';
 import { Site, InventoryItem } from '../../types';
@@ -14,7 +16,6 @@ import { formatSerialDisplay } from '../../utils/serialUtils';
 const statusVariant = (s: string): 'success' | 'danger' | 'warning' | 'info' | 'default' =>
   s === 'DISPATCHED' ? 'danger' : s === 'APPROVED' ? 'warning' : s === 'CANCELLED' ? 'default' : 'info';
 
-// Helper function to format live Date & Time
 const formatDateTime = (dispatchDateVal?: string | Date, createdAtVal?: string | Date) => {
   let d = dispatchDateVal ? new Date(dispatchDateVal) : null;
   if (!d || isNaN(d.getTime()) || (d.getHours() === 0 && d.getMinutes() === 0 && createdAtVal)) {
@@ -30,6 +31,8 @@ const formatDateTime = (dispatchDateVal?: string | Date, createdAtVal?: string |
 export const DispatchListPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
+  const { selectedOrg, organizations } = useOrganization();
+  const activeOrgObj = organizations.find((o) => o.id === selectedOrg) || { id: 'BHEL', name: 'BHEL' };
 
   const [search, setSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -72,7 +75,7 @@ export const DispatchListPage: React.FC = () => {
   }, [preItemId]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['dispatches', search],
+    queryKey: ['dispatches', search, selectedOrg],
     queryFn: async () => {
       const res = await api.get('/dispatch', { params: { search } });
       return res.data;
@@ -80,7 +83,7 @@ export const DispatchListPage: React.FC = () => {
   });
 
   const { data: sitesData } = useQuery({
-    queryKey: ['sites-dropdown'],
+    queryKey: ['sites-dropdown', selectedOrg],
     queryFn: async () => {
       const res = await api.get('/sites/dropdown');
       return res.data.data as Site[];

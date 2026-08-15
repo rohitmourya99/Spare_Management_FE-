@@ -43,7 +43,7 @@ export class ReportsService {
       }
 
       case 'dispatch': {
-        const where: any = {};
+        const where: any = { organizationId };
         if (startDate || endDate) where.createdAt = dateFilter;
         const dispatches = await prisma.dispatch.findMany({
           where,
@@ -81,7 +81,7 @@ export class ReportsService {
       }
 
       case 'pickup': {
-        const where: any = {};
+        const where: any = { organizationId };
         if (startDate || endDate) where.createdAt = dateFilter;
         const pickups = await prisma.pickup.findMany({
           where,
@@ -97,7 +97,7 @@ export class ReportsService {
           'Spare ID': p.inventoryItem.spareId,
           'Product Name': p.inventoryItem.productName,
           OEM: p.inventoryItem.oem.name,
-          'BHEL Site': p.site.siteName,
+          'Site Name': p.site.siteName,
           Quantity: p.quantity,
           Courier: p.courierName || '',
           'Tracking No': p.trackingNo || '',
@@ -109,7 +109,7 @@ export class ReportsService {
       }
 
       case 'movement': {
-        const where: any = {};
+        const where: any = { organizationId };
         if (startDate || endDate) where.createdAt = dateFilter;
         const movements = await prisma.inventoryMovement.findMany({
           where,
@@ -133,7 +133,7 @@ export class ReportsService {
       }
 
       case 'low_stock': {
-        const { allLowStockGroups } = await inventoryService.calculatePartCodeLowStock();
+        const { allLowStockGroups } = await inventoryService.calculatePartCodeLowStock(organizationId);
         return allLowStockGroups.map((g) => ({
           'Part Code': g.partCode,
           'Product Name': g.productName,
@@ -169,7 +169,7 @@ export class ReportsService {
       }
 
       case 'activity': {
-        const where: any = {};
+        const where: any = { organizationId };
         if (startDate || endDate) where.createdAt = dateFilter;
         const logs = await prisma.activityLog.findMany({
           where,
@@ -188,7 +188,7 @@ export class ReportsService {
       }
 
       case 'swap_tracking': {
-        const where: any = {};
+        const where: any = { organizationId };
         if (startDate || endDate) where.swappedAt = dateFilter;
         if (filters.building) where.buildingName = { contains: filters.building };
         if (filters.partId) where.partId = { contains: filters.partId };
@@ -235,6 +235,7 @@ export class ReportsService {
 
       case 'comments': {
         const comments = await prisma.comment.findMany({
+          where: { inventoryItem: { organizationId } },
           include: {
             inventoryItem: true,
             user: true,
@@ -253,6 +254,7 @@ export class ReportsService {
 
       case 'site_wise': {
         const sites = await prisma.site.findMany({
+          where: { organizationId },
           include: {
             dispatches: { include: { inventoryItem: true } },
             pickups: { include: { inventoryItem: true } },
@@ -270,17 +272,17 @@ export class ReportsService {
 
       case 'store_wise': {
         const delhiCount = await prisma.inventoryItem.count({
-          where: { store: 'Delhi', isDeleted: false },
+          where: { store: 'Delhi', isDeleted: false, organizationId },
         });
         const delhiQty = await prisma.inventoryItem.aggregate({
-          where: { store: 'Delhi', isDeleted: false },
+          where: { store: 'Delhi', isDeleted: false, organizationId },
           _sum: { quantity: true, availableQuantity: true },
         });
         const blrCount = await prisma.inventoryItem.count({
-          where: { store: 'Bengaluru', isDeleted: false },
+          where: { store: 'Bengaluru', isDeleted: false, organizationId },
         });
         const blrQty = await prisma.inventoryItem.aggregate({
-          where: { store: 'Bengaluru', isDeleted: false },
+          where: { store: 'Bengaluru', isDeleted: false, organizationId },
           _sum: { quantity: true, availableQuantity: true },
         });
 
@@ -385,9 +387,9 @@ export class ReportsService {
     }
   }
 
-  async exportReport(res: Response, reportType: string, format: 'excel' | 'pdf' | 'csv', filters: any) {
-    const data = await this.getReportData(reportType, filters);
-    const fileName = `${reportType}_report_${new Date().toISOString().split('T')[0]}`;
+  async exportReport(res: Response, reportType: string, format: 'excel' | 'pdf' | 'csv', filters: any, organizationId: string = 'BHEL') {
+    const data = await this.getReportData(reportType, filters, organizationId);
+    const fileName = `${organizationId}_${reportType}_report_${new Date().toISOString().split('T')[0]}`;
 
     if (format === 'excel') {
       return exportToExcel(res, data, 'Report', fileName);

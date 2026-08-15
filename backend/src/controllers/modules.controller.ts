@@ -121,7 +121,8 @@ export class SiteController {
   }
 
   async getDropdown(req: Request, res: Response) {
-    const sites = await siteService.getAll_dropdown();
+    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
+    const sites = await siteService.getAll_dropdown(orgId);
     ApiResponse.success(res, sites);
   }
 
@@ -131,7 +132,8 @@ export class SiteController {
   }
 
   async create(req: Request, res: Response) {
-    const site = await siteService.create(req.body, req.user?.userId);
+    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
+    const site = await siteService.create(req.body, req.user?.userId, orgId);
     ApiResponse.created(res, site, 'Site created');
   }
 
@@ -171,7 +173,7 @@ export class ReportsController {
         ApiResponse.forbidden(res, 'Field Engineers are restricted from downloading reports');
         return;
       }
-      await reportsService.exportReport(res, type, format, req.query);
+      await reportsService.exportReport(res, type, format, req.query, orgId);
       await activityService.logActivity({
         userId: req.user!.userId,
         module: 'Reports',
@@ -199,7 +201,7 @@ export class ReportsController {
         ApiResponse.forbidden(res, 'Field Engineers are restricted from downloading reports');
         return;
       }
-      await reportsService.exportReport(res, reportType, format, req.query);
+      await reportsService.exportReport(res, reportType, format, req.query, orgId);
       await activityService.logActivity({
         userId: req.user!.userId,
         module: 'Reports',

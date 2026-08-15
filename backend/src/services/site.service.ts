@@ -51,13 +51,14 @@ export class SiteService {
       email?: string;
       remarks?: string;
     },
-    userId?: string
+    userId?: string,
+    organizationId: string = 'BHEL'
   ) {
     const fullAddress = [data.addressLine1, data.addressLine2, data.city, data.state, data.pin]
       .filter(Boolean)
       .join(', ');
 
-    const newSite = await prisma.site.create({ data: { ...data, fullAddress } });
+    const newSite = await prisma.site.create({ data: { ...data, fullAddress, organizationId } });
 
     if (userId) {
       await activityService.logActivity({
@@ -130,9 +131,9 @@ export class SiteService {
     }
   }
 
-  async getAll_dropdown() {
+  async getAll_dropdown(organizationId: string = 'BHEL') {
     return await prisma.site.findMany({
-      where: { isActive: true },
+      where: { isActive: true, organizationId },
       select: { id: true, siteName: true, city: true, state: true, contactPerson: true, phone: true, email: true, fullAddress: true },
       orderBy: { siteName: 'asc' },
     });

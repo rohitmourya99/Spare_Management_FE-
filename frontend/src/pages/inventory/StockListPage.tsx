@@ -8,6 +8,7 @@ import {
   Truck, Check, Clock, Tag, Cpu, Archive
 } from 'lucide-react';
 import { useAuthStore } from '../../store/useAuthStore';
+import { useOrganization } from '../../context/OrganizationContext';
 import api from '../../api';
 import { Layout } from '../../components/layout';
 import { Button, Card, Badge, Modal } from '../../components/ui';
@@ -20,6 +21,9 @@ const statusVariant = (s: string): 'success' | 'danger' | 'warning' | 'default' 
 export const StockListPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const { selectedOrg, organizations } = useOrganization();
+  const activeOrgObj = organizations.find((o) => o.id === selectedOrg) || { id: 'BHEL', name: 'BHEL' };
+
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
 
@@ -201,7 +205,7 @@ export const StockListPage: React.FC = () => {
   if (filterStatus) params.status = filterStatus;
 
   const { data, isLoading } = useQuery({
-    queryKey: ['inventory', params],
+    queryKey: ['inventory', params, selectedOrg],
     queryFn: async () => {
       const res = await api.get('/inventory', { params });
       return res.data;
@@ -310,19 +314,35 @@ export const StockListPage: React.FC = () => {
         {/* Row 1: Warehouse Tabs & Actions */}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-1.5 p-1 bg-slate-100 border border-slate-200 rounded-xl">
-            {(['All', 'Delhi', 'Bengaluru'] as const).map((s) => (
-              <button
-                key={s}
-                onClick={() => { setStore(s); setPage(1); }}
-                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  store === s
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'text-slate-700 hover:text-slate-900 hover:bg-slate-200/60'
-                }`}
-              >
-                {s === 'All' ? '🏬 All Warehouses' : s === 'Delhi' ? '📍 Delhi Store' : '📍 Bengaluru Store'}
-              </button>
-            ))}
+            {selectedOrg === 'BHEL' ? (
+              (['All', 'Delhi', 'Bengaluru'] as const).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => { setStore(s); setPage(1); }}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    store === s
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'text-slate-700 hover:text-slate-900 hover:bg-slate-200/60'
+                  }`}
+                >
+                  {s === 'All' ? '🏬 All Warehouses' : s === 'Delhi' ? '📍 Delhi Store' : '📍 Bengaluru Store'}
+                </button>
+              ))
+            ) : (
+              (['All', 'Main'] as const).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => { setStore(s === 'All' ? 'All' : 'Delhi'); setPage(1); }}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    store === (s === 'All' ? 'All' : 'Delhi')
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'text-slate-700 hover:text-slate-900 hover:bg-slate-200/60'
+                  }`}
+                >
+                  {s === 'All' ? '🏬 All Warehouses' : `📍 ${activeOrgObj.name} Store`}
+                </button>
+              ))
+            )}
           </div>
 
           {(user?.role === 'SUPER_ADMIN' || user?.role === 'INVENTORY_ADMIN') && (

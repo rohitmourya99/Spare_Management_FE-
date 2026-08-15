@@ -9,7 +9,8 @@ import { AppError } from '../middleware/error.middleware';
 
 export class InventoryController {
   async getAll(req: Request, res: Response): Promise<void> {
-    const result = await inventoryService.getAll(req.query as any);
+    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
+    const result = await inventoryService.getAll(req.query as any, orgId);
     ApiResponse.paginated(res, result.items, result.pagination);
   }
 
@@ -52,12 +53,14 @@ export class InventoryController {
   }
 
   async getDashboardStats(req: Request, res: Response): Promise<void> {
-    const stats = await inventoryService.getDashboardStats();
+    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
+    const stats = await inventoryService.getDashboardStats(orgId);
     ApiResponse.success(res, stats);
   }
 
   async getStockAlerts(req: Request, res: Response): Promise<void> {
-    const alerts = await inventoryService.getStockAlerts();
+    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
+    const alerts = await inventoryService.getStockAlerts(orgId);
     res.status(200).json({
       success: true,
       ...alerts,

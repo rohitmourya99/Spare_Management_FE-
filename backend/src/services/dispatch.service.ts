@@ -37,9 +37,9 @@ export class DispatchService {
     siteId?: string;
     page?: string;
     limit?: string;
-  }) {
+  }, organizationId: string = 'BHEL') {
     const { page, limit, skip } = parsePagination(filters);
-    const where: Prisma.DispatchWhereInput = {};
+    const where: Prisma.DispatchWhereInput = { organizationId };
 
     if (filters.status) where.status = filters.status;
     if (filters.siteId) where.siteId = filters.siteId;

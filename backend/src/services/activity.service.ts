@@ -85,10 +85,11 @@ export class ActivityService {
       page?: string;
       limit?: string;
     },
-    currentUser: { userId: string; role: UserRole }
+    currentUser: { userId: string; role: UserRole },
+    organizationId: string = 'BHEL'
   ) {
     const { page, limit, skip } = parsePagination(filters);
-    const where: any = {};
+    const where: any = { organizationId };
 
     // RBAC Access Control Scoping
     if (currentUser.role === UserRole.ENGINEER) {

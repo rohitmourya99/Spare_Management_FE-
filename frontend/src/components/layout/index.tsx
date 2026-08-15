@@ -123,6 +123,16 @@ export const Header: React.FC<{ title: string }> = ({ title }) => {
   const { selectedOrg, setSelectedOrg, organizations } = useOrganization();
   const [now, setNow] = useState(new Date());
 
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+
+  // Lock non-Super-Admin users to their assigned organization context
+  useEffect(() => {
+    const userOrg = (user as any)?.organizationId;
+    if (!isSuperAdmin && userOrg && selectedOrg !== userOrg) {
+      setSelectedOrg(userOrg);
+    }
+  }, [isSuperAdmin, user, selectedOrg, setSelectedOrg]);
+
   // Continuous real-time clock updating every second
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
@@ -149,7 +159,9 @@ export const Header: React.FC<{ title: string }> = ({ title }) => {
           <select
             value={selectedOrg}
             onChange={(e) => setSelectedOrg(e.target.value)}
-            className="bg-transparent text-xs font-black text-indigo-700 focus:outline-none cursor-pointer pr-1"
+            disabled={!isSuperAdmin && Boolean((user as any)?.organizationId)}
+            className="bg-transparent text-xs font-black text-indigo-700 focus:outline-none cursor-pointer pr-1 disabled:cursor-not-allowed disabled:opacity-75"
+            title={!isSuperAdmin ? 'Organization selection is locked to your assigned organization' : 'Switch Active Organization'}
           >
             {organizations.map((org) => (
               <option key={org.id} value={org.id} className="text-slate-900 font-bold bg-white">

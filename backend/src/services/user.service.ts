@@ -6,9 +6,12 @@ import { parsePagination, buildPagination } from '../utils/response.util';
 import { activityService } from './activity.service';
 
 export class UserService {
-  async getAll(filters: { search?: string; role?: UserRole; status?: string; page?: string; limit?: string }) {
+  async getAll(filters: { search?: string; role?: UserRole; status?: string; page?: string; limit?: string }, requestingUserRole?: string, organizationId: string = 'BHEL') {
     const { page, limit, skip } = parsePagination(filters);
     const where: any = {};
+    if (requestingUserRole !== 'SUPER_ADMIN') {
+      where.organizationId = organizationId;
+    }
 
     if (filters.role) where.role = filters.role;
     if (filters.status) where.status = filters.status;

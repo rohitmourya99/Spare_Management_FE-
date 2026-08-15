@@ -4,10 +4,10 @@ import { parsePagination, buildPagination } from '../utils/response.util';
 import { activityService } from './activity.service';
 
 export class SiteService {
-  async getAll(filters: { search?: string; city?: string; state?: string; page?: string; limit?: string }) {
+  async getAll(filters: { search?: string; city?: string; state?: string; page?: string; limit?: string }, organizationId: string = 'BHEL') {
     const { page, limit, skip } = parsePagination(filters);
 
-    const where: any = {};
+    const where: any = { organizationId };
     if (filters.search) {
       where.OR = [
         { siteName: { contains: filters.search } },

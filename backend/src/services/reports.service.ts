@@ -7,7 +7,7 @@ export class ReportsService {
   /**
    * Fetch report dataset based on report type and filters
    */
-  async getReportData(reportType: string, filters: any = {}) {
+  async getReportData(reportType: string, filters: any = {}, organizationId: string = 'BHEL') {
     const { store, oemId, startDate, endDate } = filters;
 
     const dateFilter: any = {};
@@ -16,7 +16,7 @@ export class ReportsService {
 
     switch (reportType) {
       case 'inventory': {
-        const where: any = { isDeleted: false };
+        const where: any = { isDeleted: false, organizationId };
         if (store) where.store = store;
         if (oemId) where.oemId = oemId;
         const items = await prisma.inventoryItem.findMany({

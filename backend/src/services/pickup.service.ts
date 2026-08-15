@@ -35,9 +35,9 @@ export interface OemReceiptDto {
 }
 
 export class PickupService {
-  async getAll(filters: { search?: string; status?: PickupStatus; page?: string; limit?: string }) {
+  async getAll(filters: { search?: string; status?: PickupStatus; page?: string; limit?: string }, organizationId: string = 'BHEL') {
     const { page, limit, skip } = parsePagination(filters);
-    const where: Prisma.PickupWhereInput = {};
+    const where: Prisma.PickupWhereInput = { organizationId };
 
     if (filters.status) where.status = filters.status;
     if (filters.search) {

@@ -15,15 +15,22 @@ import api from '../../api';
 import { Layout } from '../../components/layout';
 import { Card, Badge, StatCard } from '../../components/ui';
 
+import { useOrganization } from '../../context/OrganizationContext';
+
 const COLORS = ['#2563eb', '#059669', '#d97706', '#dc2626', '#7c3aed', '#db2777', '#0891b2', '#65a30d', '#ea580c'];
 
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
+  const { selectedOrg, organizations } = useOrganization();
   const [activeCardFilter, setActiveCardFilter] = useState<string>('TOTAL_SPARE_PARTS');
   const [selectedStore, setSelectedStore] = useState<'ALL' | 'DELHI' | 'BENGALURU'>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isStockModalOpen, setIsStockModalOpen] = useState<boolean>(false);
   const tableSectionRef = useRef<HTMLDivElement>(null);
+
+  const activeOrgObj = useMemo(() => {
+    return organizations.find((o) => o.id === selectedOrg) || { id: 'BHEL', name: 'BHEL' };
+  }, [organizations, selectedOrg]);
 
   const handleCardClick = (cardId: string) => {
     setActiveCardFilter(cardId);
@@ -43,7 +50,7 @@ export const DashboardPage: React.FC = () => {
   };
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['dashboard-stats'],
+    queryKey: ['dashboard-stats', selectedOrg],
     queryFn: async () => {
       const res = await api.get('/inventory/dashboard-stats');
       return res.data.data;
@@ -56,6 +63,20 @@ export const DashboardPage: React.FC = () => {
   const inv = data?.inventorySummary || {};
   const delhi = data?.delhiStoreSummary || {};
   const blr = data?.bengaluruStoreSummary || {};
+
+  const warehouseCards = useMemo(() => {
+    if (selectedOrg === 'BHEL') {
+      return [
+        { id: 'DELHI_STORE', title: 'Delhi Store Stock', value: inv.delhiTotalStock ?? 0, icon: MapPin, color: 'text-emerald-600' },
+        { id: 'BENGALURU_STORE', title: 'Bengaluru Stock', value: inv.bengaluruTotalStock ?? 0, icon: MapPin, color: 'text-orange-600' },
+      ];
+    } else {
+      const storeLabel = `${activeOrgObj.name} Store`;
+      return [
+        { id: 'DELHI_STORE', title: `${storeLabel} Stock`, value: inv.delhiTotalStock ?? inv.totalSpareParts ?? 0, icon: MapPin, color: 'text-emerald-600' },
+      ];
+    }
+  }, [selectedOrg, activeOrgObj.name, inv]);
 
   const { data: dynamicLowStock, isLoading: isLoadingDynamic, refetch: refetchDynamicLowStock } = useQuery({
     queryKey: ['dynamic-low-stock'],
@@ -74,7 +95,7 @@ export const DashboardPage: React.FC = () => {
   };
 
   const { data: inventoryItemsData, isLoading: isLoadingInventory } = useQuery({
-    queryKey: ['dashboard-inventory-items'],
+    queryKey: ['dashboard-inventory-items', selectedOrg],
     queryFn: async () => {
       const res = await api.get('/inventory?limit=500');
       return Array.isArray(res.data?.data) ? res.data.data : (res.data?.data?.items || []);
@@ -83,7 +104,7 @@ export const DashboardPage: React.FC = () => {
   });
 
   const { data: dispatchesQueryData } = useQuery({
-    queryKey: ['dashboard-dispatches-list'],
+    queryKey: ['dashboard-dispatches-list', selectedOrg],
     queryFn: async () => {
       try {
         const res = await api.get('/dispatch?limit=100');
@@ -97,7 +118,7 @@ export const DashboardPage: React.FC = () => {
   });
 
   const { data: pickupsQueryData } = useQuery({
-    queryKey: ['dashboard-pickups-list'],
+    queryKey: ['dashboard-pickups-list', selectedOrg],
     queryFn: async () => {
       try {
         const res = await api.get('/pickup?limit=100');
@@ -651,8 +672,7 @@ export const DashboardPage: React.FC = () => {
     { id: 'SERIALIZED_PARTS', title: 'Serialized Parts', value: inv.totalSerializedParts ?? 0, icon: Archive, color: 'text-indigo-600' },
     { id: 'NON_SERIALIZED', title: 'Non-Serialized', value: inv.totalNonSerializedParts ?? 0, icon: Layers, color: 'text-purple-600' },
     { id: 'TOTAL_OEM', title: 'Total OEMs', value: inv.totalOEMs ?? 0, icon: Cpu, color: 'text-cyan-600' },
-    { id: 'DELHI_STORE', title: 'Delhi Store Stock', value: inv.delhiTotalStock ?? 0, icon: MapPin, color: 'text-emerald-600' },
-    { id: 'BENGALURU_STORE', title: 'Bengaluru Stock', value: inv.bengaluruTotalStock ?? 0, icon: MapPin, color: 'text-orange-600' },
+    ...warehouseCards,
     { id: 'LOW_STOCK', title: 'Low Stock Items', value: inv.lowStockCount ?? 0, icon: AlertTriangle, color: 'text-amber-600' },
     { id: 'OUT_OF_STOCK', title: 'Out of Stock', value: inv.outOfStockCount ?? 0, icon: XCircle, color: 'text-rose-600' },
     { id: 'TODAYS_ACTIVITIES', title: "Today's Activities", value: inv.todaysActivitiesCount ?? 0, icon: History, color: 'text-indigo-700' },

@@ -47,10 +47,11 @@ export class InventoryService {
   /**
    * Get all inventory items with filters and pagination
    */
-  async getAll(filters: InventoryFilters) {
+  async getAll(filters: InventoryFilters, organizationId: string = 'BHEL') {
     const { page, limit, skip } = parsePagination(filters);
     const where: Prisma.InventoryItemWhereInput = {
       isDeleted: false,
+      organizationId,
     };
 
     if (filters.search) {
@@ -380,8 +381,10 @@ export class InventoryService {
   /**
    * Comprehensive Dashboard Statistics with Part Code 50% Threshold Low Stock Rule
    */
-  async getDashboardStats() {
-    const stockAnalysis = await this.calculatePartCodeLowStock();
+  async getDashboardStats(organizationId: string = 'BHEL') {
+    const orgWhere = { organizationId };
+    const baseWhere: Prisma.InventoryItemWhereInput = { isDeleted: false, organizationId };
+    const stockAnalysis = await this.calculatePartCodeLowStock(organizationId);
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
 
@@ -519,9 +522,9 @@ export class InventoryService {
   /**
    * Group active inventory items by Part Code and calculate Part Code level low stock alerts (<= 50% available stock).
    */
-  async calculatePartCodeLowStock() {
+  async calculatePartCodeLowStock(organizationId: string = 'BHEL') {
     const activeItems = await prisma.inventoryItem.findMany({
-      where: { isDeleted: false },
+      where: { isDeleted: false, organizationId },
       include: { oem: { select: { name: true } } },
     });
 
@@ -623,9 +626,9 @@ export class InventoryService {
   /**
    * Get stock alert detailed breakdown for low stock and out of stock items
    */
-  async getStockAlerts() {
+  async getStockAlerts(organizationId: string = 'BHEL') {
     const activeItems = await prisma.inventoryItem.findMany({
-      where: { isDeleted: false },
+      where: { isDeleted: false, organizationId },
       include: { oem: { select: { name: true } }, location: { select: { name: true } } },
     });
 

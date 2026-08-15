@@ -15,7 +15,8 @@ import { exportToCSV, exportToExcel } from '../utils/export.util';
 // Dispatch Controller
 export class DispatchController {
   async getAll(req: Request, res: Response) {
-    const result = await dispatchService.getAll(req.query as any);
+    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
+    const result = await dispatchService.getAll(req.query as any, orgId);
     ApiResponse.paginated(res, result.dispatches, result.pagination);
   }
 
@@ -53,7 +54,8 @@ export class DispatchController {
 // Pickup Controller
 export class PickupController {
   async getAll(req: Request, res: Response) {
-    const result = await pickupService.getAll(req.query as any);
+    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
+    const result = await pickupService.getAll(req.query as any, orgId);
     ApiResponse.paginated(res, result.pickups, result.pagination);
   }
 
@@ -113,7 +115,8 @@ export class RMAController {
 // Site Controller
 export class SiteController {
   async getAll(req: Request, res: Response) {
-    const result = await siteService.getAll(req.query as any);
+    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
+    const result = await siteService.getAll(req.query as any, orgId);
     ApiResponse.paginated(res, result.sites, result.pagination);
   }
 
@@ -161,6 +164,7 @@ export class ReportsController {
   async generateReport(req: Request, res: Response) {
     const { type, format } = req.query as { type: string; format: 'excel' | 'pdf' | 'csv' };
     if (!type) throw new AppError(400, 'Report type is required');
+    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
 
     if (format) {
       if (req.user?.role === UserRole.ENGINEER) {
@@ -177,7 +181,7 @@ export class ReportsController {
         remarks: `Exported ${type} report as ${format.toUpperCase()}`,
       });
     } else {
-      const data = await reportsService.getReportData(type, req.query);
+      const data = await reportsService.getReportData(type, req.query, orgId);
       ApiResponse.success(res, data);
     }
   }
@@ -188,6 +192,7 @@ export class ReportsController {
    */
   async generateNamedReport(req: Request, res: Response, reportType: string) {
     const { format } = req.query as { format?: 'excel' | 'pdf' | 'csv' };
+    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
 
     if (format) {
       if (req.user?.role === UserRole.ENGINEER) {
@@ -204,7 +209,7 @@ export class ReportsController {
         remarks: `Exported ${reportType} report as ${format.toUpperCase()}`,
       });
     } else {
-      const data = await reportsService.getReportData(reportType, req.query);
+      const data = await reportsService.getReportData(reportType, req.query, orgId);
       ApiResponse.success(res, data);
     }
   }
@@ -213,7 +218,8 @@ export class ReportsController {
 // User Controller
 export class UserController {
   async getAll(req: Request, res: Response) {
-    const result = await userService.getAll(req.query as any);
+    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
+    const result = await userService.getAll(req.query as any, req.user?.role as any, orgId);
     ApiResponse.paginated(res, result.users, result.pagination);
   }
 
@@ -268,7 +274,8 @@ export class ActivityController {
       ApiResponse.forbidden(res, 'Read Only users cannot access Activity Logs');
       return;
     }
-    const result = await activityService.getAll(req.query as any, req.user as any);
+    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
+    const result = await activityService.getAll(req.query as any, req.user as any, orgId);
     ApiResponse.paginated(res, result.logs, result.pagination);
   }
 

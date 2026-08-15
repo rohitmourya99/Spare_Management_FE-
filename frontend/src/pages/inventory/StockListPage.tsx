@@ -22,7 +22,18 @@ export const StockListPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const { selectedOrg, organizations } = useOrganization();
+  const { data: warehousesData } = useQuery({
+    queryKey: ['warehouses', selectedOrg],
+    queryFn: async () => {
+      const res = await api.get('/warehouses', { params: { organizationId: selectedOrg } });
+      return res.data?.data || [];
+    },
+  });
+
   const activeOrgObj = organizations.find((o) => o.id === selectedOrg) || { id: 'BHEL', name: 'BHEL' };
+  const activeWarehouseName = (warehousesData && warehousesData.length > 0 && warehousesData[0]?.name)
+    ? warehousesData[0].name
+    : `${activeOrgObj.name} Store`;
 
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
@@ -339,7 +350,7 @@ export const StockListPage: React.FC = () => {
                       : 'text-slate-700 hover:text-slate-900 hover:bg-slate-200/60'
                   }`}
                 >
-                  {s === 'All' ? '🏬 All Warehouses' : `📍 ${activeOrgObj.name} Store`}
+                  {s === 'All' ? '🏬 All Warehouses' : `📍 ${activeWarehouseName}`}
                 </button>
               ))
             )}

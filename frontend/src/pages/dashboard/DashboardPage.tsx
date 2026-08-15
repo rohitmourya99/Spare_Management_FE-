@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
 import {
@@ -23,7 +23,7 @@ export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { selectedOrg, organizations } = useOrganization();
   const [activeCardFilter, setActiveCardFilter] = useState<string>('TOTAL_SPARE_PARTS');
-  const [selectedStore, setSelectedStore] = useState<'ALL' | 'DELHI' | 'BENGALURU'>('ALL');
+  const [selectedStore, setSelectedStore] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isStockModalOpen, setIsStockModalOpen] = useState<boolean>(false);
   const tableSectionRef = useRef<HTMLDivElement>(null);
@@ -32,12 +32,43 @@ export const DashboardPage: React.FC = () => {
     return organizations.find((o) => o.id === selectedOrg) || { id: 'BHEL', name: 'BHEL' };
   }, [organizations, selectedOrg]);
 
+  const { data: warehousesData } = useQuery({
+    queryKey: ['warehouses', selectedOrg],
+    queryFn: async () => {
+      const res = await api.get('/warehouses', { params: { organizationId: selectedOrg } });
+      return res.data?.data || [];
+    },
+  });
+
+  const warehouses = useMemo(() => {
+    if (selectedOrg === 'BHEL') {
+      return [
+        { id: 'delhi', name: 'Delhi Store', code: 'DELHI', storeKey: 'DELHI' },
+        { id: 'bengaluru', name: 'Bengaluru Store', code: 'BENGALURU', storeKey: 'BENGALURU' },
+      ];
+    }
+    if (warehousesData && Array.isArray(warehousesData) && warehousesData.length > 0) {
+      return warehousesData;
+    }
+    return [
+      { id: 'primary', name: `${activeOrgObj.name} Store`, code: selectedOrg, storeKey: 'PRIMARY' },
+    ];
+  }, [selectedOrg, activeOrgObj.name, warehousesData]);
+
+  useEffect(() => {
+    if (selectedOrg !== 'BHEL' && (selectedStore === 'DELHI' || selectedStore === 'BENGALURU')) {
+      setSelectedStore('ALL');
+    }
+  }, [selectedOrg, selectedStore]);
+
   const handleCardClick = (cardId: string) => {
     setActiveCardFilter(cardId);
     if (cardId === 'DELHI_STORE') {
       setSelectedStore('DELHI');
     } else if (cardId === 'BENGALURU_STORE') {
       setSelectedStore('BENGALURU');
+    } else if (cardId === 'PRIMARY_STORE') {
+      setSelectedStore('PRIMARY');
     }
   };
 
@@ -71,12 +102,12 @@ export const DashboardPage: React.FC = () => {
         { id: 'BENGALURU_STORE', title: 'Bengaluru Stock', value: inv.bengaluruTotalStock ?? 0, icon: MapPin, color: 'text-orange-600' },
       ];
     } else {
-      const storeLabel = `${activeOrgObj.name} Store`;
+      const primaryWarehouseName = warehouses[0]?.name || `${activeOrgObj.name} Store`;
       return [
-        { id: 'DELHI_STORE', title: `${storeLabel} Stock`, value: inv.delhiTotalStock ?? inv.totalSpareParts ?? 0, icon: MapPin, color: 'text-emerald-600' },
+        { id: 'PRIMARY_STORE', title: `${primaryWarehouseName} Stock`, value: inv.totalSpareParts ?? 0, icon: MapPin, color: 'text-emerald-600' },
       ];
     }
-  }, [selectedOrg, activeOrgObj.name, inv]);
+  }, [selectedOrg, activeOrgObj.name, inv, warehouses]);
 
   const { data: dynamicLowStock, isLoading: isLoadingDynamic, refetch: refetchDynamicLowStock } = useQuery({
     queryKey: ['dynamic-low-stock'],
@@ -749,11 +780,16 @@ export const DashboardPage: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2.5 flex-wrap">
-            {/* Store Location Filter Buttons (Delhi vs Bengaluru vs All Stores) */}
+            {/* Store Location Filter Buttons (Dynamic based on active organization) */}
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0">
               <button
                 type="button"
-                onClick={() => setSelectedStore('ALL')}
+                onClick={() => {
+                  setSelectedStore('ALL');
+                  if (activeCardFilter === 'DELHI_STORE' || activeCardFilter === 'BENGALURU_STORE' || activeCardFilter === 'PRIMARY_STORE') {
+                    setActiveCardFilter('TOTAL_SPARE_PARTS');
+                  }
+                }}
                 className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
                   selectedStore === 'ALL'
                     ? 'bg-indigo-600 text-white shadow-xs'
@@ -762,34 +798,56 @@ export const DashboardPage: React.FC = () => {
               >
                 All Stores
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedStore('DELHI');
-                  setActiveCardFilter('DELHI_STORE');
-                }}
-                className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
-                  selectedStore === 'DELHI'
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/70'
-                }`}
-              >
-                Delhi Store
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedStore('BENGALURU');
-                  setActiveCardFilter('BENGALURU_STORE');
-                }}
-                className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
-                  selectedStore === 'BENGALURU'
-                    ? 'bg-orange-600 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/70'
-                }`}
-              >
-                Bengaluru Store
-              </button>
+              {selectedOrg === 'BHEL' ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedStore('DELHI');
+                      setActiveCardFilter('DELHI_STORE');
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
+                      selectedStore === 'DELHI'
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/70'
+                    }`}
+                  >
+                    Delhi Store
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedStore('BENGALURU');
+                      setActiveCardFilter('BENGALURU_STORE');
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
+                      selectedStore === 'BENGALURU'
+                        ? 'bg-orange-600 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/70'
+                    }`}
+                  >
+                    Bengaluru Store
+                  </button>
+                </>
+              ) : (
+                warehouses.map((wh) => (
+                  <button
+                    key={wh.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedStore(wh.storeKey || wh.id);
+                      setActiveCardFilter('PRIMARY_STORE');
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
+                      selectedStore === (wh.storeKey || wh.id)
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/70'
+                    }`}
+                  >
+                    {wh.name}
+                  </button>
+                ))
+              )}
             </div>
 
             {/* Search Input */}
@@ -1277,79 +1335,119 @@ export const DashboardPage: React.FC = () => {
 
       {/* Store Distribution Cards & Quick Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
-        {/* Delhi Store */}
-        <Card
-          className={`border-l-4 border-l-blue-600 transition-all cursor-pointer hover:shadow-md ${selectedStore === 'DELHI' ? 'ring-2 ring-blue-500 bg-blue-50/20' : ''}`}
-          onClick={() => {
-            setSelectedStore('DELHI');
-            setActiveCardFilter('DELHI_STORE');
-            tableSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }}
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center border border-blue-200 shadow-inner">
-                <MapPin className="w-5 h-5 text-blue-600" />
+        {selectedOrg === 'BHEL' ? (
+          <>
+            {/* Delhi Store */}
+            <Card
+              className={`border-l-4 border-l-blue-600 transition-all cursor-pointer hover:shadow-md ${selectedStore === 'DELHI' ? 'ring-2 ring-blue-500 bg-blue-50/20' : ''}`}
+              onClick={() => {
+                setSelectedStore('DELHI');
+                setActiveCardFilter('DELHI_STORE');
+                tableSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center border border-blue-200 shadow-inner">
+                    <MapPin className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-900 text-sm">Delhi Stock Store</p>
+                    <p className="text-[11px] text-slate-500 font-medium">Proactive Delhi Warehouse</p>
+                  </div>
+                </div>
+                <Badge variant="info">Primary</Badge>
               </div>
-              <div>
-                <p className="font-bold text-slate-900 text-sm">Delhi Stock Store</p>
-                <p className="text-[11px] text-slate-500 font-medium">Proactive Delhi Warehouse</p>
+              <div className="grid grid-cols-3 gap-2.5">
+                <div className="bg-gradient-to-b from-slate-50 to-slate-100/70 border border-slate-200/80 rounded-xl p-3 text-center shadow-inner">
+                  <p className="text-xl font-extrabold text-slate-900">{delhi.totalQuantity ?? delhi.totalItems ?? 0}</p>
+                  <p className="text-[10px] font-bold text-slate-600 mt-0.5">Total Uploaded</p>
+                </div>
+                <div className="bg-gradient-to-b from-slate-50 to-slate-100/70 border border-slate-200/80 rounded-xl p-3 text-center shadow-inner">
+                  <p className="text-xl font-extrabold text-emerald-600">{delhi.availableQuantity ?? 0}</p>
+                  <p className="text-[10px] font-bold text-slate-600 mt-0.5">Available</p>
+                </div>
+                <div className="bg-gradient-to-b from-slate-50 to-slate-100/70 border border-slate-200/80 rounded-xl p-3 text-center shadow-inner">
+                  <p className="text-xl font-extrabold text-amber-600">{Math.max(0, (delhi.totalQuantity ?? 0) - (delhi.availableQuantity ?? 0))}</p>
+                  <p className="text-[10px] font-bold text-slate-600 mt-0.5">Reserved</p>
+                </div>
               </div>
-            </div>
-            <Badge variant="info">Primary</Badge>
-          </div>
-          <div className="grid grid-cols-3 gap-2.5">
-            <div className="bg-gradient-to-b from-slate-50 to-slate-100/70 border border-slate-200/80 rounded-xl p-3 text-center shadow-inner">
-              <p className="text-xl font-extrabold text-slate-900">{delhi.totalQuantity ?? delhi.totalItems ?? 0}</p>
-              <p className="text-[10px] font-bold text-slate-600 mt-0.5">Total Uploaded</p>
-            </div>
-            <div className="bg-gradient-to-b from-slate-50 to-slate-100/70 border border-slate-200/80 rounded-xl p-3 text-center shadow-inner">
-              <p className="text-xl font-extrabold text-emerald-600">{delhi.availableQuantity ?? 0}</p>
-              <p className="text-[10px] font-bold text-slate-600 mt-0.5">Available</p>
-            </div>
-            <div className="bg-gradient-to-b from-slate-50 to-slate-100/70 border border-slate-200/80 rounded-xl p-3 text-center shadow-inner">
-              <p className="text-xl font-extrabold text-amber-600">{Math.max(0, (delhi.totalQuantity ?? 0) - (delhi.availableQuantity ?? 0))}</p>
-              <p className="text-[10px] font-bold text-slate-600 mt-0.5">Reserved</p>
-            </div>
-          </div>
-        </Card>
+            </Card>
 
-        {/* Bengaluru Store */}
-        <Card
-          className={`border-l-4 border-l-orange-500 transition-all cursor-pointer hover:shadow-md ${selectedStore === 'BENGALURU' ? 'ring-2 ring-orange-500 bg-orange-50/20' : ''}`}
-          onClick={() => {
-            setSelectedStore('BENGALURU');
-            setActiveCardFilter('BENGALURU_STORE');
-            tableSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }}
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-orange-50 flex items-center justify-center border border-orange-200 shadow-inner">
-                <MapPin className="w-5 h-5 text-orange-600" />
+            {/* Bengaluru Store */}
+            <Card
+              className={`border-l-4 border-l-orange-500 transition-all cursor-pointer hover:shadow-md ${selectedStore === 'BENGALURU' ? 'ring-2 ring-orange-500 bg-orange-50/20' : ''}`}
+              onClick={() => {
+                setSelectedStore('BENGALURU');
+                setActiveCardFilter('BENGALURU_STORE');
+                tableSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-orange-50 flex items-center justify-center border border-orange-200 shadow-inner">
+                    <MapPin className="w-5 h-5 text-orange-600" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-900 text-sm">Bengaluru Stock Store</p>
+                    <p className="text-[11px] text-slate-500 font-medium">Proactive South Warehouse</p>
+                  </div>
+                </div>
+                <Badge variant="warning">Regional</Badge>
               </div>
-              <div>
-                <p className="font-bold text-slate-900 text-sm">Bengaluru Stock Store</p>
-                <p className="text-[11px] text-slate-500 font-medium">Proactive South Warehouse</p>
+              <div className="grid grid-cols-3 gap-2.5">
+                <div className="bg-gradient-to-b from-slate-50 to-slate-100/70 border border-slate-200/80 rounded-xl p-3 text-center shadow-inner">
+                  <p className="text-xl font-extrabold text-slate-900">{blr.totalQuantity ?? blr.totalItems ?? 0}</p>
+                  <p className="text-[10px] font-bold text-slate-600 mt-0.5">Total Uploaded</p>
+                </div>
+                <div className="bg-gradient-to-b from-slate-50 to-slate-100/70 border border-slate-200/80 rounded-xl p-3 text-center shadow-inner">
+                  <p className="text-xl font-extrabold text-emerald-600">{blr.availableQuantity ?? 0}</p>
+                  <p className="text-[10px] font-bold text-slate-600 mt-0.5">Available</p>
+                </div>
+                <div className="bg-gradient-to-b from-slate-50 to-slate-100/70 border border-slate-200/80 rounded-xl p-3 text-center shadow-inner">
+                  <p className="text-xl font-extrabold text-amber-600">{Math.max(0, (blr.totalQuantity ?? 0) - (blr.availableQuantity ?? 0))}</p>
+                  <p className="text-[10px] font-bold text-slate-600 mt-0.5">Reserved</p>
+                </div>
+              </div>
+            </Card>
+          </>
+        ) : (
+          <Card
+            className="border-l-4 border-l-emerald-600 transition-all cursor-pointer hover:shadow-md lg:col-span-2"
+            onClick={() => {
+              setSelectedStore('ALL');
+              setActiveCardFilter('TOTAL_SPARE_PARTS');
+              tableSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center border border-emerald-200 shadow-inner">
+                  <MapPin className="w-5 h-5 text-emerald-600" />
+                </div>
+                <div>
+                  <p className="font-bold text-slate-900 text-sm">{warehouses[0]?.name || `${activeOrgObj.name} Store`}</p>
+                  <p className="text-[11px] text-slate-500 font-medium">Primary Client Warehouse Hub</p>
+                </div>
+              </div>
+              <Badge variant="success">Active Store</Badge>
+            </div>
+            <div className="grid grid-cols-3 gap-2.5">
+              <div className="bg-gradient-to-b from-slate-50 to-slate-100/70 border border-slate-200/80 rounded-xl p-3 text-center shadow-inner">
+                <p className="text-xl font-extrabold text-slate-900">{inv.totalSpareParts ?? 0}</p>
+                <p className="text-[10px] font-bold text-slate-600 mt-0.5">Total Uploaded</p>
+              </div>
+              <div className="bg-gradient-to-b from-slate-50 to-slate-100/70 border border-slate-200/80 rounded-xl p-3 text-center shadow-inner">
+                <p className="text-xl font-extrabold text-emerald-600">{inv.totalSerializedParts ?? 0}</p>
+                <p className="text-[10px] font-bold text-slate-600 mt-0.5">Available</p>
+              </div>
+              <div className="bg-gradient-to-b from-slate-50 to-slate-100/70 border border-slate-200/80 rounded-xl p-3 text-center shadow-inner">
+                <p className="text-xl font-extrabold text-indigo-600">{inv.totalNonSerializedParts ?? 0}</p>
+                <p className="text-[10px] font-bold text-slate-600 mt-0.5">Non-Serialized</p>
               </div>
             </div>
-            <Badge variant="warning">Regional</Badge>
-          </div>
-          <div className="grid grid-cols-3 gap-2.5">
-            <div className="bg-gradient-to-b from-slate-50 to-slate-100/70 border border-slate-200/80 rounded-xl p-3 text-center shadow-inner">
-              <p className="text-xl font-extrabold text-slate-900">{blr.totalQuantity ?? blr.totalItems ?? 0}</p>
-              <p className="text-[10px] font-bold text-slate-600 mt-0.5">Total Uploaded</p>
-            </div>
-            <div className="bg-gradient-to-b from-slate-50 to-slate-100/70 border border-slate-200/80 rounded-xl p-3 text-center shadow-inner">
-              <p className="text-xl font-extrabold text-emerald-600">{blr.availableQuantity ?? 0}</p>
-              <p className="text-[10px] font-bold text-slate-600 mt-0.5">Available</p>
-            </div>
-            <div className="bg-gradient-to-b from-slate-50 to-slate-100/70 border border-slate-200/80 rounded-xl p-3 text-center shadow-inner">
-              <p className="text-xl font-extrabold text-amber-600">{Math.max(0, (blr.totalQuantity ?? 0) - (blr.availableQuantity ?? 0))}</p>
-              <p className="text-[10px] font-bold text-slate-600 mt-0.5">Reserved</p>
-            </div>
-          </div>
-        </Card>
+          </Card>
+        )}
 
         {/* Quick Actions Shortcuts */}
         <Card title="Quick Tasks" subtitle="Frequently used actions">

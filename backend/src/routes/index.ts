@@ -361,4 +361,55 @@ router.use('/activity', activityRoutes);
 router.use('/swap-history', swapHistoryRoutes);
 router.use('/organizations', organizationRoutes);
 
+// ==============================================
+// WAREHOUSE ROUTES (/api/warehouses)
+// ==============================================
+const warehouseRoutes = Router();
+warehouseRoutes.use(authenticate);
+warehouseRoutes.get('/', async (req, res, next) => {
+  try {
+    const orgId = (req.query.organizationId as string) || req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
+
+    if (orgId === 'BHEL') {
+      return res.json({
+        success: true,
+        data: [
+          { id: 'delhi', name: 'Delhi Store', code: 'DELHI', storeKey: 'DELHI', isPrimary: true },
+          { id: 'bengaluru', name: 'Bengaluru Store', code: 'BENGALURU', storeKey: 'BENGALURU', isPrimary: false },
+        ],
+      });
+    }
+
+    const locations = await prisma.location.findMany({
+      where: { organizationId: orgId },
+      orderBy: { name: 'asc' },
+    });
+
+    if (!locations || locations.length === 0) {
+      const org = await prisma.organization.findUnique({ where: { id: orgId } });
+      const storeName = org?.name ? `${org.name} Store` : 'Jaipur Store';
+      return res.json({
+        success: true,
+        data: [
+          { id: 'primary', name: storeName, code: orgId, storeKey: 'PRIMARY', isPrimary: true },
+        ],
+      });
+    }
+
+    const data = locations.map((loc, idx) => ({
+      id: loc.id,
+      name: loc.name.endsWith('Store') || loc.name.endsWith('Warehouse') ? loc.name : `${loc.name} Store`,
+      code: loc.id,
+      storeKey: loc.id,
+      isPrimary: idx === 0,
+    }));
+
+    return res.json({ success: true, data });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err?.message || 'Failed to fetch warehouses' });
+  }
+});
+
+router.use('/warehouses', warehouseRoutes);
+
 export default router;

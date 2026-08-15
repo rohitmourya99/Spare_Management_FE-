@@ -293,7 +293,7 @@ organizationRoutes.post('/', async (req, res, next) => {
   try {
     const { name, code, primaryWarehouseName } = req.body;
     if (!name || !code) {
-      ApiResponse.badRequest(res, 'Organization Name and Organization Code are required');
+      res.status(400).json({ success: false, message: 'Organization Name and Organization Code are required' });
       return;
     }
 
@@ -303,14 +303,15 @@ organizationRoutes.post('/', async (req, res, next) => {
     const existing = await prisma.organization.findFirst({
       where: {
         OR: [
-          { id: cleanCode },
-          { code: cleanCode },
+          { id: { equals: cleanCode, mode: 'insensitive' } },
+          { code: { equals: cleanCode, mode: 'insensitive' } },
+          { name: { equals: cleanName, mode: 'insensitive' } },
         ],
       },
     });
 
     if (existing) {
-      ApiResponse.badRequest(res, `Organization code '${cleanCode}' already exists`);
+      res.status(400).json({ success: false, message: 'Organization Code already exists' });
       return;
     }
 
@@ -323,19 +324,26 @@ organizationRoutes.post('/', async (req, res, next) => {
       },
     });
 
-    if (primaryWarehouseName) {
-      await prisma.location.create({
-        data: {
-          name: String(primaryWarehouseName).trim(),
-          city: 'Main Store',
-          organizationId: newOrg.id,
-        },
-      }).catch(() => {});
-    }
+    const warehouseName = (primaryWarehouseName && String(primaryWarehouseName).trim())
+      ? String(primaryWarehouseName).trim()
+      : 'Main Store';
 
-    ApiResponse.created(res, newOrg, `Organization '${cleanName}' created successfully`);
-  } catch (err) {
-    next(err);
+    await prisma.location.create({
+      data: {
+        name: warehouseName,
+        city: 'Main Store',
+        organizationId: newOrg.id,
+      },
+    }).catch(() => {});
+
+    res.status(201).json({
+      success: true,
+      organization: newOrg,
+      data: newOrg,
+      message: `Organization '${cleanName}' created successfully`,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err?.message || 'Failed to create organization' });
   }
 });
 

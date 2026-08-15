@@ -144,7 +144,12 @@ export const Header: React.FC<{ title: string }> = ({ title }) => {
   const handleAddOrgSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setModalError(null);
-    if (!formData.name.trim() || !formData.code.trim()) {
+
+    const cleanName = formData.name.trim();
+    const cleanCode = formData.code.trim();
+    const cleanWarehouse = formData.primaryWarehouseName.trim();
+
+    if (!cleanName || !cleanCode) {
       setModalError('Organization Name and Code are required.');
       return;
     }
@@ -152,20 +157,27 @@ export const Header: React.FC<{ title: string }> = ({ title }) => {
     setIsSubmitting(true);
     try {
       const res = await api.post('/organizations', {
-        name: formData.name.trim(),
-        code: formData.code.trim(),
-        primaryWarehouseName: formData.primaryWarehouseName.trim() || undefined,
+        name: cleanName,
+        code: cleanCode,
+        primaryWarehouseName: cleanWarehouse || undefined,
       });
 
-      if (res.data?.success) {
+      if (res.data?.success || res.status === 201 || res.status === 200) {
+        const createdOrg = res.data?.organization || res.data?.data;
+        const newOrgId = createdOrg?.id || cleanCode.toUpperCase();
+
         await refetchOrganizations();
         setIsAddModalOpen(false);
-        const newOrgId = res.data.data.id || formData.code.trim().toUpperCase();
         setFormData({ name: '', code: '', primaryWarehouseName: '' });
+
+        // Switch active organization context immediately
         setSelectedOrg(newOrgId);
+      } else {
+        setModalError(res.data?.message || 'Failed to create organization.');
       }
     } catch (err: any) {
-      setModalError(err?.response?.data?.message || 'Failed to create organization.');
+      const serverMsg = err?.response?.data?.message || err?.message || 'Failed to create organization.';
+      setModalError(serverMsg);
     } finally {
       setIsSubmitting(false);
     }

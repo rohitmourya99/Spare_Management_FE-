@@ -247,6 +247,35 @@ swapHistoryRoutes.get('/export', (req, res, next) => swapHistoryController.expor
 swapHistoryRoutes.get('/', (req, res, next) => swapHistoryController.getSwapHistory(req, res).catch(next));
 swapHistoryRoutes.post('/', (req, res, next) => swapHistoryController.createSwapHistory(req, res).catch(next));
 
+// ==============================================
+// ORGANIZATION ROUTES (/api/organizations)
+// ==============================================
+const organizationRoutes = Router();
+organizationRoutes.use(authenticate);
+organizationRoutes.get('/', async (_req, res, next) => {
+  try {
+    let orgs = await prisma.organization.findMany({
+      where: { status: 'ACTIVE' },
+      orderBy: { name: 'asc' },
+    });
+    if (!orgs || orgs.length === 0) {
+      orgs = [
+        {
+          id: 'BHEL',
+          name: 'BHEL',
+          code: 'BHEL',
+          status: 'ACTIVE',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ];
+    }
+    res.json({ success: true, data: orgs });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Mount sub-routers
 router.use('/auth', authRoutes);
 router.use('/inventory', inventoryRoutes);
@@ -259,5 +288,6 @@ router.use('/reports', reportsRoutes);
 router.use('/users', userRoutes);
 router.use('/activity', activityRoutes);
 router.use('/swap-history', swapHistoryRoutes);
+router.use('/organizations', organizationRoutes);
 
 export default router;

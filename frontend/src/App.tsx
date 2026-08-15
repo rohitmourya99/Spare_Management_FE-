@@ -17,6 +17,7 @@ import { ReportsPage } from './pages/reports/ReportsPage';
 import { SettingsPage } from './pages/settings/SettingsPage';
 import { ActivityLogPage } from './pages/activity/ActivityLogPage';
 import UserListPage from './pages/users/UserListPage';
+import { OrganizationProvider } from './context/OrganizationContext';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -66,115 +67,117 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; roles?: UserRole[] }
 
 export const App: React.FC = () => {
   return (
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
+    <OrganizationProvider>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
 
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute roles={['SUPER_ADMIN', 'INVENTORY_ADMIN', 'ENGINEER', 'READ_ONLY']}>
-                <DashboardPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/stock-list"
-            element={
-              <ProtectedRoute roles={['SUPER_ADMIN', 'INVENTORY_ADMIN', 'ENGINEER', 'READ_ONLY']}>
-                <StockListPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/stock"
-            element={
-              <ProtectedRoute roles={['SUPER_ADMIN', 'INVENTORY_ADMIN', 'ENGINEER', 'READ_ONLY']}>
-                <StockListPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/inventory"
-            element={
-              <ProtectedRoute roles={['SUPER_ADMIN', 'INVENTORY_ADMIN', 'ENGINEER', 'READ_ONLY']}>
-                <InventoryListPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/inventory/:id"
-            element={
-              <ProtectedRoute roles={['SUPER_ADMIN', 'INVENTORY_ADMIN', 'ENGINEER', 'READ_ONLY']}>
-                <SpareDetailPage />
-              </ProtectedRoute>
-            }
-          />
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute roles={['SUPER_ADMIN', 'INVENTORY_ADMIN', 'ENGINEER', 'READ_ONLY']}>
+                  <DashboardPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/stock-list"
+              element={
+                <ProtectedRoute roles={['SUPER_ADMIN', 'INVENTORY_ADMIN', 'ENGINEER', 'READ_ONLY']}>
+                  <StockListPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/stock"
+              element={
+                <ProtectedRoute roles={['SUPER_ADMIN', 'INVENTORY_ADMIN', 'ENGINEER', 'READ_ONLY']}>
+                  <StockListPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/inventory"
+              element={
+                <ProtectedRoute roles={['SUPER_ADMIN', 'INVENTORY_ADMIN', 'ENGINEER', 'READ_ONLY']}>
+                  <InventoryListPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/inventory/:id"
+              element={
+                <ProtectedRoute roles={['SUPER_ADMIN', 'INVENTORY_ADMIN', 'ENGINEER', 'READ_ONLY']}>
+                  <SpareDetailPage />
+                </ProtectedRoute>
+              }
+            />
 
-          <Route
-            path="/dispatch"
-            element={
-              <ProtectedRoute roles={['SUPER_ADMIN', 'INVENTORY_ADMIN', 'ENGINEER']}>
-                <DispatchListPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/pickup"
-            element={
-              <ProtectedRoute roles={['SUPER_ADMIN', 'INVENTORY_ADMIN', 'ENGINEER']}>
-                <PickupListPage />
-              </ProtectedRoute>
-            }
-          />
+            <Route
+              path="/dispatch"
+              element={
+                <ProtectedRoute roles={['SUPER_ADMIN', 'INVENTORY_ADMIN', 'ENGINEER']}>
+                  <DispatchListPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/pickup"
+              element={
+                <ProtectedRoute roles={['SUPER_ADMIN', 'INVENTORY_ADMIN', 'ENGINEER']}>
+                  <PickupListPage />
+                </ProtectedRoute>
+              }
+            />
 
-          <Route
-            path="/sites"
-            element={
-              <ProtectedRoute roles={['SUPER_ADMIN', 'INVENTORY_ADMIN', 'READ_ONLY']}>
-                <SiteListPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/reports"
-            element={
-              <ProtectedRoute roles={['SUPER_ADMIN', 'INVENTORY_ADMIN', 'READ_ONLY']}>
-                <ReportsPage />
-              </ProtectedRoute>
-            }
-          />
+            <Route
+              path="/sites"
+              element={
+                <ProtectedRoute roles={['SUPER_ADMIN', 'INVENTORY_ADMIN', 'READ_ONLY']}>
+                  <SiteListPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/reports"
+              element={
+                <ProtectedRoute roles={['SUPER_ADMIN', 'INVENTORY_ADMIN', 'READ_ONLY']}>
+                  <ReportsPage />
+                </ProtectedRoute>
+              }
+            />
 
-          <Route
-            path="/settings"
-            element={
-              <ProtectedRoute roles={['SUPER_ADMIN']}>
-                <SettingsPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/activity"
-            element={
-              <ProtectedRoute roles={['SUPER_ADMIN']}>
-                <ActivityLogPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/users"
-            element={
-              <ProtectedRoute roles={['SUPER_ADMIN']}>
-                <UserListPage />
-              </ProtectedRoute>
-            }
-          />
+            <Route
+              path="/settings"
+              element={
+                <ProtectedRoute roles={['SUPER_ADMIN']}>
+                  <SettingsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/activity"
+              element={
+                <ProtectedRoute roles={['SUPER_ADMIN']}>
+                  <ActivityLogPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/users"
+              element={
+                <ProtectedRoute roles={['SUPER_ADMIN']}>
+                  <UserListPage />
+                </ProtectedRoute>
+              }
+            />
 
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        </Routes>
-      </BrowserRouter>
-    </QueryClientProvider>
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </QueryClientProvider>
+    </OrganizationProvider>
   );
 };
 

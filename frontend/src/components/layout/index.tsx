@@ -6,6 +6,7 @@ import {
   History, LogOut, ShieldCheck, ChevronRight, Calendar, Clock,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/useAuthStore';
+import { useOrganization } from '../../context/OrganizationContext';
 import pdsLogo from '../../assets/pds-logo.png';
 
 export const Sidebar: React.FC = () => {
@@ -119,6 +120,7 @@ export const Sidebar: React.FC = () => {
 
 export const Header: React.FC<{ title: string }> = ({ title }) => {
   const { user } = useAuthStore();
+  const { selectedOrg, setSelectedOrg, organizations } = useOrganization();
   const [now, setNow] = useState(new Date());
 
   // Continuous real-time clock updating every second
@@ -138,8 +140,25 @@ export const Header: React.FC<{ title: string }> = ({ title }) => {
         <h2 className="text-base font-black text-slate-900 tracking-tight">{title}</h2>
       </div>
 
-      {/* Right side: Real-time Live Date & Clock + Super Admin User Badge */}
+      {/* Right side: Organization Switcher + Real-time Live Clock + User Badge */}
       <div className="flex items-center gap-3">
+        {/* Organization Switcher Dropdown */}
+        <div className="flex items-center gap-2 px-3 py-1 bg-indigo-50/80 border border-indigo-200/90 rounded-xl shadow-2xs">
+          <Building2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+          <span className="text-[11px] font-extrabold text-indigo-900 uppercase tracking-wider hidden sm:inline">Organization:</span>
+          <select
+            value={selectedOrg}
+            onChange={(e) => setSelectedOrg(e.target.value)}
+            className="bg-transparent text-xs font-black text-indigo-700 focus:outline-none cursor-pointer pr-1"
+          >
+            {organizations.map((org) => (
+              <option key={org.id} value={org.id} className="text-slate-900 font-bold bg-white">
+                {org.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
         {/* Real-time Clock Card with 3D subtle depth */}
         <div className="flex items-center gap-2.5 px-3 py-1 bg-slate-50 border border-slate-200 rounded-xl shadow-2xs">
           <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">

@@ -1,0 +1,78 @@
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import api from '../api';
+
+export interface Organization {
+  id: string;
+  name: string;
+  code: string;
+  status: string;
+}
+
+interface OrganizationContextType {
+  selectedOrg: string;
+  setSelectedOrg: (orgId: string) => void;
+  organizations: Organization[];
+  isLoadingOrgs: boolean;
+}
+
+const OrganizationContext = createContext<OrganizationContextType>({
+  selectedOrg: 'BHEL',
+  setSelectedOrg: () => {},
+  organizations: [{ id: 'BHEL', name: 'BHEL', code: 'BHEL', status: 'ACTIVE' }],
+  isLoadingOrgs: false,
+});
+
+export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [selectedOrg, setSelectedOrgState] = useState<string>(() => {
+    return localStorage.getItem('selected_organization') || 'BHEL';
+  });
+
+  const [organizations, setOrganizations] = useState<Organization[]>([
+    { id: 'BHEL', name: 'BHEL', code: 'BHEL', status: 'ACTIVE' },
+  ]);
+  const [isLoadingOrgs, setIsLoadingOrgs] = useState<boolean>(false);
+
+  const setSelectedOrg = (orgId: string) => {
+    setSelectedOrgState(orgId);
+    localStorage.setItem('selected_organization', orgId);
+    // Reload window to trigger clean re-fetch across all active query components
+    window.location.reload();
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchOrgs = async () => {
+      setIsLoadingOrgs(true);
+      try {
+        const response = await api.get('/organizations');
+        if (response.data?.data && Array.isArray(response.data.data) && response.data.data.length > 0) {
+          if (isMounted) setOrganizations(response.data.data);
+        }
+      } catch (err) {
+        // Fallback default BHEL
+      } finally {
+        if (isMounted) setIsLoadingOrgs(false);
+      }
+    };
+
+    fetchOrgs();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  return (
+    <OrganizationContext.Provider
+      value={{
+        selectedOrg,
+        setSelectedOrg,
+        organizations,
+        isLoadingOrgs,
+      }}
+    >
+      {children}
+    </OrganizationContext.Provider>
+  );
+};
+
+export const useOrganization = () => useContext(OrganizationContext);

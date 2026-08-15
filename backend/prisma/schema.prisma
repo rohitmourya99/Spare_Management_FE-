@@ -13,20 +13,45 @@ datasource db {
 }
 
 // ==============================================
+// ORGANIZATION MODULE (Multi-Organization Support)
+// ==============================================
+
+model Organization {
+  id        String   @id @default("BHEL")
+  name      String   @unique
+  code      String   @unique
+  status    String   @default("ACTIVE") // ACTIVE | INACTIVE
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users          User[]
+  inventoryItems InventoryItem[]
+  locations      Location[]
+  sites          Site[]
+  dispatches     Dispatch[]
+  pickups        Pickup[]
+  activityLogs   ActivityLog[]
+
+  @@map("organizations")
+}
+
+// ==============================================
 // USER & AUTH
 // ==============================================
 
 model User {
-  id            String    @id @default(uuid())
-  name          String
-  email         String    @unique
-  password      String
-  role          String    @default("ENGINEER") // SUPER_ADMIN | INVENTORY_ADMIN | ENGINEER | READ_ONLY
-  phone         String?
-  status        String    @default("ACTIVE") // ACTIVE | SUSPENDED | DISABLED
-  isActive      Boolean   @default(true)
-  lastLoginAt   DateTime?
-  refreshTokens RefreshToken[]
+  id             String        @id @default(uuid())
+  name           String
+  email          String        @unique
+  password       String
+  role           String        @default("ENGINEER") // SUPER_ADMIN | INVENTORY_ADMIN | ENGINEER | READ_ONLY
+  phone          String?
+  status         String        @default("ACTIVE") // ACTIVE | SUSPENDED | DISABLED
+  isActive       Boolean       @default(true)
+  lastLoginAt    DateTime?
+  organizationId String?       @default("BHEL")
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  refreshTokens  RefreshToken[]
 
   // Relations
   createdInventory     InventoryItem[] @relation("CreatedByUser")
@@ -48,6 +73,7 @@ model User {
   @@index([role])
   @@index([status])
   @@index([isActive])
+  @@index([organizationId])
   @@map("users")
 }
 
@@ -97,42 +123,48 @@ model Category {
 }
 
 model Location {
-  id        String          @id @default(uuid())
-  name      String          @unique
-  city      String?
-  isActive  Boolean         @default(true)
-  items     InventoryItem[]
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
+  id             String        @id @default(uuid())
+  name           String        @unique
+  city           String?
+  isActive       Boolean       @default(true)
+  organizationId String?       @default("BHEL")
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  items          InventoryItem[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
+  @@index([organizationId])
   @@map("locations")
 }
 
 model Site {
-  id            String     @id @default(uuid())
-  siteName      String     @unique
-  unitDivision  String?
-  subLocation   String?
-  locationClass String?
-  spareStore    String?
-  addressLine1  String?
-  addressLine2  String?
-  fullAddress   String?
-  city          String?
-  state         String?
-  pin           String?
-  contactPerson String?
-  phone         String?
-  email         String?
-  remarks       String?
-  isActive      Boolean    @default(true)
-  dispatches    Dispatch[]
-  pickups       Pickup[]
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  id             String        @id @default(uuid())
+  siteName       String        @unique
+  unitDivision   String?
+  subLocation    String?
+  locationClass  String?
+  spareStore     String?
+  addressLine1   String?
+  addressLine2   String?
+  fullAddress    String?
+  city           String?
+  state          String?
+  pin            String?
+  contactPerson  String?
+  phone          String?
+  email          String?
+  remarks        String?
+  isActive       Boolean       @default(true)
+  organizationId String?       @default("BHEL")
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  dispatches     Dispatch[]
+  pickups        Pickup[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
   @@index([city])
   @@index([state])
+  @@index([organizationId])
   @@map("sites")
 }
 
@@ -160,6 +192,8 @@ model InventoryItem {
   store             String    @default("Delhi") // "Delhi" | "Bengaluru"
   locationId        String?
   location          Location? @relation(fields: [locationId], references: [id])
+  organizationId    String?   @default("BHEL")
+  organization      Organization? @relation(fields: [organizationId], references: [id])
   rack              String?
   bin               String?
   condition         String    @default("NEW") // "NEW" | "GOOD" | "DEFECTIVE" | "REFURBISHED"
@@ -209,6 +243,7 @@ model InventoryItem {
   @@index([isSerialized])
   @@index([partCode])
   @@index([productName])
+  @@index([organizationId])
   @@map("inventory_items")
 }
 
@@ -279,6 +314,8 @@ model Dispatch {
   inventoryItem    InventoryItem @relation(fields: [inventoryItemId], references: [id])
   siteId           String
   site             Site      @relation(fields: [siteId], references: [id])
+  organizationId   String?   @default("BHEL")
+  organization     Organization? @relation(fields: [organizationId], references: [id])
   quantity         Int       @default(1)
   courierName      String?
   trackingNo       String?
@@ -312,6 +349,7 @@ model Dispatch {
   @@index([siteId])
   @@index([createdById])
   @@index([status])
+  @@index([organizationId])
   @@map("dispatches")
 }
 
@@ -326,6 +364,8 @@ model Pickup {
   inventoryItem     InventoryItem @relation(fields: [inventoryItemId], references: [id])
   siteId            String
   site              Site          @relation(fields: [siteId], references: [id])
+  organizationId    String?       @default("BHEL")
+  organization      Organization? @relation(fields: [organizationId], references: [id])
   quantity          Int           @default(1)
   courierName       String?
   trackingNo        String?
@@ -348,6 +388,7 @@ model Pickup {
   @@index([siteId])
   @@index([createdById])
   @@index([status])
+  @@index([organizationId])
   @@map("pickups")
 }
 
@@ -447,31 +488,34 @@ model Reservation {
 // ==============================================
 
 model ActivityLog {
-  id           String   @id @default(uuid())
-  userId       String
-  user         User     @relation(fields: [userId], references: [id])
-  userName     String?
-  userRole     String?
-  module       String   @default("System") // Inventory, Dispatch, Pickup, Reports, Import, Site Master, User Management, Authentication
-  action       String
-  entity       String?
-  entityId     String?
-  entityLabel  String?
-  partCode     String?
-  serialNumber String?
-  siteName     String?
-  oldValue     String?
-  newValue     String?
-  remarks      String?
-  ipAddress    String?
-  userAgent    String?
-  createdAt    DateTime @default(now())
+  id             String        @id @default(uuid())
+  userId         String
+  user           User          @relation(fields: [userId], references: [id])
+  userName       String?
+  userRole       String?
+  organizationId String?       @default("BHEL")
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  module         String        @default("System") // Inventory, Dispatch, Pickup, Reports, Import, Site Master, User Management, Authentication
+  action         String
+  entity         String?
+  entityId       String?
+  entityLabel    String?
+  partCode       String?
+  serialNumber   String?
+  siteName       String?
+  oldValue       String?
+  newValue       String?
+  remarks        String?
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime      @default(now())
 
   @@index([userId])
   @@index([action])
   @@index([entity])
   @@index([module])
   @@index([partCode])
+  @@index([organizationId])
   @@map("activity_logs")
 }
 

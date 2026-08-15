@@ -30,14 +30,17 @@ const api = axios.create({
   },
 });
 
-// Request interceptor: attach token automatically to all outbound requests
+// Request interceptor: attach token & organization context automatically to all outbound requests
 api.interceptors.request.use(
   (config) => {
+    config.headers = config.headers || {};
     const token = getStoredToken();
     if (token) {
-      config.headers = config.headers || {};
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    const selectedOrg = localStorage.getItem('selected_organization') || 'BHEL';
+    config.headers['x-organization-id'] = selectedOrg;
 
     // CRITICAL FIX: When sending FormData (file uploads), the browser MUST set the
     // Content-Type header with the multipart boundary automatically.

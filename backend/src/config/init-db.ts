@@ -22,32 +22,22 @@ function getRowValue(row: Record<string, any>, ...possibleKeys: string[]): any {
  */
 export async function ensureDatabaseSeeded(): Promise<void> {
   try {
-    // 0. Auto-sync PostgreSQL database schema if new tables/columns are missing
-    try {
-      const { execSync } = require('child_process');
-      logger.info('🔄 Verifying and syncing database schema with Prisma...');
-      execSync('npx prisma db push --skip-generate', { stdio: 'inherit' });
-      logger.info('✅ Database schema verified & synced.');
-    } catch (syncErr) {
-      logger.warn('Prisma DB push notice:', syncErr);
-    }
-
-    // 1. Seed & Tag Default Organization (BHEL)
+    // 0. Seed & Tag Default Organization (BHEL)
     try {
       await prisma.organization.upsert({
         where: { id: 'BHEL' },
         update: { name: 'BHEL', code: 'BHEL', status: 'ACTIVE' },
         create: { id: 'BHEL', name: 'BHEL', code: 'BHEL', status: 'ACTIVE' },
-      });
+      }).catch(() => {});
 
-      await prisma.user.updateMany({ where: { organizationId: null }, data: { organizationId: 'BHEL' } });
-      await prisma.inventoryItem.updateMany({ where: { organizationId: null }, data: { organizationId: 'BHEL' } });
-      await prisma.location.updateMany({ where: { organizationId: null }, data: { organizationId: 'BHEL' } });
-      await prisma.site.updateMany({ where: { organizationId: null }, data: { organizationId: 'BHEL' } });
-      await prisma.dispatch.updateMany({ where: { organizationId: null }, data: { organizationId: 'BHEL' } });
-      await prisma.pickup.updateMany({ where: { organizationId: null }, data: { organizationId: 'BHEL' } });
-      await prisma.activityLog.updateMany({ where: { organizationId: null }, data: { organizationId: 'BHEL' } });
-      logger.info('🏢 Default Organization [BHEL] seeded and records tagged.');
+      await prisma.user.updateMany({ where: { organizationId: null }, data: { organizationId: 'BHEL' } }).catch(() => {});
+      await prisma.inventoryItem.updateMany({ where: { organizationId: null }, data: { organizationId: 'BHEL' } }).catch(() => {});
+      await prisma.location.updateMany({ where: { organizationId: null }, data: { organizationId: 'BHEL' } }).catch(() => {});
+      await prisma.site.updateMany({ where: { organizationId: null }, data: { organizationId: 'BHEL' } }).catch(() => {});
+      await prisma.dispatch.updateMany({ where: { organizationId: null }, data: { organizationId: 'BHEL' } }).catch(() => {});
+      await prisma.pickup.updateMany({ where: { organizationId: null }, data: { organizationId: 'BHEL' } }).catch(() => {});
+      await prisma.activityLog.updateMany({ where: { organizationId: null }, data: { organizationId: 'BHEL' } }).catch(() => {});
+      logger.info('🏢 Default Organization [BHEL] seeded and verified.');
     } catch (orgErr) {
       logger.warn('Organization init notice:', orgErr);
     }

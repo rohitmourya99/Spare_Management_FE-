@@ -408,27 +408,28 @@ export class InventoryService {
       failedLoginAttemptsCount,
       recentInventoryUpdates,
     ] = await Promise.all([
-      prisma.inventoryItem.count({ where: { isDeleted: false } }),
-      prisma.inventoryItem.count({ where: { isDeleted: false, isSerialized: true } }),
-      prisma.inventoryItem.count({ where: { isDeleted: false, isSerialized: false } }),
+      prisma.inventoryItem.count({ where: { isDeleted: false, organizationId } }),
+      prisma.inventoryItem.count({ where: { isDeleted: false, isSerialized: true, organizationId } }),
+      prisma.inventoryItem.count({ where: { isDeleted: false, isSerialized: false, organizationId } }),
       prisma.oEM.count({ where: { isActive: true } }),
 
       // Delhi store stats
       prisma.inventoryItem.aggregate({
-        where: { isDeleted: false, store: 'Delhi' },
+        where: { isDeleted: false, store: 'Delhi', organizationId },
         _count: { id: true },
         _sum: { quantity: true, availableQuantity: true },
       }),
 
       // Bengaluru store stats
       prisma.inventoryItem.aggregate({
-        where: { isDeleted: false, store: 'Bengaluru' },
+        where: { isDeleted: false, store: 'Bengaluru', organizationId },
         _count: { id: true },
         _sum: { quantity: true, availableQuantity: true },
       }),
 
       // Recent Dispatches
       prisma.dispatch.findMany({
+        where: { organizationId },
         take: 5,
         orderBy: { createdAt: 'desc' },
         include: { inventoryItem: true, site: true, createdBy: { select: { name: true } } },
@@ -436,6 +437,7 @@ export class InventoryService {
 
       // Recent Pickups
       prisma.pickup.findMany({
+        where: { organizationId },
         take: 5,
         orderBy: { createdAt: 'desc' },
         include: { inventoryItem: true, site: true, createdBy: { select: { name: true } } },
@@ -443,6 +445,7 @@ export class InventoryService {
 
       // Recent Activity
       prisma.activityLog.findMany({
+        where: { organizationId },
         take: 8,
         orderBy: { createdAt: 'desc' },
         include: { user: { select: { name: true, role: true } } },
@@ -451,22 +454,22 @@ export class InventoryService {
       // OEM distribution
       prisma.inventoryItem.groupBy({
         by: ['oemId'],
-        where: { isDeleted: false },
+        where: { isDeleted: false, organizationId },
         _count: { id: true },
         _sum: { quantity: true },
       }),
 
-      this.getMonthlyStats('dispatch'),
-      this.getMonthlyStats('pickup'),
+      this.getMonthlyStats('dispatch', organizationId),
+      this.getMonthlyStats('pickup', organizationId),
 
       // Phase 3 Activity Metrics
-      prisma.activityLog.count({ where: { createdAt: { gte: startOfToday } } }),
-      prisma.activityLog.count(),
-      prisma.dispatch.count({ where: { createdAt: { gte: startOfToday } } }),
-      prisma.pickup.count({ where: { createdAt: { gte: startOfToday } } }),
-      prisma.activityLog.count({ where: { action: 'Failed Login', createdAt: { gte: startOfToday } } }),
+      prisma.activityLog.count({ where: { organizationId, createdAt: { gte: startOfToday } } }),
+      prisma.activityLog.count({ where: { organizationId } }),
+      prisma.dispatch.count({ where: { organizationId, createdAt: { gte: startOfToday } } }),
+      prisma.pickup.count({ where: { organizationId, createdAt: { gte: startOfToday } } }),
+      prisma.activityLog.count({ where: { organizationId, action: 'Failed Login', createdAt: { gte: startOfToday } } }),
       prisma.inventoryItem.findMany({
-        where: { isDeleted: false },
+        where: { isDeleted: false, organizationId },
         orderBy: { updatedAt: 'desc' },
         take: 5,
         include: { oem: true },
@@ -672,9 +675,9 @@ export class InventoryService {
   /**
    * Dynamic Real-time Low Stock Breakdown
    */
-  async getDynamicLowStockDetails() {
+  async getDynamicLowStockDetails(organizationId: string = 'BHEL') {
     const allStock = await prisma.inventoryItem.findMany({
-      where: { isDeleted: false },
+      where: { isDeleted: false, organizationId },
       include: {
         oem: { select: { id: true, name: true } },
         category: { select: { id: true, name: true } },
@@ -711,7 +714,7 @@ export class InventoryService {
       (item) => item.quantity > 0 && item.quantity <= item.reorderLevel
     );
 
-    const partCodeAnalysis = await this.calculatePartCodeLowStock();
+    const partCodeAnalysis = await this.calculatePartCodeLowStock(organizationId);
 
     const finalLowStockList = lowStockItems.length > 0 ? lowStockItems : partCodeAnalysis.allLowStockGroups;
     const finalLowStockCount = partCodeAnalysis.lowStockCount || lowStockItems.length;
@@ -729,7 +732,7 @@ export class InventoryService {
     };
   }
 
-  private async getMonthlyStats(type: 'dispatch' | 'pickup') {
+  private async getMonthlyStats(type: 'dispatch' | 'pickup', organizationId: string = 'BHEL') {
     const months = [];
     for (let i = 5; i >= 0; i--) {
       const date = new Date();
@@ -739,8 +742,8 @@ export class InventoryService {
 
       const count =
         type === 'dispatch'
-          ? await prisma.dispatch.count({ where: { createdAt: { gte: start, lte: end } } })
-          : await prisma.pickup.count({ where: { createdAt: { gte: start, lte: end } } });
+          ? await prisma.dispatch.count({ where: { organizationId, createdAt: { gte: start, lte: end } } })
+          : await prisma.pickup.count({ where: { organizationId, createdAt: { gte: start, lte: end } } });
 
       months.push({
         month: start.toLocaleString('default', { month: 'short' }),

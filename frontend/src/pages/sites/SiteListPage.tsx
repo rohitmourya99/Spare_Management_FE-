@@ -5,10 +5,14 @@ import api from '../../api';
 import { Layout } from '../../components/layout';
 import { Card, Button, Modal } from '../../components/ui';
 import { useAuthStore } from '../../store/useAuthStore';
+import { useOrganization } from '../../context/OrganizationContext';
 import { Site } from '../../types';
 
 export const SiteListPage: React.FC = () => {
   const { user } = useAuthStore();
+  const { selectedOrg, organizations } = useOrganization();
+  const activeOrgObj = organizations.find((o) => o.id === selectedOrg) || { id: 'BHEL', name: 'BHEL' };
+
   const [search, setSearch] = useState('');
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importSummary, setImportSummary] = useState<any>(null);
@@ -18,7 +22,7 @@ export const SiteListPage: React.FC = () => {
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
-    queryKey: ['sites', search],
+    queryKey: ['sites', search, selectedOrg],
     queryFn: async () => {
       const res = await api.get('/sites', { params: { search, limit: 100 } });
       return res.data;
@@ -38,10 +42,10 @@ export const SiteListPage: React.FC = () => {
       const res = await api.post('/sites/import', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      setImportSummary(res.data.data);
+      setImportSummary(res.data?.data || { imported: 0, created: 0 });
       queryClient.invalidateQueries({ queryKey: ['sites'] });
     } catch (err: any) {
-      setImportSummary({ error: err.response?.data?.message || 'Import failed' });
+      alert(err?.response?.data?.message || 'Failed to import site excel file');
     } finally {
       setIsImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -49,13 +53,13 @@ export const SiteListPage: React.FC = () => {
   };
 
   return (
-    <Layout title="BHEL Site Master Directory">
+    <Layout title={`${activeOrgObj.name} Site Master Directory`}>
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
         <div className="relative w-full sm:w-80">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5" />
           <input
             type="text"
-            placeholder="Search BHEL Site, City, Code..."
+            placeholder={`Search ${activeOrgObj.name} Site, City, Code...`}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-10 pr-4 py-1.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-600 font-medium"

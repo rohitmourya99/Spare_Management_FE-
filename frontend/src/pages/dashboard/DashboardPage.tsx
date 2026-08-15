@@ -699,7 +699,7 @@ export const DashboardPage: React.FC = () => {
             </div>
             <h1 className="text-xl font-black text-slate-900 tracking-tight">Enterprise Stock List Dashboard</h1>
             <p className="text-xs text-slate-600 mt-1 max-w-xl font-medium">
-              Real-time spare parts monitoring across Delhi &amp; Bengaluru warehouses, BHEL dispatch tracking, and OEM replacements.
+              Real-time spare parts monitoring across active warehouses, {activeOrgObj.name} dispatch tracking, and OEM replacements.
             </p>
           </div>
         </div>
@@ -870,7 +870,7 @@ export const DashboardPage: React.FC = () => {
                   <>
                     <th className="p-3">Dispatch No</th>
                     <th className="p-3">Spare Part Item</th>
-                    <th className="p-3">Destination BHEL Site</th>
+                    <th className="p-3">Destination {activeOrgObj.name} Site</th>
                     <th className="p-3">Status</th>
                     <th className="p-3 text-right">Dispatch Date</th>
                   </>
@@ -1211,7 +1211,7 @@ export const DashboardPage: React.FC = () => {
                     <tr key={i} className="hover:bg-slate-50/80 transition-colors">
                       <td className="p-3 font-mono font-extrabold text-blue-700">{d.dispatchNo}</td>
                       <td className="p-3 font-bold text-slate-900">{d.inventoryItem?.productName || 'Spare Part'}</td>
-                      <td className="p-3 font-semibold text-slate-800">{d.site?.siteName || d.siteName || 'BHEL Site'}</td>
+                      <td className="p-3 font-semibold text-slate-800">{d.site?.siteName || d.siteName || `${activeOrgObj.name} Site`}</td>
                       <td className="p-3"><Badge variant="warning">RESERVED</Badge></td>
                       <td className="p-3 text-right font-mono text-slate-500 text-[11px]">{new Date(d.createdAt).toLocaleString('en-IN')}</td>
                     </tr>
@@ -1490,7 +1490,7 @@ export const DashboardPage: React.FC = () => {
 
       {/* Monthly Dispatch & Pickup Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
-        <Card title="Monthly Dispatches" subtitle="Outbound spares movement to BHEL sites">
+        <Card title="Monthly Dispatches" subtitle={`Outbound spares movement to ${activeOrgObj.name} sites`}>
           <div className="h-56 mt-2">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={data?.monthlyDispatches || []}>

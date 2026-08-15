@@ -68,7 +68,8 @@ export class InventoryController {
   }
 
   async getDynamicLowStockDetails(req: Request, res: Response): Promise<void> {
-    const details = await inventoryService.getDynamicLowStockDetails();
+    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
+    const details = await inventoryService.getDynamicLowStockDetails(orgId);
     res.status(200).json(details);
   }
 

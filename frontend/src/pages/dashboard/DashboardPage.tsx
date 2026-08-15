@@ -1442,8 +1442,8 @@ export const DashboardPage: React.FC = () => {
                 <p className="text-[10px] font-bold text-slate-600 mt-0.5">Available</p>
               </div>
               <div className="bg-gradient-to-b from-slate-50 to-slate-100/70 border border-slate-200/80 rounded-xl p-3 text-center shadow-inner">
-                <p className="text-xl font-extrabold text-indigo-600">{inv.totalNonSerializedParts ?? 0}</p>
-                <p className="text-[10px] font-bold text-slate-600 mt-0.5">Non-Serialized</p>
+                <p className="text-xl font-extrabold text-amber-600">{Math.max(0, (inv.totalSpareParts ?? 0) - (inv.totalSerializedParts ?? 0))}</p>
+                <p className="text-[10px] font-bold text-slate-600 mt-0.5">Reserved</p>
               </div>
             </div>
           </Card>

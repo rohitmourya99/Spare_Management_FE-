@@ -180,7 +180,8 @@ export class InventoryController {
   }
 
   async getLocationHierarchy(req: Request, res: Response): Promise<void> {
-    const hierarchy = await inventoryService.getLocationHierarchy();
+    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
+    const hierarchy = await inventoryService.getLocationHierarchy(orgId);
     ApiResponse.success(res, hierarchy);
   }
 

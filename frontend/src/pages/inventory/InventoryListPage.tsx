@@ -6,6 +6,7 @@ import {
   FileSpreadsheet, Filter, Check, Clock, Tag, Download, Plus
 } from 'lucide-react';
 import api from '../../api';
+import { useOrganization } from '../../context/OrganizationContext';
 import { Layout } from '../../components/layout';
 import { Button, Card, Badge, Modal } from '../../components/ui';
 import { isRealSerial, formatSerialDisplay } from '../../utils/serialUtils';
@@ -51,6 +52,7 @@ interface ReplacementAuditLog {
 
 export const InventoryListPage: React.FC = () => {
   const queryClient = useQueryClient();
+  const { selectedOrg } = useOrganization();
   const [activeTab, setActiveTab] = useState<'location-inventory' | 'audit-history'>('location-inventory');
 
   // Search & Filter state for Location Inventory
@@ -88,7 +90,7 @@ export const InventoryListPage: React.FC = () => {
 
   // Location Hierarchy Query
   const { data: hierarchyData } = useQuery({
-    queryKey: ['location-hierarchy'],
+    queryKey: ['location-hierarchy', selectedOrg],
     queryFn: async () => {
       const res = await api.get('/inventory/location-hierarchy');
       return res.data.data;
@@ -123,7 +125,7 @@ export const InventoryListPage: React.FC = () => {
   if (filterRoomId) locationParams.roomId = filterRoomId;
 
   const { data: locationData, isLoading: locationLoading } = useQuery({
-    queryKey: ['location-inventory', locationParams],
+    queryKey: ['location-inventory', locationParams, selectedOrg],
     queryFn: async () => {
       const res = await api.get('/inventory/location-inventory', { params: locationParams });
       return res.data;

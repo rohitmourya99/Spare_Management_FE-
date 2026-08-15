@@ -170,19 +170,10 @@ if (!global.prisma) {
 
 export async function connectDatabase(): Promise<void> {
   try {
-    // Sync schema to PostgreSQL at server runtime
-    const { execSync } = await import('child_process');
-    try {
-      logger.info('Syncing Prisma schema with database...');
-      execSync('npx prisma db push --skip-generate', { stdio: 'inherit' });
-    } catch (pushErr) {
-      logger.warn('Prisma db push notice:', pushErr);
-    }
-
     await basePrisma.$connect();
     logger.info('✅ Database connected successfully');
   } catch (error) {
-    logger.warn('⚠️ Database connection warning (local dev mode active):', error);
+    logger.warn('⚠️ Database connection warning:', error);
   }
 }
 

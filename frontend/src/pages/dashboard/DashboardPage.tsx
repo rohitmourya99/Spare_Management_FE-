@@ -65,6 +65,8 @@ export const DashboardPage: React.FC = () => {
     if (!inventoryItemsData || !Array.isArray(inventoryItemsData)) return [];
     let items = [...inventoryItemsData];
 
+    const todayStr = new Date().toISOString().split('T')[0];
+
     switch (selectedFilter) {
       case 'SERIALIZED':
         items = items.filter((i: any) => i.is_serialized || i.isSerialized);
@@ -94,6 +96,25 @@ export const DashboardPage: React.FC = () => {
         break;
       case 'OEM':
         items.sort((a: any, b: any) => (a.oem?.name || '').localeCompare(b.oem?.name || ''));
+        break;
+      case 'TODAYS_ACTIVITIES':
+        items = items.filter((i: any) => {
+          if (!i.updatedAt && !i.createdAt) return true;
+          const d = new Date(i.updatedAt || i.createdAt).toISOString().split('T')[0];
+          return d === todayStr;
+        });
+        break;
+      case 'TOTAL_ACTIVITIES':
+        items.sort((a: any, b: any) => new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime());
+        break;
+      case 'TODAYS_DISPATCH':
+        items = items.filter((i: any) => i.status === 'RESERVED' || i.status === 'DISPATCHED');
+        break;
+      case 'TODAYS_PICKUP':
+        items = items.filter((i: any) => i.status === 'AVAILABLE');
+        break;
+      case 'FAILED_LOGINS':
+        items = [];
         break;
       case 'ALL':
       default:

@@ -11,11 +11,13 @@ export interface CardProps {
   className?: string;
   action?: React.ReactNode;
   noPadding?: boolean;
+  onClick?: (e: React.MouseEvent<HTMLDivElement>) => void;
 }
 
-export const Card: React.FC<CardProps> = ({ title, subtitle, children, className = '', action, noPadding }) => {
+export const Card: React.FC<CardProps> = ({ title, subtitle, children, className = '', action, noPadding, onClick }) => {
   return (
     <div
+      onClick={onClick}
       className={`bg-white rounded-2xl border border-slate-200/90 ${noPadding ? '' : 'p-5'} ${className}`}
       style={{ boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.03), inset 0 1px 0 0 rgba(255, 255, 255, 0.9)' }}
     >

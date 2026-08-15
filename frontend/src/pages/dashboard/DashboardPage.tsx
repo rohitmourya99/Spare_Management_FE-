@@ -20,9 +20,19 @@ const COLORS = ['#2563eb', '#059669', '#d97706', '#dc2626', '#7c3aed', '#db2777'
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const [activeCardFilter, setActiveCardFilter] = useState<string>('TOTAL_SPARE_PARTS');
+  const [selectedStore, setSelectedStore] = useState<'ALL' | 'DELHI' | 'BENGALURU'>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isStockModalOpen, setIsStockModalOpen] = useState<boolean>(false);
   const tableSectionRef = useRef<HTMLDivElement>(null);
+
+  const handleCardClick = (cardId: string) => {
+    setActiveCardFilter(cardId);
+    if (cardId === 'DELHI_STORE') {
+      setSelectedStore('DELHI');
+    } else if (cardId === 'BENGALURU_STORE') {
+      setSelectedStore('BENGALURU');
+    }
+  };
 
   const handleReviewStock = () => {
     setActiveCardFilter('LOW_STOCK');
@@ -66,7 +76,7 @@ export const DashboardPage: React.FC = () => {
   const { data: inventoryItemsData, isLoading: isLoadingInventory } = useQuery({
     queryKey: ['dashboard-inventory-items'],
     queryFn: async () => {
-      const res = await api.get('/inventory?limit=300');
+      const res = await api.get('/inventory?limit=500');
       return Array.isArray(res.data?.data) ? res.data.data : (res.data?.data?.items || []);
     },
     refetchInterval: false,
@@ -100,7 +110,7 @@ export const DashboardPage: React.FC = () => {
     refetchOnWindowFocus: false,
   });
 
-  // Robust inventory classification helpers
+  // Robust inventory classification & stock calculation helpers
   const isItemSerialized = (i: any) =>
     i.isSerialized === true ||
     i.is_serialized === true ||
@@ -111,11 +121,38 @@ export const DashboardPage: React.FC = () => {
     i.type === 'SERIALIZED' ||
     Boolean(i.serialNumber && i.serialNumber !== 'N/A' && i.serialNumber !== '-');
 
-  const getAvailableQty = (i: any) =>
-    Number(i.availableQuantity ?? i.currentQuantity ?? i.quantity ?? i.available_quantity ?? 0);
+  const getAvailableQty = (i: any): number => {
+    if (i.availableQuantity !== undefined && i.availableQuantity !== null) {
+      return Math.max(0, Number(i.availableQuantity));
+    }
+    if (i.status === 'RESERVED' || i.status === 'DISPATCHED') {
+      return 0;
+    }
+    return Math.max(0, Number(i.quantity ?? i.currentQuantity ?? 0));
+  };
 
-  const getInitialCapacity = (i: any) =>
-    Number(i.quantity ?? i.totalQuantity ?? i.initialQuantity ?? i.availableQuantity ?? 1);
+  const getReservedQty = (i: any): number => {
+    if (i.reservedQuantity !== undefined && i.reservedQuantity !== null) {
+      return Math.max(0, Number(i.reservedQuantity));
+    }
+    const total = Number(i.quantity ?? i.totalQuantity ?? i.initialQuantity ?? 0);
+    const avail = getAvailableQty(i);
+    if (total > avail) {
+      return total - avail;
+    }
+    if (i.status === 'RESERVED' || i.status === 'IN_TRANSIT') {
+      return Math.max(1, total || 1);
+    }
+    return 0;
+  };
+
+  const getTotalQty = (i: any): number => {
+    const avail = getAvailableQty(i);
+    const res = getReservedQty(i);
+    return Math.max(avail + res, Number(i.quantity ?? i.totalQuantity ?? 0));
+  };
+
+  const getInitialCapacity = (i: any) => getTotalQty(i);
 
   const getStoreName = (i: any) =>
     (i.store || i.storeLocation || i.locationName || i.location?.name || i.location || i.warehouse || i.store_location || '')
@@ -147,7 +184,7 @@ export const DashboardPage: React.FC = () => {
     for (const item of inventoryItemsData) {
       const key = (item.partCode || item.productName || item.spareId || 'UNKNOWN').trim();
       const existing = groups.get(key);
-      const total = getInitialCapacity(item);
+      const total = getTotalQty(item);
       const avail = getAvailableQty(item);
 
       if (!existing) {
@@ -211,10 +248,16 @@ export const DashboardPage: React.FC = () => {
     };
   }, [inventoryItemsData, inv, data?.lowStockAlerts]);
 
-  // Filter Stock items based on active card filter & search input
+  // Filter Stock items based on active card filter, selected store & search input
   const filteredInventoryItems = useMemo(() => {
     if (!inventoryItemsData || !Array.isArray(inventoryItemsData)) return [];
     let items = [...inventoryItemsData];
+
+    if (selectedStore === 'DELHI') {
+      items = items.filter((i: any) => getStoreName(i).includes('delhi'));
+    } else if (selectedStore === 'BENGALURU') {
+      items = items.filter((i: any) => getStoreName(i).includes('bengaluru') || getStoreName(i).includes('blr'));
+    }
 
     switch (activeCardFilter) {
       case 'SERIALIZED_PARTS':
@@ -230,7 +273,7 @@ export const DashboardPage: React.FC = () => {
         items = items.filter((i: any) => getStoreName(i).includes('bengaluru') || getStoreName(i).includes('blr'));
         break;
       case 'LOW_STOCK':
-        items = items.filter((i: any) => getAvailableQty(i) <= (getInitialCapacity(i) * 0.5) && getAvailableQty(i) > 0);
+        items = items.filter((i: any) => getAvailableQty(i) <= (getTotalQty(i) * 0.5) && getAvailableQty(i) > 0);
         break;
       case 'OUT_OF_STOCK':
         items = items.filter((i: any) => getAvailableQty(i) === 0);
@@ -256,7 +299,7 @@ export const DashboardPage: React.FC = () => {
     }
 
     return items;
-  }, [inventoryItemsData, activeCardFilter, searchQuery]);
+  }, [inventoryItemsData, selectedStore, activeCardFilter, searchQuery]);
 
   // Filter Activities & Audit Logs
   const filteredActivities = useMemo(() => {
@@ -347,69 +390,137 @@ export const DashboardPage: React.FC = () => {
     return items;
   }, [data?.recentActivities, searchQuery]);
 
-  // Real-time OEM Breakdown Calculation
+  // Real-time OEM Breakdown Calculation with Store Location Filtering & Total Uploaded Stock (Available + Reserved)
   const oemBreakdown = useMemo(() => {
     if (!inventoryItemsData || !Array.isArray(inventoryItemsData)) {
       return {
         oemList: [],
         grandTotalSerialized: 0,
         grandTotalNonSerialized: 0,
-        grandTotalParts: 0,
+        grandTotalAvailable: 0,
+        grandTotalReserved: 0,
+        grandTotalUploaded: 0,
+        distinctOemCount: 0,
+        totalSpareTypes: 0,
       };
+    }
+
+    // Filter items based on selected store location (Delhi vs Bengaluru vs All Stores)
+    let itemsToProcess = inventoryItemsData;
+    if (selectedStore === 'DELHI') {
+      itemsToProcess = inventoryItemsData.filter((i: any) => getStoreName(i).includes('delhi'));
+    } else if (selectedStore === 'BENGALURU') {
+      itemsToProcess = inventoryItemsData.filter((i: any) =>
+        getStoreName(i).includes('bengaluru') || getStoreName(i).includes('blr')
+      );
     }
 
     const map = new Map<string, {
       oemName: string;
+      stores: Set<string>;
+      partCodes: Set<string>;
       serializedCount: number;
       nonSerializedCount: number;
-      totalParts: number;
+      availableQuantity: number;
+      reservedQuantity: number;
+      totalUploadedQuantity: number;
     }>();
 
-    for (const item of inventoryItemsData) {
+    for (const item of itemsToProcess) {
       const oemName = (item.oem?.name || item.oemName || item.oem || 'Standard OEM').trim();
+      const rawStore = item.store || item.location?.name || 'Delhi';
+      const storeName = rawStore.toString().trim();
+      const partCode = (item.partCode || item.spareId || item.productName || '').trim();
+
       const existing = map.get(oemName) || {
         oemName,
+        stores: new Set<string>(),
+        partCodes: new Set<string>(),
         serializedCount: 0,
         nonSerializedCount: 0,
-        totalParts: 0,
+        availableQuantity: 0,
+        reservedQuantity: 0,
+        totalUploadedQuantity: 0,
       };
 
-      const qty = getAvailableQty(item);
+      if (storeName) existing.stores.add(storeName);
+      if (partCode) existing.partCodes.add(partCode);
+
+      const availQty = getAvailableQty(item);
+      const resQty = getReservedQty(item);
+      const totalUploaded = availQty + resQty;
       const isSer = isItemSerialized(item);
 
       if (isSer) {
-        existing.serializedCount += qty;
+        existing.serializedCount += totalUploaded;
       } else {
-        existing.nonSerializedCount += qty;
+        existing.nonSerializedCount += totalUploaded;
       }
-      existing.totalParts += qty;
+
+      existing.availableQuantity += availQty;
+      existing.reservedQuantity += resQty;
+      existing.totalUploadedQuantity += totalUploaded;
 
       map.set(oemName, existing);
     }
 
-    let oemList = Array.from(map.values());
+    let oemList = Array.from(map.values()).map((entry) => {
+      let storeLocationStr = '';
+      if (selectedStore === 'DELHI') {
+        storeLocationStr = 'Delhi Store';
+      } else if (selectedStore === 'BENGALURU') {
+        storeLocationStr = 'Bengaluru Store';
+      } else {
+        const storeArray = Array.from(entry.stores);
+        if (storeArray.length === 0) storeLocationStr = 'Delhi Store';
+        else if (storeArray.length === 1) storeLocationStr = storeArray[0].includes('Store') ? storeArray[0] : `${storeArray[0]} Store`;
+        else storeLocationStr = 'Delhi & Bengaluru';
+      }
+
+      return {
+        oemName: entry.oemName,
+        storeLocation: storeLocationStr,
+        spareTypesCount: entry.partCodes.size,
+        serializedCount: entry.serializedCount,
+        nonSerializedCount: entry.nonSerializedCount,
+        availableQuantity: entry.availableQuantity,
+        reservedQuantity: entry.reservedQuantity,
+        totalUploadedQuantity: entry.totalUploadedQuantity,
+      };
+    });
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      oemList = oemList.filter((oem) => oem.oemName.toLowerCase().includes(q));
+      oemList = oemList.filter(
+        (oem) =>
+          oem.oemName.toLowerCase().includes(q) ||
+          oem.storeLocation.toLowerCase().includes(q)
+      );
     }
 
     oemList.sort((a, b) => a.oemName.localeCompare(b.oemName));
 
     const grandTotalSerialized = oemList.reduce((sum, o) => sum + o.serializedCount, 0);
     const grandTotalNonSerialized = oemList.reduce((sum, o) => sum + o.nonSerializedCount, 0);
-    const grandTotalParts = oemList.reduce((sum, o) => sum + o.totalParts, 0);
+    const grandTotalAvailable = oemList.reduce((sum, o) => sum + o.availableQuantity, 0);
+    const grandTotalReserved = oemList.reduce((sum, o) => sum + o.reservedQuantity, 0);
+    const grandTotalUploaded = oemList.reduce((sum, o) => sum + o.totalUploadedQuantity, 0);
+    const totalSpareTypes = oemList.reduce((sum, o) => sum + o.spareTypesCount, 0);
 
     return {
       oemList,
       grandTotalSerialized,
       grandTotalNonSerialized,
-      grandTotalParts,
+      grandTotalAvailable,
+      grandTotalReserved,
+      grandTotalUploaded,
+      distinctOemCount: oemList.length,
+      totalSpareTypes,
     };
-  }, [inventoryItemsData, searchQuery]);
+  }, [inventoryItemsData, selectedStore, searchQuery]);
 
-  const isOemCategory = activeCardFilter === 'TOTAL_OEM';
-  const isStockCategory = ['TOTAL_SPARE_PARTS', 'SERIALIZED_PARTS', 'NON_SERIALIZED', 'DELHI_STORE', 'BENGALURU_STORE', 'LOW_STOCK', 'OUT_OF_STOCK'].includes(activeCardFilter);
+  const isOemCategory = activeCardFilter === 'TOTAL_OEM' || activeCardFilter === 'DELHI_STORE' || activeCardFilter === 'BENGALURU_STORE';
+  const isStockCategory = ['TOTAL_SPARE_PARTS', 'SERIALIZED_PARTS', 'NON_SERIALIZED', 'LOW_STOCK', 'OUT_OF_STOCK'].includes(activeCardFilter);
   const isActivityCategory = ['TODAYS_ACTIVITIES', 'AUDIT_LOGS'].includes(activeCardFilter);
   const isDispatchCategory = activeCardFilter === 'TODAYS_DISPATCH';
   const isPickupCategory = activeCardFilter === 'TODAYS_PICKUP';
@@ -504,7 +615,7 @@ export const DashboardPage: React.FC = () => {
             icon={card.icon}
             color={card.color}
             isActive={activeCardFilter === card.id}
-            onClick={() => setActiveCardFilter(card.id)}
+            onClick={() => handleCardClick(card.id)}
           />
         ))}
       </div>
@@ -521,41 +632,85 @@ export const DashboardPage: React.FC = () => {
                 <h3 className="font-extrabold text-slate-900 text-sm">
                   Showing results for: <span className="text-indigo-600 font-black">
                     {isOemCategory
-                      ? `OEM Breakdown (${oemBreakdown.oemList.length} OEMs | Grand Total: ${oemBreakdown.grandTotalParts.toLocaleString('en-IN')} Parts)`
+                      ? `OEM Breakdown (${oemBreakdown.distinctOemCount} OEMs | Total Uploaded: ${oemBreakdown.grandTotalUploaded.toLocaleString('en-IN')} Parts)`
                       : activeCardObj.title}
                   </span>
                 </h3>
                 <span className="text-xs bg-indigo-100 text-indigo-800 font-extrabold px-2.5 py-0.5 rounded-full border border-indigo-200">
-                  {currentListLength} {currentListLength === 1 ? 'item' : 'items'}
+                  {currentListLength} {currentListLength === 1 ? 'record' : 'records'}
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 font-medium mt-0.5">
-                Click any top summary card above to instantly filter and inspect matching records in real time.
+                Click any top summary card or use store filters below to inspect stock &amp; OEM breakdowns in real time.
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {/* Store Location Filter Buttons (Delhi vs Bengaluru vs All Stores) */}
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0">
+              <button
+                type="button"
+                onClick={() => setSelectedStore('ALL')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
+                  selectedStore === 'ALL'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/70'
+                }`}
+              >
+                All Stores
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedStore('DELHI');
+                  setActiveCardFilter('DELHI_STORE');
+                }}
+                className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
+                  selectedStore === 'DELHI'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/70'
+                }`}
+              >
+                Delhi Store
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedStore('BENGALURU');
+                  setActiveCardFilter('BENGALURU_STORE');
+                }}
+                className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
+                  selectedStore === 'BENGALURU'
+                    ? 'bg-orange-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/70'
+                }`}
+              >
+                Bengaluru Store
+              </button>
+            </div>
+
             {/* Search Input */}
             <div className="relative">
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
               <input
                 type="text"
-                placeholder="Search filtered list..."
+                placeholder="Search vendor / store..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:border-indigo-600 w-44 md:w-56"
+                className="pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:border-indigo-600 w-44 md:w-52"
               />
             </div>
 
             {/* Reset View Button */}
-            {activeCardFilter !== 'TOTAL_SPARE_PARTS' && (
+            {(activeCardFilter !== 'TOTAL_SPARE_PARTS' || selectedStore !== 'ALL') && (
               <button
                 onClick={() => {
                   setActiveCardFilter('TOTAL_SPARE_PARTS');
+                  setSelectedStore('ALL');
                   setSearchQuery('');
                 }}
-                className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1.5 border border-slate-300 transition-colors shrink-0 shadow-2xs"
+                className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1.5 border border-slate-300 transition-colors shrink-0 shadow-2xs cursor-pointer"
               >
                 <XCircle className="w-3.5 h-3.5 text-slate-500" />
                 Reset View
@@ -571,11 +726,13 @@ export const DashboardPage: React.FC = () => {
               <tr className="border-b border-slate-200 bg-slate-50/70 text-[11px] font-extrabold text-slate-700 uppercase tracking-wider">
                 {isOemCategory && (
                   <>
-                    <th className="p-3">#</th>
+                    <th className="p-3">Store Location</th>
                     <th className="p-3">OEM Vendor Name</th>
                     <th className="p-3 text-center">Serialized Parts</th>
                     <th className="p-3 text-center">Non-Serialized Parts</th>
-                    <th className="p-3 text-center">Total Spare Parts</th>
+                    <th className="p-3 text-center">Available Quantity</th>
+                    <th className="p-3 text-center">Reserved Quantity</th>
+                    <th className="p-3 text-center">Total Uploaded Quantity</th>
                     <th className="p-3 text-right">Actions</th>
                   </>
                 )}
@@ -633,7 +790,7 @@ export const DashboardPage: React.FC = () => {
                 if (isLoadingInventory) {
                   return (
                     <tr>
-                      <td colSpan={7} className="p-8 text-center text-slate-500 font-semibold">
+                      <td colSpan={8} className="p-8 text-center text-slate-500 font-semibold">
                         <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
                         Loading drill-down data...
                       </td>
@@ -645,9 +802,9 @@ export const DashboardPage: React.FC = () => {
                   if (oemBreakdown.oemList.length === 0) {
                     return (
                       <tr>
-                        <td colSpan={6} className="p-8 text-center text-slate-500 font-semibold">
+                        <td colSpan={8} className="p-8 text-center text-slate-500 font-semibold">
                           <Cpu className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                          No OEM vendors found matching search query.
+                          No OEM vendors found matching selected store &amp; search filters.
                         </td>
                       </tr>
                     );
@@ -657,7 +814,18 @@ export const DashboardPage: React.FC = () => {
                     <>
                       {oemBreakdown.oemList.map((oem, idx) => (
                         <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="p-3 font-bold text-slate-400">{idx + 1}</td>
+                          <td className="p-3 font-semibold text-slate-800">
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold border ${
+                              oem.storeLocation.includes('Delhi') && oem.storeLocation.includes('Bengaluru')
+                                ? 'bg-purple-50 text-purple-800 border-purple-200'
+                                : oem.storeLocation.includes('Delhi')
+                                ? 'bg-blue-50 text-blue-800 border-blue-200'
+                                : 'bg-orange-50 text-orange-800 border-orange-200'
+                            }`}>
+                              <MapPin className="w-3 h-3" />
+                              {oem.storeLocation}
+                            </span>
+                          </td>
                           <td className="p-3 font-extrabold text-slate-900 flex items-center gap-2">
                             <Cpu className="w-4 h-4 text-cyan-600 shrink-0" />
                             <span>{oem.oemName}</span>
@@ -672,13 +840,25 @@ export const DashboardPage: React.FC = () => {
                               {oem.nonSerializedCount.toLocaleString('en-IN')}
                             </span>
                           </td>
+                          <td className="p-3 text-center font-mono">
+                            <span className="bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-lg border border-emerald-200 font-extrabold text-xs">
+                              {oem.availableQuantity.toLocaleString('en-IN')}
+                            </span>
+                          </td>
+                          <td className="p-3 text-center font-mono">
+                            <span className="bg-amber-50 text-amber-700 px-2.5 py-1 rounded-lg border border-amber-200 font-extrabold text-xs">
+                              {oem.reservedQuantity.toLocaleString('en-IN')}
+                            </span>
+                          </td>
                           <td className="p-3 text-center font-black text-slate-900 text-sm">
-                            {oem.totalParts.toLocaleString('en-IN')} PCS
+                            <span className="bg-slate-100 text-slate-900 px-2.5 py-1 rounded-lg border border-slate-300 font-black text-xs">
+                              {oem.totalUploadedQuantity.toLocaleString('en-IN')} PCS
+                            </span>
                           </td>
                           <td className="p-3 text-right">
                             <button
                               onClick={() => navigate(`/stock-list?search=${encodeURIComponent(oem.oemName)}`)}
-                              className="px-2.5 py-1 rounded-lg bg-cyan-50 text-cyan-700 hover:bg-cyan-100 text-xs font-bold border border-cyan-200 transition-colors inline-flex items-center gap-1"
+                              className="px-2.5 py-1 rounded-lg bg-cyan-50 text-cyan-700 hover:bg-cyan-100 text-xs font-bold border border-cyan-200 transition-colors inline-flex items-center gap-1 cursor-pointer"
                             >
                               Filter OEM <ChevronRight className="w-3 h-3" />
                             </button>
@@ -686,25 +866,41 @@ export const DashboardPage: React.FC = () => {
                         </tr>
                       ))}
                       <tr className="bg-slate-900 text-white font-black border-t-2 border-slate-700">
-                        <td className="p-3 text-xs uppercase tracking-wider text-slate-400">Σ</td>
-                        <td className="p-3 text-sm font-black text-white uppercase tracking-wider">
-                          GRAND TOTAL SUMMARY ({oemBreakdown.oemList.length} OEMs)
+                        <td className="p-3 font-semibold text-slate-300 text-xs">
+                          <span className="bg-slate-800 text-slate-200 px-2.5 py-1 rounded-lg border border-slate-600 font-bold text-xs">
+                            {selectedStore === 'ALL' ? 'All Stores' : selectedStore === 'DELHI' ? 'Delhi Store' : 'Bengaluru Store'}
+                          </span>
+                        </td>
+                        <td className="p-3 text-xs font-black text-white uppercase tracking-wider">
+                          GRAND TOTAL SUMMARY ({oemBreakdown.distinctOemCount} OEMs)
                         </td>
                         <td className="p-3 text-center font-mono text-xs">
-                          <span className="bg-indigo-950 text-indigo-200 px-3 py-1 rounded-lg border border-indigo-700 font-black">
+                          <span className="bg-indigo-950 text-indigo-200 px-2.5 py-1 rounded-lg border border-indigo-700 font-black">
                             {oemBreakdown.grandTotalSerialized.toLocaleString('en-IN')} Serialized
                           </span>
                         </td>
                         <td className="p-3 text-center font-mono text-xs">
-                          <span className="bg-purple-950 text-purple-200 px-3 py-1 rounded-lg border border-purple-700 font-black">
+                          <span className="bg-purple-950 text-purple-200 px-2.5 py-1 rounded-lg border border-purple-700 font-black">
                             {oemBreakdown.grandTotalNonSerialized.toLocaleString('en-IN')} Non-Serialized
                           </span>
                         </td>
-                        <td className="p-3 text-center text-sm font-black text-emerald-400">
-                          {oemBreakdown.grandTotalParts.toLocaleString('en-IN')} TOTAL PARTS
+                        <td className="p-3 text-center font-mono text-xs">
+                          <span className="bg-emerald-950 text-emerald-300 px-2.5 py-1 rounded-lg border border-emerald-700 font-black">
+                            {oemBreakdown.grandTotalAvailable.toLocaleString('en-IN')} Avail
+                          </span>
+                        </td>
+                        <td className="p-3 text-center font-mono text-xs">
+                          <span className="bg-amber-950 text-amber-300 px-2.5 py-1 rounded-lg border border-amber-700 font-black">
+                            {oemBreakdown.grandTotalReserved.toLocaleString('en-IN')} Reserved
+                          </span>
+                        </td>
+                        <td className="p-3 text-center text-xs font-black text-cyan-300">
+                          <span className="bg-cyan-950 text-cyan-200 px-3 py-1 rounded-lg border border-cyan-700 font-black text-xs">
+                            {oemBreakdown.grandTotalUploaded.toLocaleString('en-IN')} TOTAL
+                          </span>
                         </td>
                         <td className="p-3 text-right text-[11px] text-slate-400 font-bold">
-                          All Vendors Combined
+                          All Vendors
                         </td>
                       </tr>
                     </>
@@ -895,7 +1091,14 @@ export const DashboardPage: React.FC = () => {
       {/* Store Distribution Cards & Quick Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
         {/* Delhi Store */}
-        <Card className="border-l-4 border-l-blue-600">
+        <Card
+          className={`border-l-4 border-l-blue-600 transition-all cursor-pointer hover:shadow-md ${selectedStore === 'DELHI' ? 'ring-2 ring-blue-500 bg-blue-50/20' : ''}`}
+          onClick={() => {
+            setSelectedStore('DELHI');
+            setActiveCardFilter('DELHI_STORE');
+            tableSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }}
+        >
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center border border-blue-200 shadow-inner">
@@ -910,22 +1113,29 @@ export const DashboardPage: React.FC = () => {
           </div>
           <div className="grid grid-cols-3 gap-2.5">
             <div className="bg-gradient-to-b from-slate-50 to-slate-100/70 border border-slate-200/80 rounded-xl p-3 text-center shadow-inner">
-              <p className="text-xl font-extrabold text-slate-900">{delhi.totalItems ?? 0}</p>
-              <p className="text-[10px] font-bold text-slate-600 mt-0.5">Total Spares</p>
+              <p className="text-xl font-extrabold text-slate-900">{delhi.totalQuantity ?? delhi.totalItems ?? 0}</p>
+              <p className="text-[10px] font-bold text-slate-600 mt-0.5">Total Uploaded</p>
             </div>
             <div className="bg-gradient-to-b from-slate-50 to-slate-100/70 border border-slate-200/80 rounded-xl p-3 text-center shadow-inner">
               <p className="text-xl font-extrabold text-emerald-600">{delhi.availableQuantity ?? 0}</p>
               <p className="text-[10px] font-bold text-slate-600 mt-0.5">Available</p>
             </div>
             <div className="bg-gradient-to-b from-slate-50 to-slate-100/70 border border-slate-200/80 rounded-xl p-3 text-center shadow-inner">
-              <p className="text-xl font-extrabold text-amber-600">{inv.lowStockCount ?? 0}</p>
-              <p className="text-[10px] font-bold text-slate-600 mt-0.5">Low Stock</p>
+              <p className="text-xl font-extrabold text-amber-600">{Math.max(0, (delhi.totalQuantity ?? 0) - (delhi.availableQuantity ?? 0))}</p>
+              <p className="text-[10px] font-bold text-slate-600 mt-0.5">Reserved</p>
             </div>
           </div>
         </Card>
 
         {/* Bengaluru Store */}
-        <Card className="border-l-4 border-l-orange-500">
+        <Card
+          className={`border-l-4 border-l-orange-500 transition-all cursor-pointer hover:shadow-md ${selectedStore === 'BENGALURU' ? 'ring-2 ring-orange-500 bg-orange-50/20' : ''}`}
+          onClick={() => {
+            setSelectedStore('BENGALURU');
+            setActiveCardFilter('BENGALURU_STORE');
+            tableSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }}
+        >
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl bg-orange-50 flex items-center justify-center border border-orange-200 shadow-inner">
@@ -940,16 +1150,16 @@ export const DashboardPage: React.FC = () => {
           </div>
           <div className="grid grid-cols-3 gap-2.5">
             <div className="bg-gradient-to-b from-slate-50 to-slate-100/70 border border-slate-200/80 rounded-xl p-3 text-center shadow-inner">
-              <p className="text-xl font-extrabold text-slate-900">{blr.totalItems ?? 0}</p>
-              <p className="text-[10px] font-bold text-slate-600 mt-0.5">Total Spares</p>
+              <p className="text-xl font-extrabold text-slate-900">{blr.totalQuantity ?? blr.totalItems ?? 0}</p>
+              <p className="text-[10px] font-bold text-slate-600 mt-0.5">Total Uploaded</p>
             </div>
             <div className="bg-gradient-to-b from-slate-50 to-slate-100/70 border border-slate-200/80 rounded-xl p-3 text-center shadow-inner">
               <p className="text-xl font-extrabold text-emerald-600">{blr.availableQuantity ?? 0}</p>
               <p className="text-[10px] font-bold text-slate-600 mt-0.5">Available</p>
             </div>
             <div className="bg-gradient-to-b from-slate-50 to-slate-100/70 border border-slate-200/80 rounded-xl p-3 text-center shadow-inner">
-              <p className="text-xl font-extrabold text-slate-400">0</p>
-              <p className="text-[10px] font-bold text-slate-600 mt-0.5">Low Stock</p>
+              <p className="text-xl font-extrabold text-amber-600">{Math.max(0, (blr.totalQuantity ?? 0) - (blr.availableQuantity ?? 0))}</p>
+              <p className="text-[10px] font-bold text-slate-600 mt-0.5">Reserved</p>
             </div>
           </div>
         </Card>

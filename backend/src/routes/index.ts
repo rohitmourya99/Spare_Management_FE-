@@ -15,6 +15,7 @@ import {
 import { swapHistoryController } from '../controllers/swapHistory.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { UserRole } from '../types';
+import { ApiResponse } from '../utils/response.util';
 
 // Permissive file filter: accept xlsx/xls/csv by extension (case-insensitive) regardless of MIME type
 // This prevents 400 Bad Request errors when browsers send application/octet-stream for .xlsx files
@@ -285,6 +286,56 @@ organizationRoutes.get('/', async (_req, res, next) => {
         },
       ],
     });
+  }
+});
+
+organizationRoutes.post('/', async (req, res, next) => {
+  try {
+    const { name, code, primaryWarehouseName } = req.body;
+    if (!name || !code) {
+      ApiResponse.badRequest(res, 'Organization Name and Organization Code are required');
+      return;
+    }
+
+    const cleanCode = String(code).trim().toUpperCase();
+    const cleanName = String(name).trim();
+
+    const existing = await prisma.organization.findFirst({
+      where: {
+        OR: [
+          { id: cleanCode },
+          { code: cleanCode },
+        ],
+      },
+    });
+
+    if (existing) {
+      ApiResponse.badRequest(res, `Organization code '${cleanCode}' already exists`);
+      return;
+    }
+
+    const newOrg = await prisma.organization.create({
+      data: {
+        id: cleanCode,
+        name: cleanName,
+        code: cleanCode,
+        status: 'ACTIVE',
+      },
+    });
+
+    if (primaryWarehouseName) {
+      await prisma.location.create({
+        data: {
+          name: String(primaryWarehouseName).trim(),
+          city: 'Main Store',
+          organizationId: newOrg.id,
+        },
+      }).catch(() => {});
+    }
+
+    ApiResponse.created(res, newOrg, `Organization '${cleanName}' created successfully`);
+  } catch (err) {
+    next(err);
   }
 });
 

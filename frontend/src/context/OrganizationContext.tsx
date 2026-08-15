@@ -13,6 +13,7 @@ interface OrganizationContextType {
   setSelectedOrg: (orgId: string) => void;
   organizations: Organization[];
   isLoadingOrgs: boolean;
+  refetchOrganizations: () => Promise<void>;
 }
 
 const OrganizationContext = createContext<OrganizationContextType>({
@@ -20,6 +21,7 @@ const OrganizationContext = createContext<OrganizationContextType>({
   setSelectedOrg: () => {},
   organizations: [{ id: 'BHEL', name: 'BHEL', code: 'BHEL', status: 'ACTIVE' }],
   isLoadingOrgs: false,
+  refetchOrganizations: async () => {},
 });
 
 export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -39,26 +41,22 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     window.location.reload();
   };
 
-  useEffect(() => {
-    let isMounted = true;
-    const fetchOrgs = async () => {
-      setIsLoadingOrgs(true);
-      try {
-        const response = await api.get('/organizations');
-        if (response.data?.data && Array.isArray(response.data.data) && response.data.data.length > 0) {
-          if (isMounted) setOrganizations(response.data.data);
-        }
-      } catch (err) {
-        // Fallback default BHEL
-      } finally {
-        if (isMounted) setIsLoadingOrgs(false);
+  const refetchOrganizations = async () => {
+    setIsLoadingOrgs(true);
+    try {
+      const response = await api.get('/organizations');
+      if (response.data?.data && Array.isArray(response.data.data) && response.data.data.length > 0) {
+        setOrganizations(response.data.data);
       }
-    };
+    } catch (err) {
+      // Fallback default BHEL
+    } finally {
+      setIsLoadingOrgs(false);
+    }
+  };
 
-    fetchOrgs();
-    return () => {
-      isMounted = false;
-    };
+  useEffect(() => {
+    refetchOrganizations();
   }, []);
 
   return (
@@ -68,6 +66,7 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         setSelectedOrg,
         organizations,
         isLoadingOrgs,
+        refetchOrganizations,
       }}
     >
       {children}

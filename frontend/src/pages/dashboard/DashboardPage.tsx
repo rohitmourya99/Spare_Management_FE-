@@ -519,7 +519,85 @@ export const DashboardPage: React.FC = () => {
     };
   }, [inventoryItemsData, selectedStore, searchQuery]);
 
-  const isOemCategory = activeCardFilter === 'TOTAL_OEM' || activeCardFilter === 'DELHI_STORE' || activeCardFilter === 'BENGALURU_STORE';
+  // Store-specific Stock Breakdown calculations (for Delhi Store & Bengaluru Store views)
+  const storeStockBreakdown = useMemo(() => {
+    if (!inventoryItemsData || !Array.isArray(inventoryItemsData)) {
+      return {
+        items: [],
+        totalSerialized: 0,
+        totalNonSerialized: 0,
+        totalAvailable: 0,
+        totalReserved: 0,
+        grandTotalQuantity: 0,
+      };
+    }
+
+    let items = [...inventoryItemsData];
+
+    if (activeCardFilter === 'DELHI_STORE' || selectedStore === 'DELHI') {
+      items = items.filter((i: any) => getStoreName(i).includes('delhi'));
+    } else if (activeCardFilter === 'BENGALURU_STORE' || selectedStore === 'BENGALURU') {
+      items = items.filter((i: any) => getStoreName(i).includes('bengaluru') || getStoreName(i).includes('blr'));
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      items = items.filter(
+        (i: any) =>
+          i.productName?.toLowerCase().includes(q) ||
+          i.partCode?.toLowerCase().includes(q) ||
+          i.serialNumber?.toLowerCase().includes(q) ||
+          i.oem?.name?.toLowerCase().includes(q) ||
+          i.spareId?.toLowerCase().includes(q)
+      );
+    }
+
+    const processedItems = items.map((item: any) => {
+      const isSer = isItemSerialized(item);
+      const avail = getAvailableQty(item);
+      const res = getReservedQty(item);
+      const total = avail + res;
+      const storeRaw = item.store || item.location?.name || (getStoreName(item).includes('bengaluru') ? 'Bengaluru' : 'Delhi');
+
+      return {
+        ...item,
+        isSer,
+        availQty: avail,
+        reservedQty: res,
+        totalQty: total,
+        displayStore: storeRaw.includes('Bengaluru') || storeRaw.includes('blr') ? 'Bengaluru Store' : 'Delhi Store',
+      };
+    });
+
+    let totalSerialized = 0;
+    let totalNonSerialized = 0;
+    let totalAvailable = 0;
+    let totalReserved = 0;
+    let grandTotalQuantity = 0;
+
+    for (const p of processedItems) {
+      if (p.isSer) {
+        totalSerialized += p.totalQty;
+      } else {
+        totalNonSerialized += p.totalQty;
+      }
+      totalAvailable += p.availQty;
+      totalReserved += p.reservedQty;
+      grandTotalQuantity += p.totalQty;
+    }
+
+    return {
+      items: processedItems,
+      totalSerialized,
+      totalNonSerialized,
+      totalAvailable,
+      totalReserved,
+      grandTotalQuantity,
+    };
+  }, [inventoryItemsData, activeCardFilter, selectedStore, searchQuery]);
+
+  const isOemCategory = activeCardFilter === 'TOTAL_OEM';
+  const isStoreCategory = activeCardFilter === 'DELHI_STORE' || activeCardFilter === 'BENGALURU_STORE';
   const isStockCategory = ['TOTAL_SPARE_PARTS', 'SERIALIZED_PARTS', 'NON_SERIALIZED', 'LOW_STOCK', 'OUT_OF_STOCK'].includes(activeCardFilter);
   const isActivityCategory = ['TODAYS_ACTIVITIES', 'AUDIT_LOGS'].includes(activeCardFilter);
   const isDispatchCategory = activeCardFilter === 'TODAYS_DISPATCH';
@@ -528,6 +606,8 @@ export const DashboardPage: React.FC = () => {
 
   const currentListLength = isOemCategory
     ? oemBreakdown.oemList.length
+    : isStoreCategory
+    ? storeStockBreakdown.items.length
     : isStockCategory
     ? filteredInventoryItems.length
     : isActivityCategory
@@ -632,7 +712,9 @@ export const DashboardPage: React.FC = () => {
                 <h3 className="font-extrabold text-slate-900 text-sm">
                   Showing results for: <span className="text-indigo-600 font-black">
                     {isOemCategory
-                      ? `OEM Breakdown (${oemBreakdown.distinctOemCount} OEMs | Total Uploaded: ${oemBreakdown.grandTotalUploaded.toLocaleString('en-IN')} Parts)`
+                      ? `Total OEMs Breakdown (${oemBreakdown.distinctOemCount} OEMs | Total: ${oemBreakdown.grandTotalUploaded.toLocaleString('en-IN')} Stock)`
+                      : isStoreCategory
+                      ? `${activeCardFilter === 'DELHI_STORE' ? 'Delhi Store' : 'Bengaluru Store'} Stock Breakdown (${storeStockBreakdown.grandTotalQuantity.toLocaleString('en-IN')} Total Stock)`
                       : activeCardObj.title}
                   </span>
                 </h3>
@@ -730,6 +812,17 @@ export const DashboardPage: React.FC = () => {
                     <th className="p-3 text-center">Serialized Parts</th>
                     <th className="p-3 text-center">Non-Serialized Parts</th>
                     <th className="p-3 text-center">Total Stock Quantity</th>
+                    <th className="p-3 text-right">Actions</th>
+                  </>
+                )}
+                {isStoreCategory && (
+                  <>
+                    <th className="p-3">Store Location</th>
+                    <th className="p-3">Part Code / Name</th>
+                    <th className="p-3 text-center">Type</th>
+                    <th className="p-3 text-center">Available Quantity</th>
+                    <th className="p-3 text-center">Reserved Quantity</th>
+                    <th className="p-3 text-center">Total Quantity</th>
                     <th className="p-3 text-right">Actions</th>
                   </>
                 )}
@@ -863,6 +956,118 @@ export const DashboardPage: React.FC = () => {
                         </td>
                         <td className="p-3 text-right text-[11px] text-slate-400 font-bold">
                           All Vendors
+                        </td>
+                      </tr>
+                    </>
+                  );
+                }
+
+                if (isStoreCategory) {
+                  if (storeStockBreakdown.items.length === 0) {
+                    return (
+                      <tr>
+                        <td colSpan={7} className="p-8 text-center text-slate-500 font-semibold">
+                          <MapPin className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                          No spare parts found matching selected store &amp; search filters.
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  return (
+                    <>
+                      {storeStockBreakdown.items.map((item: any, idx: number) => (
+                        <tr key={item.id || idx} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="p-3 font-semibold text-slate-800">
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold border ${
+                              item.displayStore.includes('Delhi')
+                                ? 'bg-blue-50 text-blue-800 border-blue-200'
+                                : 'bg-orange-50 text-orange-800 border-orange-200'
+                            }`}>
+                              <MapPin className="w-3 h-3" />
+                              {item.displayStore}
+                            </span>
+                          </td>
+                          <td className="p-3 font-bold text-slate-900">
+                            <div>{item.productName}</div>
+                            <div className="text-[10px] text-indigo-600 font-mono font-bold mt-0.5">
+                              {item.spareId || item.partCode} {item.partCode && item.spareId !== item.partCode ? `· SKU: ${item.partCode}` : ''} {item.oem?.name ? `· OEM: ${item.oem.name}` : ''}
+                            </div>
+                          </td>
+                          <td className="p-3 text-center font-mono">
+                            {item.isSer ? (
+                              <span className="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-lg border border-indigo-200 font-extrabold text-xs">
+                                Serialized
+                              </span>
+                            ) : (
+                              <span className="bg-purple-50 text-purple-700 px-2.5 py-1 rounded-lg border border-purple-200 font-extrabold text-xs">
+                                Non-Serialized
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-3 text-center font-mono">
+                            <span className="bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-lg border border-emerald-200 font-extrabold text-xs">
+                              {item.availQty.toLocaleString('en-IN')}
+                            </span>
+                          </td>
+                          <td className="p-3 text-center font-mono">
+                            <span className="bg-amber-50 text-amber-700 px-2.5 py-1 rounded-lg border border-amber-200 font-extrabold text-xs">
+                              {item.reservedQty.toLocaleString('en-IN')}
+                            </span>
+                          </td>
+                          <td className="p-3 text-center font-black text-slate-900 text-sm">
+                            <span className="bg-slate-100 text-slate-900 px-2.5 py-1 rounded-lg border border-slate-300 font-black text-xs">
+                              {item.totalQty.toLocaleString('en-IN')} PCS
+                            </span>
+                          </td>
+                          <td className="p-3 text-right">
+                            <button
+                              onClick={() => navigate(`/stock-list?search=${encodeURIComponent(item.partCode || item.productName || '')}`)}
+                              className="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-xs font-bold border border-indigo-200 transition-colors inline-flex items-center gap-1 cursor-pointer"
+                            >
+                              Inspect <ChevronRight className="w-3 h-3" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+
+                      {/* Store Grand Total Summary Row */}
+                      <tr className="bg-slate-900 text-white font-black border-t-2 border-slate-700">
+                        <td className="p-3 font-semibold text-slate-300 text-xs">
+                          <span className="bg-slate-800 text-slate-200 px-2.5 py-1 rounded-lg border border-slate-600 font-bold text-xs">
+                            {activeCardFilter === 'DELHI_STORE' || selectedStore === 'DELHI' ? 'Delhi Store' : 'Bengaluru Store'}
+                          </span>
+                        </td>
+                        <td className="p-3 text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
+                          <span>Σ</span>
+                          <span>Store Grand Total</span>
+                          <span className="text-slate-400 text-xs font-normal font-mono">({storeStockBreakdown.items.length} Parts)</span>
+                        </td>
+                        <td className="p-3 text-center font-mono text-xs">
+                          <span className="bg-indigo-950 text-indigo-200 px-2 py-0.5 rounded border border-indigo-700 font-bold block text-[10px]">
+                            Ser: {storeStockBreakdown.totalSerialized.toLocaleString('en-IN')}
+                          </span>
+                          <span className="bg-purple-950 text-purple-200 px-2 py-0.5 rounded border border-purple-700 font-bold block text-[10px] mt-0.5">
+                            Non-Ser: {storeStockBreakdown.totalNonSerialized.toLocaleString('en-IN')}
+                          </span>
+                        </td>
+                        <td className="p-3 text-center font-mono text-xs">
+                          <span className="bg-emerald-950 text-emerald-300 px-2.5 py-1 rounded-lg border border-emerald-700 font-black">
+                            {storeStockBreakdown.totalAvailable.toLocaleString('en-IN')} Avail
+                          </span>
+                        </td>
+                        <td className="p-3 text-center font-mono text-xs">
+                          <span className="bg-amber-950 text-amber-300 px-2.5 py-1 rounded-lg border border-amber-700 font-black">
+                            {storeStockBreakdown.totalReserved.toLocaleString('en-IN')} Reserved
+                          </span>
+                        </td>
+                        <td className="p-3 text-center text-xs font-black text-cyan-300">
+                          <span className="bg-cyan-950 text-cyan-200 px-3 py-1 rounded-lg border border-cyan-700 font-black text-xs">
+                            {storeStockBreakdown.grandTotalQuantity.toLocaleString('en-IN')} TOTAL
+                          </span>
+                        </td>
+                        <td className="p-3 text-right text-[11px] text-slate-400 font-bold">
+                          Store Combined
                         </td>
                       </tr>
                     </>

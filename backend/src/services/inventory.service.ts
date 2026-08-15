@@ -855,17 +855,26 @@ export class InventoryService {
   /**
    * Get location inventory items with search and filters
    */
-  async getLocationInventories(filters: {
-    search?: string;
-    sublocation?: string;
-    state?: string;
-    buildingName?: string;
-    roomId?: string;
-    partId?: string;
-    page?: string;
-    limit?: string;
-  }) {
+  async getLocationInventories(
+    filters: {
+      search?: string;
+      sublocation?: string;
+      state?: string;
+      buildingName?: string;
+      roomId?: string;
+      partId?: string;
+      page?: string;
+      limit?: string;
+    },
+    organizationId: string = 'BHEL'
+  ) {
     const { page, limit, skip } = parsePagination(filters);
+    if (organizationId !== 'BHEL') {
+      return {
+        items: [],
+        pagination: buildPagination(page, limit, 0),
+      };
+    }
     const where: Prisma.LocationInventoryWhereInput = {};
 
     if (filters.state) where.state = { equals: filters.state };
@@ -922,15 +931,25 @@ export class InventoryService {
   /**
    * Get replacement swap audit logs with search and pagination
    */
-  async getReplacementAuditLogs(filters: {
-    search?: string;
-    state?: string;
-    buildingName?: string;
-    roomId?: string;
-    page?: string;
-    limit?: string;
-  }) {
+  async getReplacementAuditLogs(
+    filters: {
+      search?: string;
+      state?: string;
+      buildingName?: string;
+      roomId?: string;
+      page?: string;
+      limit?: string;
+    },
+    organizationId: string = 'BHEL'
+  ) {
     const { page, limit, skip } = parsePagination(filters);
+    if (organizationId !== 'BHEL') {
+      return {
+        data: [],
+        logs: [],
+        pagination: buildPagination(page, limit, 0),
+      };
+    }
     const where: Prisma.ReplacementAuditLogWhereInput = {};
 
     if (filters.state) where.state = { equals: filters.state };

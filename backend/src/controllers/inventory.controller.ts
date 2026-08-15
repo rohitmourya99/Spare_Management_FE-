@@ -106,12 +106,14 @@ export class InventoryController {
   }
 
   async getLocationInventories(req: Request, res: Response): Promise<void> {
-    const result = await inventoryService.getLocationInventories(req.query as any);
+    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
+    const result = await inventoryService.getLocationInventories(req.query as any, orgId);
     ApiResponse.paginated(res, result.items, result.pagination);
   }
 
   async getReplacementAuditLogs(req: Request, res: Response): Promise<void> {
-    const result = await inventoryService.getReplacementAuditLogs(req.query as any);
+    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
+    const result = await inventoryService.getReplacementAuditLogs(req.query as any, orgId);
     ApiResponse.paginated(res, result.logs, result.pagination);
   }
 

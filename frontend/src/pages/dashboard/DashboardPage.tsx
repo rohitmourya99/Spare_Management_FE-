@@ -54,10 +54,60 @@ export const DashboardPage: React.FC = () => {
     queryKey: ['dashboard-inventory-items'],
     queryFn: async () => {
       const res = await api.get('/inventory?limit=300');
-      return res.data.data.items || [];
+      return Array.isArray(res.data?.data) ? res.data.data : (res.data?.data?.items || []);
     },
     refetchInterval: false,
   });
+
+  const { data: dispatchesQueryData } = useQuery({
+    queryKey: ['dashboard-dispatches-list'],
+    queryFn: async () => {
+      try {
+        const res = await api.get('/dispatch?limit=100');
+        return Array.isArray(res.data?.data) ? res.data.data : (res.data?.data?.items || []);
+      } catch (e) {
+        return [];
+      }
+    },
+    refetchInterval: false,
+    refetchOnWindowFocus: false,
+  });
+
+  const { data: pickupsQueryData } = useQuery({
+    queryKey: ['dashboard-pickups-list'],
+    queryFn: async () => {
+      try {
+        const res = await api.get('/pickup?limit=100');
+        return Array.isArray(res.data?.data) ? res.data.data : (res.data?.data?.items || []);
+      } catch (e) {
+        return [];
+      }
+    },
+    refetchInterval: false,
+    refetchOnWindowFocus: false,
+  });
+
+  // Robust inventory classification helpers
+  const isItemSerialized = (i: any) =>
+    i.isSerialized === true ||
+    i.is_serialized === true ||
+    i.isSerialized === 'true' ||
+    i.is_serialized === 'true' ||
+    i.isSerialized === 1 ||
+    i.is_serialized === 1 ||
+    i.type === 'SERIALIZED' ||
+    Boolean(i.serialNumber && i.serialNumber !== 'N/A' && i.serialNumber !== '-');
+
+  const getAvailableQty = (i: any) =>
+    Number(i.availableQuantity ?? i.quantity ?? i.available_quantity ?? 0);
+
+  const getMinStockThreshold = (i: any) =>
+    Number(i.minStock ?? i.min_stock ?? i.minimumStock ?? 5);
+
+  const getStoreName = (i: any) =>
+    (i.store || i.storeLocation || i.locationName || i.location?.name || i.location || i.warehouse || i.store_location || '')
+      .toString()
+      .toLowerCase();
 
   // Filter Stock items based on active card filter & search input
   const filteredInventoryItems = useMemo(() => {
@@ -66,30 +116,22 @@ export const DashboardPage: React.FC = () => {
 
     switch (activeCardFilter) {
       case 'SERIALIZED_PARTS':
-        items = items.filter((i: any) => i.is_serialized || i.isSerialized);
+        items = items.filter((i: any) => isItemSerialized(i));
         break;
       case 'NON_SERIALIZED':
-        items = items.filter((i: any) => !i.is_serialized && !i.isSerialized);
+        items = items.filter((i: any) => !isItemSerialized(i));
         break;
       case 'DELHI_STORE':
-        items = items.filter((i: any) =>
-          (i.store || i.location?.name || i.location || '').toLowerCase().includes('delhi')
-        );
+        items = items.filter((i: any) => getStoreName(i).includes('delhi'));
         break;
       case 'BENGALURU_STORE':
-        items = items.filter((i: any) =>
-          (i.store || i.location?.name || i.location || '').toLowerCase().includes('bengaluru')
-        );
+        items = items.filter((i: any) => getStoreName(i).includes('bengaluru') || getStoreName(i).includes('blr'));
         break;
       case 'LOW_STOCK':
-        items = items.filter(
-          (i: any) =>
-            Number(i.availableQuantity ?? i.quantity) <= Number(i.minStock || i.min_stock || 5) &&
-            Number(i.availableQuantity ?? i.quantity) > 0
-        );
+        items = items.filter((i: any) => getAvailableQty(i) <= getMinStockThreshold(i) && getAvailableQty(i) > 0);
         break;
       case 'OUT_OF_STOCK':
-        items = items.filter((i: any) => Number(i.availableQuantity ?? i.quantity) === 0);
+        items = items.filter((i: any) => getAvailableQty(i) === 0);
         break;
       case 'TOTAL_OEM':
         items.sort((a: any, b: any) => (a.oem?.name || '').localeCompare(b.oem?.name || ''));
@@ -145,7 +187,7 @@ export const DashboardPage: React.FC = () => {
 
   // Filter Dispatches
   const filteredDispatches = useMemo(() => {
-    const dispatches = data?.recentDispatches || [];
+    const dispatches = (dispatchesQueryData && dispatchesQueryData.length > 0) ? dispatchesQueryData : (data?.recentDispatches || []);
     if (!Array.isArray(dispatches)) return [];
     let items = [...dispatches];
 
@@ -160,11 +202,11 @@ export const DashboardPage: React.FC = () => {
     }
 
     return items;
-  }, [data?.recentDispatches, searchQuery]);
+  }, [dispatchesQueryData, data?.recentDispatches, searchQuery]);
 
   // Filter Pickups
   const filteredPickups = useMemo(() => {
-    const pickups = data?.recentPickups || [];
+    const pickups = (pickupsQueryData && pickupsQueryData.length > 0) ? pickupsQueryData : (data?.recentPickups || []);
     if (!Array.isArray(pickups)) return [];
     let items = [...pickups];
 
@@ -179,7 +221,7 @@ export const DashboardPage: React.FC = () => {
     }
 
     return items;
-  }, [data?.recentPickups, searchQuery]);
+  }, [pickupsQueryData, data?.recentPickups, searchQuery]);
 
   // Filter Failed Logins
   const filteredFailedLogins = useMemo(() => {

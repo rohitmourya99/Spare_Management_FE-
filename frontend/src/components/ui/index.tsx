@@ -226,7 +226,7 @@ export const StatCard: React.FC<StatCardProps> = ({ title, value, icon: Icon, co
     <div
       role="button"
       tabIndex={0}
-      className={`bg-white rounded-2xl p-4 border transition-all duration-200 hover:-translate-y-1 hover:border-indigo-500 hover:shadow-xl cursor-pointer select-none pointer-events-auto ${
+      className={`bg-white rounded-2xl p-4 border transition-all duration-200 hover:-translate-y-1 hover:border-indigo-500 hover:shadow-xl cursor-pointer select-none ${
         isActive
           ? 'border-2 border-indigo-600 bg-indigo-50/40 ring-2 ring-indigo-500/20 shadow-lg font-black'
           : 'border-slate-200/90'
@@ -234,8 +234,7 @@ export const StatCard: React.FC<StatCardProps> = ({ title, value, icon: Icon, co
       style={{
         boxShadow: '0 4px 18px -2px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.03), inset 0 1px 0 0 rgba(255, 255, 255, 0.8)',
       }}
-      onClick={(e) => {
-        e.stopPropagation();
+      onClick={() => {
         if (onClick) onClick();
       }}
       onKeyDown={(e) => {
@@ -245,21 +244,21 @@ export const StatCard: React.FC<StatCardProps> = ({ title, value, icon: Icon, co
         }
       }}
     >
-      <div className="flex items-start justify-between mb-2.5 pointer-events-none">
-        <p className="text-[11px] font-bold text-slate-600 leading-tight max-w-[80%] pointer-events-none">{title}</p>
-        <div className="w-8 h-8 rounded-xl bg-gradient-to-b from-slate-50 to-slate-100 flex items-center justify-center shrink-0 border border-slate-200/80 shadow-inner pointer-events-none">
-          <Icon className={`w-4 h-4 ${color} pointer-events-none`} />
+      <div className="flex items-start justify-between mb-2.5">
+        <p className="text-[11px] font-bold text-slate-600 leading-tight max-w-[80%]">{title}</p>
+        <div className="w-8 h-8 rounded-xl bg-gradient-to-b from-slate-50 to-slate-100 flex items-center justify-center shrink-0 border border-slate-200/80 shadow-inner">
+          <Icon className={`w-4 h-4 ${color}`} />
         </div>
       </div>
-      <p className={`text-2xl font-black ${color} tracking-tight leading-none pointer-events-none`}>
+      <p className={`text-2xl font-black ${color} tracking-tight leading-none`}>
         {typeof value === 'number' ? value.toLocaleString('en-IN') : value}
       </p>
       {trend && (
         <p className="text-[10px] text-slate-500 mt-1.5 font-medium">
           <span className={trend.value >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
             {trend.value >= 0 ? '+' : ''}{trend.value}
-          </span>
-          {' '}{trend.label}
+          </span>{' '}
+          {trend.label}
         </p>
       )}
     </div>

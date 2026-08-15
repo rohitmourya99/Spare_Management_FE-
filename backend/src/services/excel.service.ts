@@ -676,7 +676,6 @@ export class ExcelService {
         try {
           const createRes = await prisma.locationInventory.createMany({
             data: chunk,
-            skipDuplicates: false,
           });
           totalCreated += createRes.count;
         } catch (err: any) {

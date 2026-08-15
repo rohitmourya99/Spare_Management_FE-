@@ -726,13 +726,10 @@ export const DashboardPage: React.FC = () => {
               <tr className="border-b border-slate-200 bg-slate-50/70 text-[11px] font-extrabold text-slate-700 uppercase tracking-wider">
                 {isOemCategory && (
                   <>
-                    <th className="p-3">Store Location</th>
-                    <th className="p-3">OEM Vendor Name</th>
+                    <th className="p-3">OEM Name</th>
                     <th className="p-3 text-center">Serialized Parts</th>
                     <th className="p-3 text-center">Non-Serialized Parts</th>
-                    <th className="p-3 text-center">Available Quantity</th>
-                    <th className="p-3 text-center">Reserved Quantity</th>
-                    <th className="p-3 text-center">Total Uploaded Quantity</th>
+                    <th className="p-3 text-center">Total Stock Quantity</th>
                     <th className="p-3 text-right">Actions</th>
                   </>
                 )}
@@ -790,7 +787,7 @@ export const DashboardPage: React.FC = () => {
                 if (isLoadingInventory) {
                   return (
                     <tr>
-                      <td colSpan={8} className="p-8 text-center text-slate-500 font-semibold">
+                      <td colSpan={isOemCategory ? 5 : 7} className="p-8 text-center text-slate-500 font-semibold">
                         <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
                         Loading drill-down data...
                       </td>
@@ -802,7 +799,7 @@ export const DashboardPage: React.FC = () => {
                   if (oemBreakdown.oemList.length === 0) {
                     return (
                       <tr>
-                        <td colSpan={8} className="p-8 text-center text-slate-500 font-semibold">
+                        <td colSpan={5} className="p-8 text-center text-slate-500 font-semibold">
                           <Cpu className="w-8 h-8 mx-auto mb-2 text-slate-300" />
                           No OEM vendors found matching selected store &amp; search filters.
                         </td>
@@ -814,44 +811,22 @@ export const DashboardPage: React.FC = () => {
                     <>
                       {oemBreakdown.oemList.map((oem, idx) => (
                         <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="p-3 font-semibold text-slate-800">
-                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold border ${
-                              oem.storeLocation.includes('Delhi') && oem.storeLocation.includes('Bengaluru')
-                                ? 'bg-purple-50 text-purple-800 border-purple-200'
-                                : oem.storeLocation.includes('Delhi')
-                                ? 'bg-blue-50 text-blue-800 border-blue-200'
-                                : 'bg-orange-50 text-orange-800 border-orange-200'
-                            }`}>
-                              <MapPin className="w-3 h-3" />
-                              {oem.storeLocation}
-                            </span>
-                          </td>
                           <td className="p-3 font-extrabold text-slate-900 flex items-center gap-2">
                             <Cpu className="w-4 h-4 text-cyan-600 shrink-0" />
                             <span>{oem.oemName}</span>
                           </td>
                           <td className="p-3 text-center font-mono">
-                            <span className="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-lg border border-indigo-200 font-extrabold text-xs">
+                            <span className="bg-indigo-50 text-indigo-700 px-3 py-1 rounded-lg border border-indigo-200 font-extrabold text-xs">
                               {oem.serializedCount.toLocaleString('en-IN')}
                             </span>
                           </td>
                           <td className="p-3 text-center font-mono">
-                            <span className="bg-purple-50 text-purple-700 px-2.5 py-1 rounded-lg border border-purple-200 font-extrabold text-xs">
+                            <span className="bg-purple-50 text-purple-700 px-3 py-1 rounded-lg border border-purple-200 font-extrabold text-xs">
                               {oem.nonSerializedCount.toLocaleString('en-IN')}
                             </span>
                           </td>
-                          <td className="p-3 text-center font-mono">
-                            <span className="bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-lg border border-emerald-200 font-extrabold text-xs">
-                              {oem.availableQuantity.toLocaleString('en-IN')}
-                            </span>
-                          </td>
-                          <td className="p-3 text-center font-mono">
-                            <span className="bg-amber-50 text-amber-700 px-2.5 py-1 rounded-lg border border-amber-200 font-extrabold text-xs">
-                              {oem.reservedQuantity.toLocaleString('en-IN')}
-                            </span>
-                          </td>
                           <td className="p-3 text-center font-black text-slate-900 text-sm">
-                            <span className="bg-slate-100 text-slate-900 px-2.5 py-1 rounded-lg border border-slate-300 font-black text-xs">
+                            <span className="bg-slate-100 text-slate-900 px-3 py-1 rounded-lg border border-slate-300 font-black text-xs">
                               {oem.totalUploadedQuantity.toLocaleString('en-IN')} PCS
                             </span>
                           </td>
@@ -866,32 +841,19 @@ export const DashboardPage: React.FC = () => {
                         </tr>
                       ))}
                       <tr className="bg-slate-900 text-white font-black border-t-2 border-slate-700">
-                        <td className="p-3 font-semibold text-slate-300 text-xs">
-                          <span className="bg-slate-800 text-slate-200 px-2.5 py-1 rounded-lg border border-slate-600 font-bold text-xs">
-                            {selectedStore === 'ALL' ? 'All Stores' : selectedStore === 'DELHI' ? 'Delhi Store' : 'Bengaluru Store'}
-                          </span>
-                        </td>
-                        <td className="p-3 text-xs font-black text-white uppercase tracking-wider">
-                          GRAND TOTAL SUMMARY ({oemBreakdown.distinctOemCount} OEMs)
+                        <td className="p-3 text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
+                          <span>Σ</span>
+                          <span>Grand Total</span>
+                          <span className="text-slate-400 text-xs font-normal font-mono">({oemBreakdown.distinctOemCount} OEMs)</span>
                         </td>
                         <td className="p-3 text-center font-mono text-xs">
-                          <span className="bg-indigo-950 text-indigo-200 px-2.5 py-1 rounded-lg border border-indigo-700 font-black">
-                            {oemBreakdown.grandTotalSerialized.toLocaleString('en-IN')} Serialized
+                          <span className="bg-indigo-950 text-indigo-200 px-3 py-1 rounded-lg border border-indigo-700 font-black">
+                            {oemBreakdown.grandTotalSerialized.toLocaleString('en-IN')}
                           </span>
                         </td>
                         <td className="p-3 text-center font-mono text-xs">
-                          <span className="bg-purple-950 text-purple-200 px-2.5 py-1 rounded-lg border border-purple-700 font-black">
-                            {oemBreakdown.grandTotalNonSerialized.toLocaleString('en-IN')} Non-Serialized
-                          </span>
-                        </td>
-                        <td className="p-3 text-center font-mono text-xs">
-                          <span className="bg-emerald-950 text-emerald-300 px-2.5 py-1 rounded-lg border border-emerald-700 font-black">
-                            {oemBreakdown.grandTotalAvailable.toLocaleString('en-IN')} Avail
-                          </span>
-                        </td>
-                        <td className="p-3 text-center font-mono text-xs">
-                          <span className="bg-amber-950 text-amber-300 px-2.5 py-1 rounded-lg border border-amber-700 font-black">
-                            {oemBreakdown.grandTotalReserved.toLocaleString('en-IN')} Reserved
+                          <span className="bg-purple-950 text-purple-200 px-3 py-1 rounded-lg border border-purple-700 font-black">
+                            {oemBreakdown.grandTotalNonSerialized.toLocaleString('en-IN')}
                           </span>
                         </td>
                         <td className="p-3 text-center text-xs font-black text-cyan-300">

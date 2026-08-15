@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
 import {
@@ -22,6 +22,15 @@ export const DashboardPage: React.FC = () => {
   const [activeCardFilter, setActiveCardFilter] = useState<string>('TOTAL_SPARE_PARTS');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isStockModalOpen, setIsStockModalOpen] = useState<boolean>(false);
+  const tableSectionRef = useRef<HTMLDivElement>(null);
+
+  const handleReviewStock = () => {
+    setActiveCardFilter('LOW_STOCK');
+    setSearchQuery('');
+    setTimeout(() => {
+      tableSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  };
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['dashboard-stats'],
@@ -437,7 +446,7 @@ export const DashboardPage: React.FC = () => {
       </div>
 
       {/* Interactive Metric Card Drill-Down Detail Table */}
-      <div className="mb-6 bg-white border border-slate-200/90 rounded-2xl p-5 shadow-lg">
+      <div ref={tableSectionRef} className="mb-6 bg-white border border-slate-200/90 rounded-2xl p-5 shadow-lg">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-200">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center border border-indigo-200 text-indigo-600 shrink-0">

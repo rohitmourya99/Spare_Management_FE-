@@ -19,7 +19,7 @@ const COLORS = ['#2563eb', '#059669', '#d97706', '#dc2626', '#7c3aed', '#db2777'
 
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
-  const [selectedFilter, setSelectedFilter] = useState<string>('ALL');
+  const [activeCardFilter, setActiveCardFilter] = useState<string>('TOTAL_SPARE_PARTS');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isStockModalOpen, setIsStockModalOpen] = useState<boolean>(false);
 
@@ -59,27 +59,24 @@ export const DashboardPage: React.FC = () => {
     refetchInterval: false,
   });
 
-  // Filter items based on selected card filter & search input using useMemo
-  // (Called unconditionally at top level to obey React Rule of Hooks)
-  const displayedItems = useMemo(() => {
+  // Filter Stock items based on active card filter & search input
+  const filteredInventoryItems = useMemo(() => {
     if (!inventoryItemsData || !Array.isArray(inventoryItemsData)) return [];
     let items = [...inventoryItemsData];
 
-    const todayStr = new Date().toISOString().split('T')[0];
-
-    switch (selectedFilter) {
-      case 'SERIALIZED':
+    switch (activeCardFilter) {
+      case 'SERIALIZED_PARTS':
         items = items.filter((i: any) => i.is_serialized || i.isSerialized);
         break;
       case 'NON_SERIALIZED':
         items = items.filter((i: any) => !i.is_serialized && !i.isSerialized);
         break;
-      case 'DELHI':
+      case 'DELHI_STORE':
         items = items.filter((i: any) =>
           (i.store || i.location?.name || i.location || '').toLowerCase().includes('delhi')
         );
         break;
-      case 'BENGALURU':
+      case 'BENGALURU_STORE':
         items = items.filter((i: any) =>
           (i.store || i.location?.name || i.location || '').toLowerCase().includes('bengaluru')
         );
@@ -94,29 +91,10 @@ export const DashboardPage: React.FC = () => {
       case 'OUT_OF_STOCK':
         items = items.filter((i: any) => Number(i.availableQuantity ?? i.quantity) === 0);
         break;
-      case 'OEM':
+      case 'TOTAL_OEM':
         items.sort((a: any, b: any) => (a.oem?.name || '').localeCompare(b.oem?.name || ''));
         break;
-      case 'TODAYS_ACTIVITIES':
-        items = items.filter((i: any) => {
-          if (!i.updatedAt && !i.createdAt) return true;
-          const d = new Date(i.updatedAt || i.createdAt).toISOString().split('T')[0];
-          return d === todayStr;
-        });
-        break;
-      case 'TOTAL_ACTIVITIES':
-        items.sort((a: any, b: any) => new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime());
-        break;
-      case 'TODAYS_DISPATCH':
-        items = items.filter((i: any) => i.status === 'RESERVED' || i.status === 'DISPATCHED');
-        break;
-      case 'TODAYS_PICKUP':
-        items = items.filter((i: any) => i.status === 'AVAILABLE');
-        break;
-      case 'FAILED_LOGINS':
-        items = [];
-        break;
-      case 'ALL':
+      case 'TOTAL_SPARE_PARTS':
       default:
         break;
     }
@@ -134,7 +112,112 @@ export const DashboardPage: React.FC = () => {
     }
 
     return items;
-  }, [inventoryItemsData, selectedFilter, searchQuery]);
+  }, [inventoryItemsData, activeCardFilter, searchQuery]);
+
+  // Filter Activities & Audit Logs
+  const filteredActivities = useMemo(() => {
+    const activities = data?.recentActivities || [];
+    if (!Array.isArray(activities)) return [];
+    let items = [...activities];
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    if (activeCardFilter === 'TODAYS_ACTIVITIES') {
+      items = items.filter((act: any) => {
+        if (!act.createdAt) return true;
+        const d = new Date(act.createdAt).toISOString().split('T')[0];
+        return d === todayStr;
+      });
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      items = items.filter(
+        (act: any) =>
+          act.userName?.toLowerCase().includes(q) ||
+          act.action?.toLowerCase().includes(q) ||
+          act.module?.toLowerCase().includes(q) ||
+          act.entityLabel?.toLowerCase().includes(q)
+      );
+    }
+
+    return items;
+  }, [data?.recentActivities, activeCardFilter, searchQuery]);
+
+  // Filter Dispatches
+  const filteredDispatches = useMemo(() => {
+    const dispatches = data?.recentDispatches || [];
+    if (!Array.isArray(dispatches)) return [];
+    let items = [...dispatches];
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      items = items.filter(
+        (d: any) =>
+          d.dispatchNo?.toLowerCase().includes(q) ||
+          d.inventoryItem?.productName?.toLowerCase().includes(q) ||
+          d.site?.siteName?.toLowerCase().includes(q)
+      );
+    }
+
+    return items;
+  }, [data?.recentDispatches, searchQuery]);
+
+  // Filter Pickups
+  const filteredPickups = useMemo(() => {
+    const pickups = data?.recentPickups || [];
+    if (!Array.isArray(pickups)) return [];
+    let items = [...pickups];
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      items = items.filter(
+        (p: any) =>
+          p.pickupNo?.toLowerCase().includes(q) ||
+          p.inventoryItem?.productName?.toLowerCase().includes(q) ||
+          p.site?.siteName?.toLowerCase().includes(q)
+      );
+    }
+
+    return items;
+  }, [data?.recentPickups, searchQuery]);
+
+  // Filter Failed Logins
+  const filteredFailedLogins = useMemo(() => {
+    const activities = data?.recentActivities || [];
+    if (!Array.isArray(activities)) return [];
+    let items = activities.filter(
+      (act: any) =>
+        (act.action || '').toUpperCase().includes('FAILED') ||
+        (act.action || '').toUpperCase().includes('LOGIN_FAILED')
+    );
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      items = items.filter(
+        (act: any) =>
+          act.userName?.toLowerCase().includes(q) ||
+          act.entityLabel?.toLowerCase().includes(q)
+      );
+    }
+
+    return items;
+  }, [data?.recentActivities, searchQuery]);
+
+  const isStockCategory = ['TOTAL_SPARE_PARTS', 'SERIALIZED_PARTS', 'NON_SERIALIZED', 'TOTAL_OEM', 'DELHI_STORE', 'BENGALURU_STORE', 'LOW_STOCK', 'OUT_OF_STOCK'].includes(activeCardFilter);
+  const isActivityCategory = ['TODAYS_ACTIVITIES', 'AUDIT_LOGS'].includes(activeCardFilter);
+  const isDispatchCategory = activeCardFilter === 'TODAYS_DISPATCH';
+  const isPickupCategory = activeCardFilter === 'TODAYS_PICKUP';
+  const isFailedLoginsCategory = activeCardFilter === 'FAILED_LOGINS';
+
+  const currentListLength = isStockCategory
+    ? filteredInventoryItems.length
+    : isActivityCategory
+    ? filteredActivities.length
+    : isDispatchCategory
+    ? filteredDispatches.length
+    : isPickupCategory
+    ? filteredPickups.length
+    : filteredFailedLogins.length;
 
   if (isLoading) {
     return (
@@ -169,22 +252,22 @@ export const DashboardPage: React.FC = () => {
   ];
 
   const topSummaryCards = [
-    { id: 'ALL', title: 'Total Spare Parts', value: inv.totalSpareParts ?? 0, icon: Package, color: 'text-blue-600' },
-    { id: 'SERIALIZED', title: 'Serialized Parts', value: inv.totalSerializedParts ?? 0, icon: Archive, color: 'text-indigo-600' },
+    { id: 'TOTAL_SPARE_PARTS', title: 'Total Spare Parts', value: inv.totalSpareParts ?? 0, icon: Package, color: 'text-blue-600' },
+    { id: 'SERIALIZED_PARTS', title: 'Serialized Parts', value: inv.totalSerializedParts ?? 0, icon: Archive, color: 'text-indigo-600' },
     { id: 'NON_SERIALIZED', title: 'Non-Serialized', value: inv.totalNonSerializedParts ?? 0, icon: Layers, color: 'text-purple-600' },
-    { id: 'OEM', title: 'Total OEMs', value: inv.totalOEMs ?? 0, icon: Cpu, color: 'text-cyan-600' },
-    { id: 'DELHI', title: 'Delhi Store Stock', value: inv.delhiTotalStock ?? 0, icon: MapPin, color: 'text-emerald-600' },
-    { id: 'BENGALURU', title: 'Bengaluru Stock', value: inv.bengaluruTotalStock ?? 0, icon: MapPin, color: 'text-orange-600' },
+    { id: 'TOTAL_OEM', title: 'Total OEMs', value: inv.totalOEMs ?? 0, icon: Cpu, color: 'text-cyan-600' },
+    { id: 'DELHI_STORE', title: 'Delhi Store Stock', value: inv.delhiTotalStock ?? 0, icon: MapPin, color: 'text-emerald-600' },
+    { id: 'BENGALURU_STORE', title: 'Bengaluru Stock', value: inv.bengaluruTotalStock ?? 0, icon: MapPin, color: 'text-orange-600' },
     { id: 'LOW_STOCK', title: 'Low Stock Items', value: inv.lowStockCount ?? 0, icon: AlertTriangle, color: 'text-amber-600' },
     { id: 'OUT_OF_STOCK', title: 'Out of Stock', value: inv.outOfStockCount ?? 0, icon: XCircle, color: 'text-rose-600' },
     { id: 'TODAYS_ACTIVITIES', title: "Today's Activities", value: inv.todaysActivitiesCount ?? 0, icon: History, color: 'text-indigo-700' },
-    { id: 'TOTAL_ACTIVITIES', title: 'Total Audit Logs', value: inv.totalActivitiesCount ?? 0, icon: Activity, color: 'text-purple-700' },
+    { id: 'AUDIT_LOGS', title: 'Total Audit Logs', value: inv.totalActivitiesCount ?? 0, icon: Activity, color: 'text-purple-700' },
     { id: 'TODAYS_DISPATCH', title: "Today's Dispatch", value: inv.todaysDispatchCount ?? 0, icon: Truck, color: 'text-blue-700' },
     { id: 'TODAYS_PICKUP', title: "Today's Pickup", value: inv.todaysPickupCount ?? 0, icon: RotateCcw, color: 'text-emerald-700' },
     { id: 'FAILED_LOGINS', title: 'Failed Login Attempts', value: inv.failedLoginAttemptsCount ?? 0, icon: ShieldAlert, color: 'text-rose-700' },
   ];
 
-  const activeCardObj = topSummaryCards.find((c) => c.id === selectedFilter) || topSummaryCards[0];
+  const activeCardObj = topSummaryCards.find((c) => c.id === activeCardFilter) || topSummaryCards[0];
 
   return (
     <Layout title="Dashboard & Overview">
@@ -207,8 +290,8 @@ export const DashboardPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Top 8 Metric Stat Cards (Interactive 1-Click Filters) */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6">
+      {/* Top 13 Metric Stat Cards (Interactive 1-Click Filters) */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
         {topSummaryCards.map((card) => (
           <StatCard
             key={card.id}
@@ -216,8 +299,8 @@ export const DashboardPage: React.FC = () => {
             value={card.value}
             icon={card.icon}
             color={card.color}
-            isActive={selectedFilter === card.id}
-            onClick={() => setSelectedFilter(card.id)}
+            isActive={activeCardFilter === card.id}
+            onClick={() => setActiveCardFilter(card.id)}
           />
         ))}
       </div>
@@ -235,11 +318,11 @@ export const DashboardPage: React.FC = () => {
                   Showing results for: <span className="text-indigo-600 font-black">{activeCardObj.title}</span>
                 </h3>
                 <span className="text-xs bg-indigo-100 text-indigo-800 font-extrabold px-2.5 py-0.5 rounded-full border border-indigo-200">
-                  {displayedItems.length} {displayedItems.length === 1 ? 'item' : 'items'}
+                  {currentListLength} {currentListLength === 1 ? 'item' : 'items'}
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 font-medium mt-0.5">
-                Click any top summary card above to instantly filter and inspect matching spare parts in real time.
+                Click any top summary card above to instantly filter and inspect matching records in real time.
               </p>
             </div>
           </div>
@@ -258,10 +341,10 @@ export const DashboardPage: React.FC = () => {
             </div>
 
             {/* Reset View Button */}
-            {selectedFilter !== 'ALL' && (
+            {activeCardFilter !== 'TOTAL_SPARE_PARTS' && (
               <button
                 onClick={() => {
-                  setSelectedFilter('ALL');
+                  setActiveCardFilter('TOTAL_SPARE_PARTS');
                   setSearchQuery('');
                 }}
                 className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1.5 border border-slate-300 transition-colors shrink-0 shadow-2xs"
@@ -278,13 +361,53 @@ export const DashboardPage: React.FC = () => {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/70 text-[11px] font-extrabold text-slate-700 uppercase tracking-wider">
-                <th className="p-3">Spare Part</th>
-                <th className="p-3">OEM Vendor</th>
-                <th className="p-3">Serial Number</th>
-                <th className="p-3">Store Location</th>
-                <th className="p-3">Available Stock</th>
-                <th className="p-3">Status</th>
-                <th className="p-3 text-right">Actions</th>
+                {isStockCategory && (
+                  <>
+                    <th className="p-3">Spare Part</th>
+                    <th className="p-3">OEM Vendor</th>
+                    <th className="p-3">Serial Number</th>
+                    <th className="p-3">Store Location</th>
+                    <th className="p-3">Available Stock</th>
+                    <th className="p-3">Status</th>
+                    <th className="p-3 text-right">Actions</th>
+                  </>
+                )}
+                {isActivityCategory && (
+                  <>
+                    <th className="p-3">User &amp; Role</th>
+                    <th className="p-3">Action / Activity</th>
+                    <th className="p-3">Module &amp; Entity</th>
+                    <th className="p-3">Change Details</th>
+                    <th className="p-3 text-right">Timestamp</th>
+                  </>
+                )}
+                {isDispatchCategory && (
+                  <>
+                    <th className="p-3">Dispatch No</th>
+                    <th className="p-3">Spare Part Item</th>
+                    <th className="p-3">Destination BHEL Site</th>
+                    <th className="p-3">Status</th>
+                    <th className="p-3 text-right">Dispatch Date</th>
+                  </>
+                )}
+                {isPickupCategory && (
+                  <>
+                    <th className="p-3">Pickup No</th>
+                    <th className="p-3">Spare Part Item</th>
+                    <th className="p-3">Origin Site / Source</th>
+                    <th className="p-3">Status</th>
+                    <th className="p-3 text-right">Pickup Date</th>
+                  </>
+                )}
+                {isFailedLoginsCategory && (
+                  <>
+                    <th className="p-3">User Email / Target</th>
+                    <th className="p-3">Security Event</th>
+                    <th className="p-3">IP Address / Details</th>
+                    <th className="p-3">Status</th>
+                    <th className="p-3 text-right">Timestamp</th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-xs text-slate-900">
@@ -295,70 +418,169 @@ export const DashboardPage: React.FC = () => {
                     Loading drill-down data...
                   </td>
                 </tr>
-              ) : displayedItems.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="p-8 text-center text-slate-500 font-semibold">
-                    <Package className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                    No spare parts matching selected filter <span className="font-bold text-slate-800">"{activeCardObj.title}"</span>.
-                  </td>
-                </tr>
-              ) : (
-                displayedItems.slice(0, 15).map((item: any) => (
-                  <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="p-3 font-bold text-slate-900">
-                      <div>{item.productName}</div>
-                      <div className="text-[10px] text-indigo-600 font-mono font-bold mt-0.5">
-                        {item.spareId} {item.partCode ? `· SKU: ${item.partCode}` : ''}
-                      </div>
-                    </td>
-                    <td className="p-3 font-bold text-slate-700">
-                      {item.oem?.name || 'Standard OEM'}
-                    </td>
-                    <td className="p-3 font-mono">
-                      {item.serialNumber ? (
-                        <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded border border-indigo-200 font-bold text-[11px]">
-                          {item.serialNumber}
-                        </span>
-                      ) : (
-                        <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded border border-slate-200 font-medium text-[11px]">
-                          Non-Serialized
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-3 font-semibold text-slate-800">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold border ${(item.store || item.location?.name || '').includes('Delhi') ? 'bg-blue-50 text-blue-800 border-blue-200' : 'bg-orange-50 text-orange-800 border-orange-200'}`}>
-                        <MapPin className="w-3 h-3" />
-                        {item.store || item.location?.name || 'Delhi'}
-                      </span>
-                    </td>
-                    <td className="p-3 font-extrabold text-slate-900">
-                      {item.availableQuantity ?? item.quantity} / {item.quantity} {item.unit || 'PCS'}
-                    </td>
-                    <td className="p-3">
-                      <Badge variant={item.status === 'AVAILABLE' ? 'success' : item.status === 'RESERVED' ? 'warning' : 'danger'}>
-                        {item.status}
-                      </Badge>
-                    </td>
-                    <td className="p-3 text-right">
-                      <button
-                        onClick={() => navigate(`/stock-list?search=${encodeURIComponent(item.partCode || item.productName || '')}`)}
-                        className="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-xs font-bold border border-indigo-200 transition-colors inline-flex items-center gap-1"
-                      >
-                        Inspect <ChevronRight className="w-3 h-3" />
-                      </button>
+              ) : isStockCategory ? (
+                filteredInventoryItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="p-8 text-center text-slate-500 font-semibold">
+                      <Package className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                      No spare parts matching selected filter <span className="font-bold text-slate-800">"{activeCardObj.title}"</span>.
                     </td>
                   </tr>
-                ))
+                ) : (
+                  filteredInventoryItems.slice(0, 15).map((item: any) => (
+                    <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="p-3 font-bold text-slate-900">
+                        <div>{item.productName}</div>
+                        <div className="text-[10px] text-indigo-600 font-mono font-bold mt-0.5">
+                          {item.spareId} {item.partCode ? `· SKU: ${item.partCode}` : ''}
+                        </div>
+                      </td>
+                      <td className="p-3 font-bold text-slate-700">
+                        {item.oem?.name || 'Standard OEM'}
+                      </td>
+                      <td className="p-3 font-mono">
+                        {item.serialNumber ? (
+                          <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded border border-indigo-200 font-bold text-[11px]">
+                            {item.serialNumber}
+                          </span>
+                        ) : (
+                          <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded border border-slate-200 font-medium text-[11px]">
+                            Non-Serialized
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3 font-semibold text-slate-800">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold border ${(item.store || item.location?.name || '').includes('Delhi') ? 'bg-blue-50 text-blue-800 border-blue-200' : 'bg-orange-50 text-orange-800 border-orange-200'}`}>
+                          <MapPin className="w-3 h-3" />
+                          {item.store || item.location?.name || 'Delhi'}
+                        </span>
+                      </td>
+                      <td className="p-3 font-extrabold text-slate-900">
+                        {item.availableQuantity ?? item.quantity} / {item.quantity} {item.unit || 'PCS'}
+                      </td>
+                      <td className="p-3">
+                        <Badge variant={item.status === 'AVAILABLE' ? 'success' : item.status === 'RESERVED' ? 'warning' : 'danger'}>
+                          {item.status}
+                        </Badge>
+                      </td>
+                      <td className="p-3 text-right">
+                        <button
+                          onClick={() => navigate(`/stock-list?search=${encodeURIComponent(item.partCode || item.productName || '')}`)}
+                          className="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-xs font-bold border border-indigo-200 transition-colors inline-flex items-center gap-1"
+                        >
+                          Inspect <ChevronRight className="w-3 h-3" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )
+              ) : isActivityCategory ? (
+                filteredActivities.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="p-8 text-center text-slate-500 font-semibold">
+                      <History className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                      No audit activities recorded for <span className="font-bold text-slate-800">"{activeCardObj.title}"</span>.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredActivities.slice(0, 15).map((log: any, i: number) => (
+                    <tr key={i} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="p-3 font-bold text-slate-900">
+                        <div>{log.userName || log.user?.name || 'System'}</div>
+                        <span className="bg-indigo-100 text-indigo-800 text-[10px] px-1.5 py-0.2 rounded font-extrabold uppercase mt-0.5 inline-block">
+                          {log.userRole || log.user?.role || 'SYSTEM'}
+                        </span>
+                      </td>
+                      <td className="p-3 font-extrabold text-indigo-600">{log.action}</td>
+                      <td className="p-3">
+                        <span className="bg-slate-100 text-slate-800 text-[11px] px-2 py-0.5 rounded font-bold border border-slate-200">
+                          {log.module || 'Inventory'} {log.entityLabel ? `· ${log.entityLabel}` : ''}
+                        </span>
+                      </td>
+                      <td className="p-3 font-mono text-[11px]">
+                        {log.oldValue && log.newValue ? (
+                          <div className="flex items-center gap-1 bg-white p-1 rounded border border-slate-200">
+                            <span className="text-rose-700 font-bold">{log.oldValue}</span>
+                            <ArrowRight className="w-3 h-3 text-slate-400" />
+                            <span className="text-emerald-700 font-bold">{log.newValue}</span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-600 font-medium">{log.entityLabel || 'Standard Log Entry'}</span>
+                        )}
+                      </td>
+                      <td className="p-3 text-right font-mono text-slate-500 text-[11px]">
+                        {new Date(log.createdAt).toLocaleString('en-IN')}
+                      </td>
+                    </tr>
+                  ))
+                )
+              ) : isDispatchCategory ? (
+                filteredDispatches.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="p-8 text-center text-slate-500 font-semibold">
+                      <Truck className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                      No dispatch records found for <span className="font-bold text-slate-800">"{activeCardObj.title}"</span>.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredDispatches.slice(0, 15).map((d: any, i: number) => (
+                    <tr key={i} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="p-3 font-mono font-extrabold text-blue-700">{d.dispatchNo}</td>
+                      <td className="p-3 font-bold text-slate-900">{d.inventoryItem?.productName || 'Spare Part'}</td>
+                      <td className="p-3 font-semibold text-slate-800">{d.site?.siteName || d.siteName || 'BHEL Site'}</td>
+                      <td className="p-3"><Badge variant="warning">RESERVED</Badge></td>
+                      <td className="p-3 text-right font-mono text-slate-500 text-[11px]">{new Date(d.createdAt).toLocaleString('en-IN')}</td>
+                    </tr>
+                  ))
+                )
+              ) : isPickupCategory ? (
+                filteredPickups.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="p-8 text-center text-slate-500 font-semibold">
+                      <RotateCcw className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                      No pickup records found for <span className="font-bold text-slate-800">"{activeCardObj.title}"</span>.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredPickups.slice(0, 15).map((p: any, i: number) => (
+                    <tr key={i} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="p-3 font-mono font-extrabold text-emerald-700">{p.pickupNo}</td>
+                      <td className="p-3 font-bold text-slate-900">{p.inventoryItem?.productName || 'Spare Part'}</td>
+                      <td className="p-3 font-semibold text-slate-800">{p.site?.siteName || p.siteName || 'Origin Site'}</td>
+                      <td className="p-3"><Badge variant="success">AVAILABLE</Badge></td>
+                      <td className="p-3 text-right font-mono text-slate-500 text-[11px]">{new Date(p.createdAt).toLocaleString('en-IN')}</td>
+                    </tr>
+                  ))
+                )
+              ) : (
+                filteredFailedLogins.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="p-8 text-center text-slate-500 font-semibold">
+                      <CheckCircle2 className="w-8 h-8 mx-auto mb-2 text-emerald-500" />
+                      No failed login attempts recorded. System security status is 100% healthy.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredFailedLogins.slice(0, 15).map((act: any, i: number) => (
+                    <tr key={i} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="p-3 font-bold text-slate-900">{act.userName || 'Unknown User'}</td>
+                      <td className="p-3 font-extrabold text-rose-600">{act.action}</td>
+                      <td className="p-3 text-slate-600 font-mono text-[11px]">{act.entityLabel || 'Auth System'}</td>
+                      <td className="p-3"><Badge variant="danger">SECURITY EVENT</Badge></td>
+                      <td className="p-3 text-right font-mono text-slate-500 text-[11px]">{new Date(act.createdAt).toLocaleString('en-IN')}</td>
+                    </tr>
+                  ))
+                )
               )}
             </tbody>
           </table>
-          {displayedItems.length > 15 && (
+          {currentListLength > 15 && isStockCategory && (
             <div className="p-3 bg-slate-50 border-t border-slate-200 text-center">
               <button
                 onClick={() => navigate('/stock-list')}
                 className="text-xs font-bold text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-1"
               >
-                View all {displayedItems.length} items in Stock List <ChevronRight className="w-3.5 h-3.5" />
+                View all {currentListLength} items in Stock List <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
           )}

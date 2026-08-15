@@ -36,9 +36,9 @@ export class AuthService {
     let user = await prisma.user.findFirst({
       where: {
         OR: [
-          { email: { equals: targetEmail, mode: 'insensitive' } },
-          { email: { equals: inputClean, mode: 'insensitive' } },
-          { name: { equals: inputClean, mode: 'insensitive' } },
+          { email: { equals: targetEmail } },
+          { email: { equals: inputClean } },
+          { name: { equals: inputClean } },
         ],
       },
     });
@@ -318,7 +318,7 @@ export class AuthService {
 
       for (const acc of defaultAccounts) {
         const existing = await prisma.user.findFirst({
-          where: { email: { equals: acc.email, mode: 'insensitive' } },
+          where: { email: { equals: acc.email } },
         });
         if (!existing) {
           const hashedPassword = await bcrypt.hash(acc.pass, 10);

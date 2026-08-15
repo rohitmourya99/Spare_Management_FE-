@@ -103,20 +103,20 @@ export class ActivityService {
     if (filters.userId) where.userId = filters.userId;
     if (filters.role) where.userRole = filters.role;
     if (filters.module) where.module = filters.module;
-    if (filters.action) where.action = { contains: filters.action, mode: 'insensitive' };
-    if (filters.partCode) where.partCode = { contains: filters.partCode, mode: 'insensitive' };
-    if (filters.serialNumber) where.serialNumber = { contains: filters.serialNumber, mode: 'insensitive' };
-    if (filters.site) where.siteName = { contains: filters.site, mode: 'insensitive' };
+    if (filters.action) where.action = { contains: filters.action };
+    if (filters.partCode) where.partCode = { contains: filters.partCode };
+    if (filters.serialNumber) where.serialNumber = { contains: filters.serialNumber };
+    if (filters.site) where.siteName = { contains: filters.site };
 
     if (filters.search) {
       where.OR = [
-        { userName: { contains: filters.search, mode: 'insensitive' } },
-        { action: { contains: filters.search, mode: 'insensitive' } },
-        { module: { contains: filters.search, mode: 'insensitive' } },
-        { entityLabel: { contains: filters.search, mode: 'insensitive' } },
-        { partCode: { contains: filters.search, mode: 'insensitive' } },
-        { serialNumber: { contains: filters.search, mode: 'insensitive' } },
-        { siteName: { contains: filters.search, mode: 'insensitive' } },
+        { userName: { contains: filters.search } },
+        { action: { contains: filters.search } },
+        { module: { contains: filters.search } },
+        { entityLabel: { contains: filters.search } },
+        { partCode: { contains: filters.search } },
+        { serialNumber: { contains: filters.search } },
+        { siteName: { contains: filters.search } },
       ];
     }
 

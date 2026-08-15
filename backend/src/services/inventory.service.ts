@@ -1238,7 +1238,7 @@ export class InventoryService {
    */
   async getRoomInstalledItems(roomId: string) {
     const items = await prisma.locationInventory.findMany({
-      where: { roomId: { equals: roomId, mode: 'insensitive' } },
+      where: { roomId: { equals: roomId } },
       orderBy: { installationDate: 'desc' },
     });
     return items;

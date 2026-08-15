@@ -665,8 +665,16 @@ export const StockListPage: React.FC = () => {
               onChange={(e) => setImportStore(e.target.value as any)}
               className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 font-bold focus:outline-none focus:border-indigo-600"
             >
-              <option value="Delhi">Delhi Warehouse Store</option>
-              <option value="Bengaluru">Bengaluru Warehouse Store</option>
+              {selectedOrg === 'BHEL' ? (
+                <>
+                  <option value="Delhi">Delhi Warehouse Store</option>
+                  <option value="Bengaluru">Bengaluru Warehouse Store</option>
+                </>
+              ) : (
+                (warehousesData || []).map((w: any) => (
+                  <option key={w.id} value={w.name}>{w.name}</option>
+                ))
+              )}
             </select>
           </div>
 
@@ -756,8 +764,16 @@ export const StockListPage: React.FC = () => {
                 onChange={(e) => setNewSerialForm({ ...newSerialForm, store: e.target.value })}
                 className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 font-bold focus:outline-none focus:border-indigo-600"
               >
-                <option value="Delhi">Delhi Store</option>
-                <option value="Bengaluru">Bengaluru Store</option>
+                {selectedOrg === 'BHEL' ? (
+                  <>
+                    <option value="Delhi">Delhi Store</option>
+                    <option value="Bengaluru">Bengaluru Store</option>
+                  </>
+                ) : (
+                  (warehousesData || []).map((w: any) => (
+                    <option key={w.id} value={w.name}>{w.name}</option>
+                  ))
+                )}
               </select>
             </div>
           </div>
@@ -833,8 +849,16 @@ export const StockListPage: React.FC = () => {
                 onChange={(e) => setNewItemForm({ ...newItemForm, store: e.target.value })}
                 className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 font-bold focus:outline-none focus:border-indigo-600"
               >
-                <option value="Delhi">Delhi Store</option>
-                <option value="Bengaluru">Bengaluru Store</option>
+                {selectedOrg === 'BHEL' ? (
+                  <>
+                    <option value="Delhi">Delhi Store</option>
+                    <option value="Bengaluru">Bengaluru Store</option>
+                  </>
+                ) : (
+                  (warehousesData || []).map((w: any) => (
+                    <option key={w.id} value={w.name}>{w.name}</option>
+                  ))
+                )}
               </select>
             </div>
           </div>

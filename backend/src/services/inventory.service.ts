@@ -490,7 +490,7 @@ export class InventoryService {
         totalSpareParts: totalItems,
         totalSerializedParts: totalSerialized,
         totalNonSerializedParts: totalNonSerialized,
-        totalOEMs: oemCount,
+        totalOEMs: oemDistributionRaw.length,
         delhiTotalStock: delhiStats._sum.quantity || 0,
         bengaluruTotalStock: bengaluruStats._sum.quantity || 0,
         lowStockCount: stockAnalysis.lowStockCount,

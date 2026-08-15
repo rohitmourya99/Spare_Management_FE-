@@ -214,11 +214,29 @@ export class InventoryController {
 
   // Master data endpoints
   async getOEMs(req: Request, res: Response): Promise<void> {
+    const orgId = (req.query.organizationId as string) || req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
+
     const oems = await prisma.oEM.findMany({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        OR: [
+          { items: { some: { organizationId: orgId, isDeleted: false } } },
+          { items: { none: {} } },
+        ],
+      },
       orderBy: { name: 'asc' },
       include: { categories: { where: { isActive: true } } },
     });
+
+    if (!oems || oems.length === 0) {
+      const fallbackOems = await prisma.oEM.findMany({
+        where: { isActive: true },
+        orderBy: { name: 'asc' },
+      });
+      ApiResponse.success(res, fallbackOems);
+      return;
+    }
+
     ApiResponse.success(res, oems);
   }
 

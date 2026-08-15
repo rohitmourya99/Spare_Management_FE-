@@ -1,8 +1,9 @@
 import { Prisma } from '@prisma/client';
-import { DispatchStatus } from '../types';
+import { DispatchStatus, InventoryStatus } from '../types';
 import { prisma } from '../config/database';
 import { AppError } from '../middleware/error.middleware';
 import { parsePagination, buildPagination } from '../utils/response.util';
+import { activityService } from './activity.service';
 
 export interface CreateDispatchDto {
   inventoryItemId?: string;
@@ -312,14 +313,19 @@ export class DispatchService {
       });
     }
 
-    await prisma.activityLog.create({
-      data: {
-        userId,
-        action: 'DISPATCH',
-        entity: 'Dispatch',
-        entityId: dispatch.id,
-        entityLabel: `${dispatch.dispatchNo} (${item.productName})`,
-      },
+    await activityService.logActivity({
+      userId,
+      module: 'Dispatch',
+      action: 'Dispatch Created',
+      entity: 'Dispatch',
+      entityId: dispatch.id,
+      entityLabel: `${dispatch.dispatchNo} - ${item.productName}`,
+      partCode: item.partCode || item.partId || undefined,
+      serialNumber: originalSerial,
+      siteName: buildingName || dispatch.site?.siteName || undefined,
+      oldValue: `Stock: ${item.availableQuantity}`,
+      newValue: `Dispatched Qty: ${qtyToDispatch}, Remaining: ${newAvail}`,
+      remarks: userComments || `Dispatched to ${buildingName} / Room ${data.roomId || 'N/A'}`,
     });
 
     return dispatch;
@@ -489,6 +495,21 @@ export class DispatchService {
         dispatchedByName: user?.name || 'System User',
       },
     });
+
+    // Create entry in SwapHistory
+    await prisma.swapHistory.create({
+      data: {
+        roomId: dto.roomId,
+        roomName: dto.roomName || locationItem?.roomName || null,
+        partId,
+        buildingName: dto.buildingName || null,
+        oldSerialNo: oldFaultySerialNo,
+        newSerialNo: newSpareSerialNo,
+        swappedBy: user?.name || 'System User',
+        swapReason: dto.remarks || 'Stock Replacement Dispatch',
+        swappedAt: new Date(),
+      },
+    }).catch(() => {});
 
     // Movement & Activity Logs
     await prisma.inventoryMovement.create({

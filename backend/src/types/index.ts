@@ -66,3 +66,11 @@ export const RMAStatus = {
   REJECTED: 'REJECTED',
 } as const;
 export type RMAStatus = (typeof RMAStatus)[keyof typeof RMAStatus];
+
+export const UserStatus = {
+  ACTIVE: 'ACTIVE',
+  SUSPENDED: 'SUSPENDED',
+  DISABLED: 'DISABLED',
+} as const;
+export type UserStatus = (typeof UserStatus)[keyof typeof UserStatus];
+

@@ -11,6 +11,7 @@ import { Layout } from '../../components/layout';
 import { Button, Card, Badge } from '../../components/ui';
 import { useAuthStore } from '../../store/useAuthStore';
 import { Comment, InventoryMovement } from '../../types';
+import { isRealSerial } from '../../utils/serialUtils';
 
 const statusVariant = (s: string): 'success' | 'danger' | 'warning' | 'default' =>
   s === 'AVAILABLE' ? 'success' : s === 'DISPATCHED' ? 'danger' : 'warning';
@@ -137,9 +138,9 @@ export const SpareDetailPage: React.FC = () => {
           <div className="text-right">
             <p className="text-3xl font-black text-slate-900">{item.availableQuantity}</p>
             <p className="text-xs text-slate-600 font-semibold">available / {item.quantity} total {item.unit}</p>
-            {item.availableQuantity <= 2 && (
+            {item.availableQuantity <= (item.quantity * 0.5) && (
               <p className="text-xs text-amber-600 font-bold flex items-center gap-1 justify-end mt-1">
-                <AlertTriangle className="w-3 h-3" /> Low Stock
+                <AlertTriangle className="w-3 h-3" /> Low Stock (≤ 50%)
               </p>
             )}
           </div>
@@ -154,7 +155,7 @@ export const SpareDetailPage: React.FC = () => {
             {[
               { label: 'Part Code', value: item.partCode || '—', icon: Hash },
               { label: 'Model', value: item.model || '—', icon: Tag },
-              { label: 'Serial Number', value: item.serialNumber || 'N/A (Bulk)', icon: Hash },
+              { label: 'Serial Number', value: (item.isSerialized && isRealSerial(item.serialNumber)) ? item.serialNumber : 'N/A (Bulk)', icon: Hash },
               { label: 'Category', value: item.category?.name || '—', icon: Tag },
               { label: 'Store', value: item.store, icon: MapPin },
               { label: 'Location', value: item.location?.name || '—', icon: MapPin },
@@ -194,7 +195,7 @@ export const SpareDetailPage: React.FC = () => {
             <div className="space-y-2 mt-1">
               {[
                 { label: 'Total Quantity', value: item.quantity, color: 'text-slate-900' },
-                { label: 'Available Qty', value: item.availableQuantity, color: item.availableQuantity <= 2 ? 'text-amber-600' : 'text-emerald-600' },
+                { label: 'Available Qty', value: item.availableQuantity, color: item.availableQuantity <= (item.quantity * 0.5) ? 'text-amber-600' : 'text-emerald-600' },
                 { label: 'Reserved / Dispatched', value: item.quantity - item.availableQuantity, color: 'text-rose-600' },
               ].map(({ label, value, color }) => (
                 <div key={label} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200">
@@ -205,29 +206,31 @@ export const SpareDetailPage: React.FC = () => {
             </div>
           </Card>
 
-          <Card title="Quick Actions">
-            <div className="space-y-2 mt-1">
-              <Button
-                variant="danger"
-                size="sm"
-                className="w-full"
-                icon={<Truck className="w-3.5 h-3.5" />}
-                onClick={() => navigate(`/dispatch?itemId=${item.id}`)}
-                disabled={item.availableQuantity === 0}
-              >
-                Dispatch This Spare
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full"
-                icon={<RotateCcw className="w-3.5 h-3.5" />}
-                onClick={() => navigate(`/pickup?itemId=${item.id}`)}
-              >
-                Pickup From Site
-              </Button>
-            </div>
-          </Card>
+          {user?.role !== 'READ_ONLY' && (
+            <Card title="Quick Actions">
+              <div className="space-y-2 mt-1">
+                <Button
+                  variant="danger"
+                  size="sm"
+                  className="w-full"
+                  icon={<Truck className="w-3.5 h-3.5" />}
+                  onClick={() => navigate(`/dispatch?itemId=${item.id}`)}
+                  disabled={item.availableQuantity === 0}
+                >
+                  Dispatch This Spare
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  icon={<RotateCcw className="w-3.5 h-3.5" />}
+                  onClick={() => navigate(`/pickup?itemId=${item.id}`)}
+                >
+                  Pickup From Site
+                </Button>
+              </div>
+            </Card>
+          )}
         </div>
       </div>
 
@@ -262,32 +265,34 @@ export const SpareDetailPage: React.FC = () => {
         {activeTab === 'comments' && (
           <div className="space-y-3">
             {/* Add comment */}
-            <div className="flex gap-2">
-              <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white shrink-0 shadow-sm">
-                {user?.name?.[0] || 'U'}
-              </div>
-              <div className="flex-1">
-                <textarea
-                  value={newComment}
-                  onChange={(e) => setNewComment(e.target.value)}
-                  placeholder="Add a comment about this spare part..."
-                  rows={2}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 font-medium placeholder-slate-400 focus:outline-none focus:border-indigo-600 resize-none"
-                />
-                <div className="flex justify-end mt-1.5">
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={handleAddComment}
-                    isLoading={addCommentMutation.isPending}
-                    disabled={!newComment.trim()}
-                    icon={<Send className="w-3.5 h-3.5" />}
-                  >
-                    Post Comment
-                  </Button>
+            {user?.role !== 'READ_ONLY' && (
+              <div className="flex gap-2">
+                <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white shrink-0 shadow-sm">
+                  {user?.name?.[0] || 'U'}
+                </div>
+                <div className="flex-1">
+                  <textarea
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    placeholder="Add a comment about this spare part..."
+                    rows={2}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 font-medium placeholder-slate-400 focus:outline-none focus:border-indigo-600 resize-none"
+                  />
+                  <div className="flex justify-end mt-1.5">
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={handleAddComment}
+                      isLoading={addCommentMutation.isPending}
+                      disabled={!newComment.trim()}
+                      icon={<Send className="w-3.5 h-3.5" />}
+                    >
+                      Post Comment
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Comment list */}
             {comments.length === 0 ? (

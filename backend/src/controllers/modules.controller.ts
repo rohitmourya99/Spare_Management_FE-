@@ -9,6 +9,8 @@ import { excelService } from '../services/excel.service';
 import { reportsService } from '../services/reports.service';
 import { ApiResponse } from '../utils/response.util';
 import { AppError } from '../middleware/error.middleware';
+import { UserRole } from '../types';
+import { exportToCSV, exportToExcel } from '../utils/export.util';
 
 // Dispatch Controller
 export class DispatchController {
@@ -126,23 +128,30 @@ export class SiteController {
   }
 
   async create(req: Request, res: Response) {
-    const site = await siteService.create(req.body);
+    const site = await siteService.create(req.body, req.user?.userId);
     ApiResponse.created(res, site, 'Site created');
   }
 
   async update(req: Request, res: Response) {
-    const site = await siteService.update(req.params.id, req.body);
+    const site = await siteService.update(req.params.id, req.body, req.user?.userId);
     ApiResponse.success(res, site, 'Site updated');
   }
 
   async delete(req: Request, res: Response) {
-    await siteService.delete(req.params.id);
+    await siteService.delete(req.params.id, req.user?.userId);
     ApiResponse.success(res, null, 'Site deleted');
   }
 
   async importSites(req: Request, res: Response) {
     if (!req.file) throw new AppError(400, 'Please upload SPOC Excel file');
     const summary = await excelService.importSites(req.file.buffer, req.user!.userId);
+    await activityService.logActivity({
+      userId: req.user!.userId,
+      module: 'Import',
+      action: 'Site Master Imported',
+      entity: 'Site',
+      remarks: `Uploaded ${summary?.validRows || 0} site records`,
+    });
     ApiResponse.success(res, summary, 'Site master imported successfully');
   }
 }
@@ -154,7 +163,19 @@ export class ReportsController {
     if (!type) throw new AppError(400, 'Report type is required');
 
     if (format) {
+      if (req.user?.role === UserRole.ENGINEER) {
+        ApiResponse.forbidden(res, 'Field Engineers are restricted from downloading reports');
+        return;
+      }
       await reportsService.exportReport(res, type, format, req.query);
+      await activityService.logActivity({
+        userId: req.user!.userId,
+        module: 'Reports',
+        action: format === 'pdf' ? 'PDF Download' : 'Excel Download',
+        entity: 'Report',
+        entityLabel: type,
+        remarks: `Exported ${type} report as ${format.toUpperCase()}`,
+      });
     } else {
       const data = await reportsService.getReportData(type, req.query);
       ApiResponse.success(res, data);
@@ -169,7 +190,19 @@ export class ReportsController {
     const { format } = req.query as { format?: 'excel' | 'pdf' | 'csv' };
 
     if (format) {
+      if (req.user?.role === UserRole.ENGINEER) {
+        ApiResponse.forbidden(res, 'Field Engineers are restricted from downloading reports');
+        return;
+      }
       await reportsService.exportReport(res, reportType, format, req.query);
+      await activityService.logActivity({
+        userId: req.user!.userId,
+        module: 'Reports',
+        action: format === 'pdf' ? 'PDF Download' : 'Excel Download',
+        entity: 'Report',
+        entityLabel: reportType,
+        remarks: `Exported ${reportType} report as ${format.toUpperCase()}`,
+      });
     } else {
       const data = await reportsService.getReportData(reportType, req.query);
       ApiResponse.success(res, data);
@@ -190,34 +223,40 @@ export class UserController {
   }
 
   async create(req: Request, res: Response) {
-    const user = await userService.create(req.body);
-    ApiResponse.created(res, user, 'User created');
+    const user = await userService.create(req.body, req.user as any);
+    ApiResponse.created(res, user, 'User created successfully');
   }
 
   async update(req: Request, res: Response) {
-    const user = await userService.update(req.params.id, req.body);
-    ApiResponse.success(res, user, 'User updated');
+    const user = await userService.update(req.params.id, req.body, req.user as any);
+    ApiResponse.success(res, user, 'User updated successfully');
   }
 
   async updateStatus(req: Request, res: Response) {
-    const { status, isActive } = req.body;
-    let activeState: boolean | undefined = isActive;
-    if (activeState === undefined && status !== undefined) {
-      activeState = status === 'ACTIVE';
+    const { status } = req.body;
+    let targetStatus = status;
+    if (!targetStatus && req.body.isActive !== undefined) {
+      targetStatus = req.body.isActive ? 'ACTIVE' : 'DISABLED';
     }
-    const user = await userService.update(req.params.id, { isActive: activeState });
-    ApiResponse.success(res, user, 'User status updated');
+    if (!targetStatus) {
+      throw new AppError(400, 'Status is required (ACTIVE, SUSPENDED, or DISABLED)');
+    }
+    const user = await userService.updateStatus(req.params.id, targetStatus, req.user as any);
+    ApiResponse.success(res, user, `User status updated to ${targetStatus}`);
   }
 
   async updateRole(req: Request, res: Response) {
     const { role } = req.body;
-    const user = await userService.update(req.params.id, { role });
-    ApiResponse.success(res, user, 'User role updated');
+    const user = await userService.update(req.params.id, { role }, req.user as any);
+    ApiResponse.success(res, user, 'User role updated successfully');
   }
 
   async resetPassword(req: Request, res: Response) {
     const password = req.body.newPassword || req.body.password;
-    await userService.resetPassword(req.params.id, password);
+    if (!password) {
+      throw new AppError(400, 'New password is required');
+    }
+    await userService.resetPassword(req.params.id, password, req.user as any);
     ApiResponse.success(res, null, 'Password reset successfully');
   }
 }
@@ -225,8 +264,28 @@ export class UserController {
 // Activity Controller
 export class ActivityController {
   async getAll(req: Request, res: Response) {
-    const result = await activityService.getAll(req.query as any);
+    if (req.user?.role === UserRole.READ_ONLY) {
+      ApiResponse.forbidden(res, 'Read Only users cannot access Activity Logs');
+      return;
+    }
+    const result = await activityService.getAll(req.query as any, req.user as any);
     ApiResponse.paginated(res, result.logs, result.pagination);
+  }
+
+  async exportLogs(req: Request, res: Response) {
+    if (req.user?.role === UserRole.READ_ONLY) {
+      ApiResponse.forbidden(res, 'Read Only users cannot export Activity Logs');
+      return;
+    }
+    const exportData = await activityService.exportLogs(req.query as any, req.user as any);
+    const format = ((req.query.format as string) || 'excel').toLowerCase();
+    const dateStr = new Date().toISOString().split('T')[0];
+
+    if (format === 'csv') {
+      exportToCSV(res, exportData as any, `Activity_Logs_${dateStr}`);
+    } else {
+      exportToExcel(res, exportData as any, 'Activity Logs', `Activity_Logs_${dateStr}.xlsx`);
+    }
   }
 }
 

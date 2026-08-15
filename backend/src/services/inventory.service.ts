@@ -4,6 +4,8 @@ import { prisma } from '../config/database';
 import { AppError } from '../middleware/error.middleware';
 import { parsePagination, buildPagination } from '../utils/response.util';
 import { generateQRCode } from '../utils/qrcode.util';
+import { isBatchOrDummySerial } from '../utils/export.util';
+import { activityService } from './activity.service';
 
 export interface InventoryFilters {
   search?: string;
@@ -60,6 +62,7 @@ export class InventoryService {
         { partCode: { contains: filters.search } },
         { serialNumber: { contains: filters.search } },
         { oem: { name: { contains: filters.search } } },
+        { category: { name: { contains: filters.search } } },
         { description: { contains: filters.search } },
       ];
     }
@@ -71,7 +74,16 @@ export class InventoryService {
     if (filters.isSerialized !== undefined) {
       where.isSerialized = filters.isSerialized === 'true';
     }
-    if (filters.status) where.status = filters.status;
+    if (filters.status) {
+      const statusUpper = String(filters.status).toUpperCase();
+      if (statusUpper === 'LOW_STOCK') {
+        where.availableQuantity = { lte: 5 };
+      } else if (statusUpper === 'OUT_OF_STOCK') {
+        where.availableQuantity = { equals: 0 };
+      } else {
+        where.status = filters.status;
+      }
+    }
 
     if (filters.warrantyExpiringDays) {
       const futureDate = new Date();
@@ -172,7 +184,7 @@ export class InventoryService {
     }
 
     const qrCode = await generateQRCode(spareId);
-    const isSerialized = Boolean(data.serialNumber && data.serialNumber.trim() !== '');
+    const isSerialized = !isBatchOrDummySerial(data.serialNumber);
     const quantity = isSerialized ? 1 : (data.quantity || 1);
 
     const item = await prisma.inventoryItem.create({
@@ -223,15 +235,16 @@ export class InventoryService {
     });
 
     // Activity log
-    await prisma.activityLog.create({
-      data: {
-        userId,
-        action: 'CREATE',
-        entity: 'InventoryItem',
-        entityId: item.id,
-        entityLabel: `${item.spareId} - ${item.productName}`,
-        newValue: JSON.stringify(item),
-      },
+    await activityService.logActivity({
+      userId,
+      module: 'Inventory',
+      action: 'Add Part',
+      entity: 'InventoryItem',
+      entityId: item.id,
+      entityLabel: `${item.partCode || item.spareId} - ${item.productName}`,
+      partCode: item.partCode || undefined,
+      serialNumber: item.serialNumber || undefined,
+      newValue: `Quantity: ${quantity}, Store: ${item.store}, Status: ${item.status}`,
     });
 
     return item;
@@ -263,53 +276,115 @@ export class InventoryService {
       },
     });
 
-    await prisma.activityLog.create({
-      data: {
-        userId,
-        action: 'UPDATE',
-        entity: 'InventoryItem',
-        entityId: id,
-        entityLabel: `${updated.spareId} - ${updated.productName}`,
-        oldValue: JSON.stringify(existing),
-        newValue: JSON.stringify(updated),
-      },
+    // Compute field diffs for audit trail
+    const changes: string[] = [];
+    const inputStatus = (data as any).status;
+    if (inputStatus && inputStatus !== existing.status) changes.push(`Status: ${existing.status} → ${inputStatus}`);
+    if (data.quantity !== undefined && data.quantity !== existing.quantity) changes.push(`Quantity: ${existing.quantity} → ${data.quantity}`);
+    if (data.serialNumber !== undefined && data.serialNumber !== existing.serialNumber) changes.push(`Serial No: ${existing.serialNumber || 'N/A'} → ${data.serialNumber || 'N/A'}`);
+    if (data.store && data.store !== existing.store) changes.push(`Store: ${existing.store} → ${data.store}`);
+    if (data.productName && data.productName !== existing.productName) changes.push(`Product Name: ${existing.productName} → ${data.productName}`);
+    if (data.partCode && data.partCode !== existing.partCode) changes.push(`Part Code: ${existing.partCode || 'N/A'} → ${data.partCode}`);
+
+    const primaryAction = changes.some(c => c.startsWith('Status'))
+      ? 'Status Change'
+      : changes.some(c => c.startsWith('Quantity'))
+      ? 'Quantity Change'
+      : changes.some(c => c.startsWith('Serial'))
+      ? 'Serial Number Change'
+      : 'Edit Part';
+
+    await activityService.logActivity({
+      userId,
+      module: 'Inventory',
+      action: primaryAction,
+      entity: 'InventoryItem',
+      entityId: id,
+      entityLabel: `${updated.partCode || updated.spareId} - ${updated.productName}`,
+      partCode: updated.partCode || undefined,
+      serialNumber: updated.serialNumber || undefined,
+      oldValue: changes.length > 0 ? changes.map(c => c.split(' → ')[0]).join(', ') : 'Previous Data',
+      newValue: changes.length > 0 ? changes.join(' | ') : 'Updated Data',
     });
 
     return updated;
   }
 
   /**
-   * Soft Delete inventory item (Data Security requirement)
+   * Archive inventory item (Archive Instead of Delete)
    */
-  async delete(id: string, userId: string) {
+  async archiveItem(id: string, userId: string) {
     const item = await prisma.inventoryItem.findFirst({ where: { id, isDeleted: false } });
     if (!item) throw new AppError(404, 'Inventory item not found');
 
     if (item.status === 'DISPATCHED') {
-      throw new AppError(400, 'Cannot delete a dispatched item');
+      throw new AppError(400, 'Cannot archive a dispatched item');
     }
 
-    await prisma.inventoryItem.update({
+    const updated = await prisma.inventoryItem.update({
       where: { id },
-      data: { isDeleted: true, updatedById: userId },
+      data: { isArchived: true, archivedAt: new Date(), archivedById: userId },
     });
 
-    await prisma.activityLog.create({
-      data: {
-        userId,
-        action: 'DELETE',
-        entity: 'InventoryItem',
-        entityId: id,
-        entityLabel: `${item.spareId} - ${item.productName}`,
-        oldValue: JSON.stringify(item),
-      },
+    await activityService.logActivity({
+      userId,
+      module: 'Inventory',
+      action: 'Archive Part',
+      entity: 'InventoryItem',
+      entityId: id,
+      entityLabel: `${item.partCode || item.spareId} - ${item.productName}`,
+      partCode: item.partCode || undefined,
+      serialNumber: item.serialNumber || undefined,
+      oldValue: 'Active Inventory',
+      newValue: 'Archived Inventory',
     });
+
+    return updated;
   }
 
   /**
-   * Comprehensive Dashboard Statistics
+   * Restore archived inventory item (Super Admin only)
+   */
+  async restoreArchivedItem(id: string, userId: string) {
+    const item = await prisma.inventoryItem.findFirst({ where: { id } });
+    if (!item) throw new AppError(404, 'Inventory item not found');
+
+    const updated = await prisma.inventoryItem.update({
+      where: { id },
+      data: { isArchived: false, archivedAt: null, archivedById: null, isDeleted: false },
+    });
+
+    await activityService.logActivity({
+      userId,
+      module: 'Inventory',
+      action: 'Restore Archived Part',
+      entity: 'InventoryItem',
+      entityId: id,
+      entityLabel: `${item.partCode || item.spareId} - ${item.productName}`,
+      partCode: item.partCode || undefined,
+      serialNumber: item.serialNumber || undefined,
+      oldValue: 'Archived Inventory',
+      newValue: 'Active Inventory',
+    });
+
+    return updated;
+  }
+
+  /**
+   * Soft Delete inventory item
+   */
+  async delete(id: string, userId: string) {
+    return this.archiveItem(id, userId);
+  }
+
+  /**
+   * Comprehensive Dashboard Statistics with Part Code 50% Threshold Low Stock Rule
    */
   async getDashboardStats() {
+    const stockAnalysis = await this.calculatePartCodeLowStock();
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
     const [
       totalItems,
       totalSerialized,
@@ -317,15 +392,18 @@ export class InventoryService {
       oemCount,
       delhiStats,
       bengaluruStats,
-      lowStockCount,
-      outOfStockCount,
       recentDispatches,
       recentPickups,
       recentActivities,
-      lowStockAlerts,
       oemDistributionRaw,
       monthlyDispatches,
       monthlyPickups,
+      todaysActivitiesCount,
+      totalActivitiesCount,
+      todaysDispatchCount,
+      todaysPickupCount,
+      failedLoginAttemptsCount,
+      recentInventoryUpdates,
     ] = await Promise.all([
       prisma.inventoryItem.count({ where: { isDeleted: false } }),
       prisma.inventoryItem.count({ where: { isDeleted: false, isSerialized: true } }),
@@ -344,14 +422,6 @@ export class InventoryService {
         where: { isDeleted: false, store: 'Bengaluru' },
         _count: { id: true },
         _sum: { quantity: true, availableQuantity: true },
-      }),
-
-      // Stock alerts
-      prisma.inventoryItem.count({
-        where: { isDeleted: false, availableQuantity: { gt: 0, lte: 2 } },
-      }),
-      prisma.inventoryItem.count({
-        where: { isDeleted: false, availableQuantity: 0 },
       }),
 
       // Recent Dispatches
@@ -375,13 +445,6 @@ export class InventoryService {
         include: { user: { select: { name: true, role: true } } },
       }),
 
-      // Low Stock Alert List
-      prisma.inventoryItem.findMany({
-        where: { isDeleted: false, availableQuantity: { lte: 2 } },
-        include: { oem: true },
-        take: 5,
-      }),
-
       // OEM distribution
       prisma.inventoryItem.groupBy({
         by: ['oemId'],
@@ -392,6 +455,19 @@ export class InventoryService {
 
       this.getMonthlyStats('dispatch'),
       this.getMonthlyStats('pickup'),
+
+      // Phase 3 Activity Metrics
+      prisma.activityLog.count({ where: { createdAt: { gte: startOfToday } } }),
+      prisma.activityLog.count(),
+      prisma.dispatch.count({ where: { createdAt: { gte: startOfToday } } }),
+      prisma.pickup.count({ where: { createdAt: { gte: startOfToday } } }),
+      prisma.activityLog.count({ where: { action: 'Failed Login', createdAt: { gte: startOfToday } } }),
+      prisma.inventoryItem.findMany({
+        where: { isDeleted: false },
+        orderBy: { updatedAt: 'desc' },
+        take: 5,
+        include: { oem: true },
+      }),
     ]);
 
     // Format OEM Distribution with names
@@ -411,8 +487,13 @@ export class InventoryService {
         totalOEMs: oemCount,
         delhiTotalStock: delhiStats._sum.quantity || 0,
         bengaluruTotalStock: bengaluruStats._sum.quantity || 0,
-        lowStockCount,
-        outOfStockCount,
+        lowStockCount: stockAnalysis.lowStockCount,
+        outOfStockCount: stockAnalysis.outOfStockCount,
+        todaysActivitiesCount,
+        totalActivitiesCount,
+        todaysDispatchCount,
+        todaysPickupCount,
+        failedLoginAttemptsCount,
       },
       delhiStoreSummary: {
         totalItems: delhiStats._count.id,
@@ -427,10 +508,221 @@ export class InventoryService {
       recentDispatches,
       recentPickups,
       recentActivities,
-      lowStockAlerts,
+      recentInventoryUpdates,
+      lowStockAlerts: stockAnalysis.lowStockAlerts,
       oemDistribution,
       monthlyDispatches,
       monthlyPickups,
+    };
+  }
+
+  /**
+   * Group active inventory items by Part Code and calculate Part Code level low stock alerts (<= 50% available stock).
+   */
+  async calculatePartCodeLowStock() {
+    const activeItems = await prisma.inventoryItem.findMany({
+      where: { isDeleted: false },
+      include: { oem: { select: { name: true } } },
+    });
+
+    const groups = new Map<string, {
+      partCode: string;
+      productName: string;
+      oemName: string;
+      totalQuantity: number;
+      availableQuantity: number;
+      sampleItem: any;
+    }>();
+
+    for (const item of activeItems) {
+      const key = (item.partCode || item.productName || 'UNKNOWN').trim();
+      const existing = groups.get(key);
+      const qty = item.quantity || 1;
+      const avail = item.availableQuantity ?? qty;
+
+      if (!existing) {
+        groups.set(key, {
+          partCode: key,
+          productName: item.productName,
+          oemName: item.oem?.name || 'Generic',
+          totalQuantity: qty,
+          availableQuantity: avail,
+          sampleItem: item,
+        });
+      } else {
+        existing.totalQuantity += qty;
+        existing.availableQuantity += avail;
+      }
+    }
+
+    const lowStockAlerts: Array<{
+      id?: string;
+      partId?: string;
+      partCode: string;
+      partName?: string;
+      productName: string;
+      oemName: string;
+      totalQuantity: number;
+      availableQuantity: number;
+      quantity?: number;
+      reorderLevel?: number;
+      minStock?: number;
+      percentRemaining: number;
+      isOutOfStock: boolean;
+      spareId?: string;
+      store?: string;
+      location?: string;
+    }> = [];
+
+    let lowStockCount = 0;
+    let outOfStockCount = 0;
+
+    for (const g of groups.values()) {
+      if (g.totalQuantity > 0) {
+        const percent = Math.round((g.availableQuantity / g.totalQuantity) * 100);
+
+        if (g.availableQuantity === 0) {
+          outOfStockCount++;
+        }
+
+        // Trigger Low Stock alert only when available stock falls to 50% or below of total quantity
+        if (g.availableQuantity <= (g.totalQuantity * 0.5)) {
+          lowStockCount++;
+          lowStockAlerts.push({
+            id: g.sampleItem?.id,
+            partId: g.sampleItem?.partId || g.sampleItem?.spareId || g.partCode,
+            partCode: g.partCode,
+            partName: g.productName,
+            productName: g.productName,
+            oemName: g.oemName,
+            totalQuantity: g.totalQuantity,
+            quantity: g.availableQuantity,
+            availableQuantity: g.availableQuantity,
+            reorderLevel: (g.sampleItem as any)?.minStock || (g.sampleItem as any)?.min_stock || 5,
+            minStock: (g.sampleItem as any)?.minStock || (g.sampleItem as any)?.min_stock || 5,
+            percentRemaining: percent,
+            isOutOfStock: g.availableQuantity === 0,
+            spareId: g.sampleItem?.spareId,
+            store: g.sampleItem?.store || 'Delhi',
+            location: g.sampleItem?.store || g.sampleItem?.location?.name || 'Delhi',
+          });
+        }
+      }
+    }
+
+    lowStockAlerts.sort((a, b) => a.percentRemaining - b.percentRemaining);
+
+    return {
+      lowStockCount,
+      outOfStockCount,
+      lowStockAlerts: lowStockAlerts,
+      allLowStockGroups: lowStockAlerts,
+    };
+  }
+
+  /**
+   * Get stock alert detailed breakdown for low stock and out of stock items
+   */
+  async getStockAlerts() {
+    const activeItems = await prisma.inventoryItem.findMany({
+      where: { isDeleted: false },
+      include: { oem: { select: { name: true } }, location: { select: { name: true } } },
+    });
+
+    const stockItems = activeItems.map((item) => {
+      const avail = item.availableQuantity ?? item.quantity;
+      const minStock = (item as any).minStock || (item as any).min_stock || 5;
+      return {
+        id: item.id,
+        partId: item.partId || item.spareId || item.partCode || 'N/A',
+        partCode: item.partCode || item.spareId || 'N/A',
+        partName: item.productName,
+        productName: item.productName,
+        quantity: avail,
+        availableQuantity: avail,
+        totalQuantity: item.quantity,
+        reorderLevel: minStock,
+        minStock,
+        location: item.store || item.location?.name || 'Delhi',
+        store: item.store || 'Delhi',
+        oemName: item.oem?.name || 'Generic',
+        isOutOfStock: avail === 0,
+      };
+    });
+
+    const lowStockItems = stockItems.filter((item) => item.quantity > 0 && item.quantity <= item.reorderLevel);
+    const outOfStockItems = stockItems.filter((item) => item.quantity === 0);
+
+    const partCodeAnalysis = await this.calculatePartCodeLowStock();
+
+    return {
+      summary: {
+        lowStockCount: partCodeAnalysis.lowStockCount || lowStockItems.length,
+        outOfStockCount: partCodeAnalysis.outOfStockCount || outOfStockItems.length,
+      },
+      lowStockItems: lowStockItems.length > 0 ? lowStockItems : partCodeAnalysis.allLowStockGroups,
+      outOfStockItems,
+      lowStockAlerts: partCodeAnalysis.allLowStockGroups,
+    };
+  }
+
+  /**
+   * Dynamic Real-time Low Stock Breakdown
+   */
+  async getDynamicLowStockDetails() {
+    const allStock = await prisma.inventoryItem.findMany({
+      where: { isDeleted: false },
+      include: {
+        oem: { select: { id: true, name: true } },
+        category: { select: { id: true, name: true } },
+        location: { select: { id: true, name: true } },
+      },
+      orderBy: { availableQuantity: 'asc' },
+    });
+
+    const mappedStock = allStock.map((item) => {
+      const avail = item.availableQuantity ?? item.quantity;
+      const reorderLevel = (item as any).minStock || (item as any).min_stock || 5;
+      return {
+        id: item.id,
+        partId: item.partId || item.spareId || item.partCode || 'N/A',
+        partCode: item.partCode || item.spareId || 'N/A',
+        partName: item.productName,
+        productName: item.productName,
+        category: item.category?.name || 'General',
+        quantity: avail,
+        availableQuantity: avail,
+        totalQuantity: item.quantity,
+        reorderLevel,
+        minStock: reorderLevel,
+        location: item.store || item.location?.name || 'Delhi',
+        store: item.store || 'Delhi',
+        oemName: item.oem?.name || 'Generic',
+        unitPrice: 0,
+        isOutOfStock: avail === 0,
+      };
+    });
+
+    const outOfStockItems = mappedStock.filter((item) => item.quantity === 0);
+    const lowStockItems = mappedStock.filter(
+      (item) => item.quantity > 0 && item.quantity <= item.reorderLevel
+    );
+
+    const partCodeAnalysis = await this.calculatePartCodeLowStock();
+
+    const finalLowStockList = lowStockItems.length > 0 ? lowStockItems : partCodeAnalysis.allLowStockGroups;
+    const finalLowStockCount = partCodeAnalysis.lowStockCount || lowStockItems.length;
+    const finalOutOfStockCount = partCodeAnalysis.outOfStockCount || outOfStockItems.length;
+
+    return {
+      success: true,
+      counts: {
+        lowStock: finalLowStockCount,
+        outOfStock: finalOutOfStockCount,
+        totalWarning: finalLowStockCount + finalOutOfStockCount,
+      },
+      lowStockItems: finalLowStockList,
+      outOfStockItems,
     };
   }
 
@@ -610,8 +902,13 @@ export class InventoryService {
       }),
     ]);
 
+    const cleanedItems = items.map((item) => ({
+      ...item,
+      partSerialNo: isBatchOrDummySerial(item.partSerialNo) ? '' : item.partSerialNo.trim(),
+    }));
+
     return {
-      items,
+      items: cleanedItems,
       pagination: buildPagination(page, limit, total),
     };
   }
@@ -660,8 +957,16 @@ export class InventoryService {
       }),
     ]);
 
+    const cleanedLogs = logs.map((log) => ({
+      ...log,
+      oldFaultySerialNo: isBatchOrDummySerial(log.oldFaultySerialNo) ? '' : log.oldFaultySerialNo.trim(),
+      newSpareSerialNo: isBatchOrDummySerial(log.newSpareSerialNo) ? '' : log.newSpareSerialNo.trim(),
+      dispatchedByName: log.dispatchedBy?.name || 'System Dispatcher',
+    }));
+
     return {
-      logs,
+      data: cleanedLogs,
+      logs: cleanedLogs,
       pagination: buildPagination(page, limit, total),
     };
   }

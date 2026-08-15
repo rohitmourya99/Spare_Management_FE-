@@ -1,4 +1,5 @@
 export type UserRole = 'SUPER_ADMIN' | 'INVENTORY_ADMIN' | 'ENGINEER' | 'READ_ONLY';
+export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'DISABLED';
 
 export type InventoryStatus =
   | 'AVAILABLE'
@@ -37,6 +38,7 @@ export interface User {
   email: string;
   role: UserRole;
   phone?: string;
+  status?: UserStatus;
   isActive?: boolean;
   lastLoginAt?: string | Date;
   createdAt?: string | Date;
@@ -193,12 +195,36 @@ export interface RMA {
 export interface ActivityLog {
   id: string;
   userId: string;
-  user: User;
+  user?: User;
+  userName?: string;
+  userRole?: string;
+  module?: string;
   action: string;
-  entity: string;
+  entity?: string;
   entityId?: string;
   entityLabel?: string;
+  partCode?: string;
+  serialNumber?: string;
+  siteName?: string;
+  oldValue?: string;
+  newValue?: string;
+  remarks?: string;
   ipAddress?: string;
+  createdAt: string;
+}
+
+export interface SwapHistoryItem {
+  id: string;
+  roomId: string;
+  roomName?: string;
+  partId: string;
+  buildingName?: string;
+  floor?: string;
+  oldSerialNo: string;
+  newSerialNo: string;
+  swappedBy: string;
+  swapReason?: string;
+  swappedAt: string;
   createdAt: string;
 }
 

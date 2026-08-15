@@ -17,18 +17,20 @@ export const Sidebar: React.FC = () => {
     navigate('/login');
   };
 
+  const role = user?.role || 'ENGINEER';
+
   const navItems = [
-    { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, color: 'text-indigo-600' },
-    { label: 'Stock List', path: '/stock-list', icon: Package, color: 'text-blue-600' },
-    { label: 'Inventory', path: '/inventory', icon: Building2, color: 'text-indigo-600' },
-    { label: 'Dispatch', path: '/dispatch', icon: Truck, color: 'text-rose-600' },
-    { label: 'Pickup & OEM', path: '/pickup', icon: RotateCcw, color: 'text-emerald-600' },
-    { label: 'Site Master', path: '/sites', icon: Building2, color: 'text-cyan-600' },
-    { label: 'Reports', path: '/reports', icon: FileSpreadsheet, color: 'text-amber-600' },
-    { label: 'Users', path: '/users', icon: Users, color: 'text-pink-600' },
-    { label: 'Activity Log', path: '/activity', icon: History, color: 'text-purple-600' },
-    { label: 'Settings', path: '/settings', icon: Settings, color: 'text-slate-600' },
-  ];
+    { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, color: 'text-indigo-600', roles: ['SUPER_ADMIN', 'INVENTORY_ADMIN', 'ENGINEER', 'READ_ONLY'] },
+    { label: 'Stock List', path: '/stock-list', icon: Package, color: 'text-blue-600', roles: ['SUPER_ADMIN', 'INVENTORY_ADMIN', 'ENGINEER', 'READ_ONLY'] },
+    { label: 'Inventory', path: '/inventory', icon: Building2, color: 'text-indigo-600', roles: ['SUPER_ADMIN', 'INVENTORY_ADMIN', 'ENGINEER', 'READ_ONLY'] },
+    { label: 'Dispatch', path: '/dispatch', icon: Truck, color: 'text-rose-600', roles: ['SUPER_ADMIN', 'INVENTORY_ADMIN', 'ENGINEER'] },
+    { label: 'Pickup & OEM', path: '/pickup', icon: RotateCcw, color: 'text-emerald-600', roles: ['SUPER_ADMIN', 'INVENTORY_ADMIN', 'ENGINEER'] },
+    { label: 'Site Master', path: '/sites', icon: Building2, color: 'text-cyan-600', roles: ['SUPER_ADMIN', 'INVENTORY_ADMIN', 'READ_ONLY'] },
+    { label: 'Reports', path: '/reports', icon: FileSpreadsheet, color: 'text-amber-600', roles: ['SUPER_ADMIN', 'INVENTORY_ADMIN', 'READ_ONLY'] },
+    { label: 'Users', path: '/users', icon: Users, color: 'text-pink-600', roles: ['SUPER_ADMIN'] },
+    { label: 'Activity Logs', path: '/activity', icon: History, color: 'text-purple-600', roles: ['SUPER_ADMIN'] },
+    { label: 'Settings', path: '/settings', icon: Settings, color: 'text-slate-600', roles: ['SUPER_ADMIN'] },
+  ].filter(item => item.roles.includes(role));
 
   const initials = user?.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'U';
 

@@ -4,6 +4,24 @@ import { Response } from 'express';
 import { logger } from '../config/logger';
 import { format } from 'date-fns';
 
+export const isBatchOrDummySerial = (sn?: any): boolean => {
+  if (sn === null || sn === undefined) return true;
+  const s = String(sn).trim().toUpperCase();
+  return (
+    s === '' ||
+    s.includes('BATCH_') ||
+    s.startsWith('_BATCH') ||
+    s.startsWith('BATCH') ||
+    s.startsWith('XYZ') ||
+    s === 'N/A' ||
+    s === 'NA' ||
+    s === 'NULL' ||
+    s === 'UNDEFINED' ||
+    s === 'NONE' ||
+    s === 'BULK'
+  );
+};
+
 /**
  * Export data to Excel file and send as response
  */
@@ -140,7 +158,7 @@ export function exportInventoryToPDF(
         item.oem?.name || item.oem || item['OEM'] || '-',
         item.productName || item['Product Name'] || '-',
         item.model || item['Model'] || '-',
-        item.serialNumber || item['Serial Number'] || 'N/A',
+        isBatchOrDummySerial(item.serialNumber || item['Serial Number']) ? '-' : String(item.serialNumber || item['Serial Number']).trim(),
         String(item.quantity ?? item['Quantity'] ?? item['Qty'] ?? 0),
         item.location?.name || item.location || item.store || item['Store'] || '-',
         item.status || item['Status'] || '-',
@@ -234,7 +252,7 @@ export function formatInventoryForExport(items: any[]): Record<string, unknown>[
     Model: item.model ?? '',
     'Part ID': item.partId ?? '',
     'Part Code': item.partCode ?? '',
-    'Serial Number': item.serialNumber ?? '',
+    'Serial Number': isBatchOrDummySerial(item.serialNumber) ? '' : item.serialNumber,
     Quantity: item.quantity,
     Unit: item.unit,
     Location: item.location?.name ?? '',

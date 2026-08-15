@@ -1,10 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
   Package, Layers, MapPin, Cpu, AlertTriangle,
   Truck, RotateCcw, Upload, Search, FileSpreadsheet, ChevronRight,
   Activity, Archive, CheckCircle2, XCircle, Sparkles, TrendingUp, Filter,
+  ShieldAlert, Clock, History, UserCheck, ArrowRight
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -20,6 +21,7 @@ export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const [selectedFilter, setSelectedFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [isStockModalOpen, setIsStockModalOpen] = useState<boolean>(false);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['dashboard-stats'],
@@ -31,6 +33,22 @@ export const DashboardPage: React.FC = () => {
     refetchOnWindowFocus: false,
     retry: false,
   });
+
+  const { data: dynamicLowStock, isLoading: isLoadingDynamic, refetch: refetchDynamicLowStock } = useQuery({
+    queryKey: ['dynamic-low-stock'],
+    queryFn: async () => {
+      const res = await api.get('/stock/low-stock-details');
+      return res.data;
+    },
+    refetchInterval: false,
+    refetchOnWindowFocus: false,
+  });
+
+  const handleOpenStockModal = (e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
+    refetchDynamicLowStock();
+    setIsStockModalOpen(true);
+  };
 
   const { data: inventoryItemsData, isLoading: isLoadingInventory } = useQuery({
     queryKey: ['dashboard-inventory-items'],
@@ -123,11 +141,10 @@ export const DashboardPage: React.FC = () => {
   const blr = data?.bengaluruStoreSummary || {};
 
   const quickActions = [
-    { label: 'Import Excel', icon: Upload, gradient: 'from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 border-b-2 border-indigo-900/30', onClick: () => navigate('/inventory?action=import') },
-    { label: 'Dispatch Spare', icon: Truck, gradient: 'from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 border-b-2 border-rose-900/30', onClick: () => navigate('/dispatch') },
-    { label: 'Pickup Spare', icon: RotateCcw, gradient: 'from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 border-b-2 border-emerald-900/30', onClick: () => navigate('/pickup') },
-    { label: 'Reports', icon: FileSpreadsheet, gradient: 'from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 border-b-2 border-amber-900/30', onClick: () => navigate('/reports') },
-    { label: 'Search Stock List', icon: Search, gradient: 'from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 border-b-2 border-blue-900/30', onClick: () => navigate('/inventory') },
+    { label: 'Import Excel', icon: Upload, path: '/stock-list?action=import', gradient: 'from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 border-b-2 border-indigo-900/30' },
+    { label: 'Dispatch Spare', icon: Truck, path: '/dispatch', gradient: 'from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 border-b-2 border-rose-900/30' },
+    { label: 'Pickup Spare', icon: RotateCcw, path: '/pickup', gradient: 'from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 border-b-2 border-emerald-900/30' },
+    { label: 'Reports', icon: FileSpreadsheet, path: '/reports', gradient: 'from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 border-b-2 border-amber-900/30' },
   ];
 
   const topSummaryCards = [
@@ -139,6 +156,11 @@ export const DashboardPage: React.FC = () => {
     { id: 'BENGALURU', title: 'Bengaluru Stock', value: inv.bengaluruTotalStock ?? 0, icon: MapPin, color: 'text-orange-600' },
     { id: 'LOW_STOCK', title: 'Low Stock Items', value: inv.lowStockCount ?? 0, icon: AlertTriangle, color: 'text-amber-600' },
     { id: 'OUT_OF_STOCK', title: 'Out of Stock', value: inv.outOfStockCount ?? 0, icon: XCircle, color: 'text-rose-600' },
+    { id: 'TODAYS_ACTIVITIES', title: "Today's Activities", value: inv.todaysActivitiesCount ?? 0, icon: History, color: 'text-indigo-700' },
+    { id: 'TOTAL_ACTIVITIES', title: 'Total Audit Logs', value: inv.totalActivitiesCount ?? 0, icon: Activity, color: 'text-purple-700' },
+    { id: 'TODAYS_DISPATCH', title: "Today's Dispatch", value: inv.todaysDispatchCount ?? 0, icon: Truck, color: 'text-blue-700' },
+    { id: 'TODAYS_PICKUP', title: "Today's Pickup", value: inv.todaysPickupCount ?? 0, icon: RotateCcw, color: 'text-emerald-700' },
+    { id: 'FAILED_LOGINS', title: 'Failed Login Attempts', value: inv.failedLoginAttemptsCount ?? 0, icon: ShieldAlert, color: 'text-rose-700' },
   ];
 
   const activeCardObj = topSummaryCards.find((c) => c.id === selectedFilter) || topSummaryCards[0];
@@ -160,16 +182,6 @@ export const DashboardPage: React.FC = () => {
             <p className="text-xs text-slate-600 mt-1 max-w-xl font-medium">
               Real-time spare parts monitoring across Delhi &amp; Bengaluru warehouses, BHEL dispatch tracking, and OEM replacements.
             </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => navigate('/stock-list')}
-              className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-500/20 border-b-2 border-indigo-800 flex items-center gap-1.5 transition-all hover:-translate-y-0.5"
-            >
-              <Package className="w-3.5 h-3.5" />
-              Manage Stock List
-            </button>
           </div>
         </div>
       </div>
@@ -308,7 +320,7 @@ export const DashboardPage: React.FC = () => {
                     </td>
                     <td className="p-3 text-right">
                       <button
-                        onClick={() => navigate('/inventory')}
+                        onClick={() => navigate(`/stock-list?search=${encodeURIComponent(item.partCode || item.productName || '')}`)}
                         className="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-xs font-bold border border-indigo-200 transition-colors inline-flex items-center gap-1"
                       >
                         Inspect <ChevronRight className="w-3 h-3" />
@@ -322,7 +334,7 @@ export const DashboardPage: React.FC = () => {
           {displayedItems.length > 15 && (
             <div className="p-3 bg-slate-50 border-t border-slate-200 text-center">
               <button
-                onClick={() => navigate('/inventory')}
+                onClick={() => navigate('/stock-list')}
                 className="text-xs font-bold text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-1"
               >
                 View all {displayedItems.length} items in Stock List <ChevronRight className="w-3.5 h-3.5" />
@@ -400,40 +412,131 @@ export const DashboardPage: React.FC = () => {
             {quickActions.map((action, idx) => {
               const Icon = action.icon;
               return (
-                <button
+                <Link
                   key={idx}
-                  onClick={action.onClick}
+                  to={action.path}
                   className={`bg-gradient-to-r ${action.gradient} text-white rounded-xl px-3 py-2.5 flex items-center gap-2 text-xs font-bold shadow-md transition-all hover:-translate-y-0.5 active:translate-y-0`}
                 >
                   <Icon className="w-3.5 h-3.5 shrink-0" />
                   <span className="truncate">{action.label}</span>
-                </button>
+                </Link>
               );
             })}
           </div>
         </Card>
       </div>
 
-      {/* Low Stock Alert Bar */}
-      {inv.lowStockCount > 0 && (
-        <div className="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-between shadow-md" style={{ boxShadow: '0 4px 18px -2px rgba(245, 158, 11, 0.1)' }}>
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center shrink-0 border border-amber-200">
-              <AlertTriangle className="w-4 h-4 text-amber-600" />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-amber-900">Stock Reorder Warning</p>
-              <p className="text-[11px] text-amber-700 font-medium mt-0.5">
-                {inv.lowStockCount} item(s) are running low. {inv.outOfStockCount > 0 && `${inv.outOfStockCount} item(s) are completely out of stock.`}
-              </p>
+      {/* Low Stock Alert Bar & Breakdown */}
+      {((dynamicLowStock?.counts?.lowStock ?? inv.lowStockCount ?? 0) > 0 || (dynamicLowStock?.counts?.outOfStock ?? inv.outOfStockCount ?? 0) > 0) && (
+        <div className="mb-6 p-5 rounded-2xl bg-gradient-to-br from-amber-50 via-orange-50/40 to-amber-50/80 border border-amber-200/90 shadow-md">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-100/90 flex items-center justify-center shrink-0 border border-amber-300 text-amber-600 shadow-xs">
+                <AlertTriangle className="w-5 h-5 text-amber-600 animate-pulse" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-extrabold text-amber-950">Stock Reorder Warning</p>
+                  <span className="bg-amber-200 text-amber-900 text-[10px] font-black px-2 py-0.5 rounded-full border border-amber-300">
+                    {dynamicLowStock?.counts?.totalWarning ?? dynamicLowStock?.lowStockItems?.length ?? data?.lowStockAlerts?.length ?? inv.lowStockCount} Part Types Affected
+                  </span>
+                </div>
+                <p className="text-xs text-amber-800 font-medium mt-0.5">
+                  <span className="font-bold text-amber-950">{dynamicLowStock?.counts?.lowStock ?? inv.lowStockCount ?? 0} item(s)</span> are running low. {(dynamicLowStock?.counts?.outOfStock ?? inv.outOfStockCount ?? 0) > 0 && <span className="font-bold text-rose-700">{(dynamicLowStock?.counts?.outOfStock ?? inv.outOfStockCount ?? 0)} item(s) are completely out of stock.</span>}
+                </p>
+              </div>
             </div>
           </div>
-          <button
-            onClick={() => navigate('/inventory')}
-            className="px-3 py-1.5 rounded-xl bg-amber-600 text-white hover:bg-amber-700 text-xs font-bold flex items-center gap-1 shrink-0 transition-all hover:-translate-y-0.5 border-b-2 border-amber-800 shadow-md"
-          >
-            Review Stock <ChevronRight className="w-3.5 h-3.5" />
-          </button>
+
+          {/* Detailed Low-Stock Parts Breakdown Table */}
+          <div className="mt-4 pt-4 border-t border-amber-200/80">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-black text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
+                  <ShieldAlert className="w-4 h-4 text-amber-600" />
+                  Dynamic Low-Stock &amp; Out-of-Stock Parts Breakdown ({dynamicLowStock?.counts?.lowStock ?? inv.lowStockCount ?? 0} Low Stock Items)
+                </p>
+                <span className="text-[11px] font-semibold text-amber-800">
+                  Showing all {(dynamicLowStock?.lowStockItems || data?.lowStockAlerts || []).length} real-time low-stock part records
+                </span>
+              </div>
+
+              <div className="overflow-x-auto rounded-xl border border-amber-200 bg-white/90 shadow-sm">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-amber-100 bg-amber-50/60 text-[11px] font-extrabold text-amber-900 uppercase tracking-wider">
+                      <th className="p-2.5">Part ID / Code</th>
+                      <th className="p-2.5">Spare Part Name</th>
+                      <th className="p-2.5">OEM Vendor</th>
+                      <th className="p-2.5">Store Location</th>
+                      <th className="p-2.5">Current Stock</th>
+                      <th className="p-2.5">Min Threshold</th>
+                      <th className="p-2.5">Stock Status</th>
+                      <th className="p-2.5 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-amber-100/70 text-xs text-slate-900">
+                    {(dynamicLowStock?.lowStockItems || data?.lowStockAlerts || []).length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="p-4 text-center text-amber-800 text-xs font-semibold">
+                          No low stock breakdown records available.
+                        </td>
+                      </tr>
+                    ) : (
+                      (dynamicLowStock?.lowStockItems || data?.lowStockAlerts || []).map((item: any, idx: number) => {
+                        const partId = item.partId || item.spareId || item.partCode || 'N/A';
+                        const name = item.productName || item.partName || 'Spare Item';
+                        const oem = item.oemName || 'Standard OEM';
+                        const avail = item.availableQuantity ?? item.quantity ?? 0;
+                        const min = item.reorderLevel || item.minStock || Math.ceil((item.totalQuantity || 10) * 0.5);
+                        const storeLoc = item.store || item.location || 'Delhi';
+                        const isZero = avail === 0;
+
+                        return (
+                          <tr key={idx} className="hover:bg-amber-50/50 transition-colors">
+                            <td className="p-2.5 font-mono text-indigo-700 font-extrabold text-[11px]">
+                              {partId}
+                            </td>
+                            <td className="p-2.5 font-bold text-slate-900">
+                              {name}
+                            </td>
+                            <td className="p-2.5 font-semibold text-slate-700">
+                              {oem}
+                            </td>
+                            <td className="p-2.5">
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border ${storeLoc.toLowerCase().includes('delhi') ? 'bg-blue-50 text-blue-800 border-blue-200' : 'bg-orange-50 text-orange-800 border-orange-200'}`}>
+                                <MapPin className="w-3 h-3" />
+                                {storeLoc}
+                              </span>
+                            </td>
+                            <td className="p-2.5 font-black">
+                              <span className={isZero ? 'text-rose-700' : 'text-amber-700'}>
+                                {avail} {item.unit || 'PCS'}
+                              </span>
+                            </td>
+                            <td className="p-2.5 font-semibold text-slate-600">
+                              {min} {item.unit || 'PCS'}
+                            </td>
+                            <td className="p-2.5">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase border ${isZero ? 'bg-rose-100 text-rose-800 border-rose-300' : 'bg-amber-100 text-amber-800 border-amber-300'}`}>
+                                {isZero ? 'OUT OF STOCK' : 'LOW STOCK'}
+                              </span>
+                            </td>
+                            <td className="p-2.5 text-right">
+                              <button
+                                onClick={() => navigate(`/stock-list?search=${encodeURIComponent(item.partCode || name)}`)}
+                                className="px-2.5 py-1 rounded-lg bg-amber-600 text-white hover:bg-amber-700 text-[11px] font-bold transition-all shadow-xs inline-flex items-center gap-1"
+                              >
+                                View Part <ChevronRight className="w-3 h-3" />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
         </div>
       )}
 
@@ -445,8 +548,8 @@ export const DashboardPage: React.FC = () => {
               <AreaChart data={data?.monthlyDispatches || []}>
                 <defs>
                   <linearGradient id="dispatchGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#4f46e5" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <XAxis dataKey="month" stroke="#64748b" fontSize={11} tickLine={false} />
@@ -464,8 +567,8 @@ export const DashboardPage: React.FC = () => {
               <AreaChart data={data?.monthlyPickups || []}>
                 <defs>
                   <linearGradient id="pickupGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#059669" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#059669" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#059669" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#059669" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <XAxis dataKey="month" stroke="#64748b" fontSize={11} tickLine={false} />
@@ -507,31 +610,44 @@ export const DashboardPage: React.FC = () => {
           </div>
         </Card>
 
-        {/* Live Activity Feed */}
+        {/* Live Activity Feed / Timeline */}
         <div className="lg:col-span-2">
-          <Card title="Real-Time System Log" subtitle="Recent stock activities" action={
+          <Card title="Recent Activity Timeline" subtitle="Audit logs & change history" action={
             <button onClick={() => navigate('/activity')} className="text-xs text-indigo-600 hover:text-indigo-700 font-bold flex items-center gap-1">
-              Full Log <ChevronRight className="w-3 h-3" />
+              Full Activity Log <ChevronRight className="w-3 h-3" />
             </button>
           }>
-            <div className="space-y-2 mt-1 max-h-56 overflow-y-auto pr-1">
+            <div className="space-y-2 mt-1 max-h-60 overflow-y-auto pr-1">
               {(data?.recentActivities || []).length === 0 ? (
                 <p className="text-xs text-slate-500 text-center py-6 font-medium">No recent activity recorded</p>
               ) : (
-                (data?.recentActivities || []).map((log: any, i: number) => (
-                  <div key={i} className="flex items-start gap-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 hover:border-slate-300 transition-colors shadow-2xs">
-                    <Activity className="w-3.5 h-3.5 text-indigo-600 mt-0.5 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-slate-800 truncate">
-                        <span className="font-bold text-slate-900">{log.user?.name}</span>
-                        {' · '}
-                        <span className="text-indigo-600 font-bold">{log.action}</span>
-                        {log.entityLabel && <span className="text-slate-600 font-medium"> — {log.entityLabel}</span>}
-                      </p>
-                      <p className="text-[10px] text-slate-500 mt-0.5 font-mono">{new Date(log.createdAt).toLocaleString('en-IN')}</p>
+                (data?.recentActivities || []).map((log: any, i: number) => {
+                  const userName = log.userName || log.user?.name || 'System';
+                  const userRole = log.userRole || log.user?.role || 'SYSTEM';
+                  return (
+                    <div key={i} className="flex items-start gap-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 hover:border-slate-300 transition-colors shadow-2xs">
+                      <Activity className="w-3.5 h-3.5 text-indigo-600 mt-1 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-slate-900 text-xs">{userName}</span>
+                          <span className="bg-indigo-100 text-indigo-800 text-[10px] px-1.5 py-0.2 rounded font-extrabold uppercase">{userRole}</span>
+                          <span className="text-slate-400 text-xs">•</span>
+                          <span className="font-bold text-indigo-600 text-xs">{log.action}</span>
+                          {log.module && <span className="bg-slate-200 text-slate-800 text-[10px] px-1.5 rounded font-bold">{log.module}</span>}
+                        </div>
+                        {log.entityLabel && <p className="text-xs text-slate-700 font-medium mt-0.5">{log.entityLabel}</p>}
+                        {log.oldValue && log.newValue && (
+                          <p className="text-[11px] text-slate-600 font-mono mt-1 bg-white p-1.5 rounded border border-slate-200">
+                            <span className="text-rose-700 font-bold">{log.oldValue}</span>
+                            <ArrowRight className="w-3 h-3 inline mx-1 text-slate-400" />
+                            <span className="text-emerald-700 font-bold">{log.newValue}</span>
+                          </p>
+                        )}
+                        <p className="text-[10px] text-slate-400 mt-1 font-mono">{new Date(log.createdAt).toLocaleString('en-IN')}</p>
+                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </Card>
@@ -579,27 +695,155 @@ export const DashboardPage: React.FC = () => {
         </Card>
 
         {/* Low Stock Alerts */}
-        <Card title="Low Stock Monitoring">
+        <Card title="Low Stock Monitoring (<= 50% Stock Available)">
           <div className="space-y-2 mt-1">
             {(data?.lowStockAlerts || []).length === 0
               ? <div className="flex flex-col items-center py-6 gap-2">
-                  <CheckCircle2 className="w-8 h-8 text-emerald-600" />
-                  <p className="text-xs font-bold text-slate-700">All inventory levels healthy</p>
-                </div>
+                <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+                <p className="text-xs font-bold text-slate-700">All inventory levels healthy</p>
+              </div>
               : (data?.lowStockAlerts || []).map((item: any, i: number) => (
                 <div key={i} className="flex items-center justify-between p-2.5 rounded-xl bg-amber-50 border border-amber-200/80">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-bold text-slate-900 truncate">{item.productName}</p>
-                    <p className="text-[10px] text-slate-500 font-medium">{item.oem?.name}</p>
+                  <div className="min-w-0 flex-1 pr-2">
+                    <p className="text-xs font-bold text-slate-900 truncate">
+                      <span className="font-mono text-indigo-700 font-bold mr-1.5">{item.partCode}</span>
+                      {item.productName}
+                    </p>
+                    <p className="text-[10px] text-slate-500 font-medium">{item.oemName || item.oem?.name}</p>
                   </div>
-                  <span className={`text-xs font-extrabold px-2.5 py-0.5 rounded-lg ${item.availableQuantity === 0 ? 'bg-rose-100 text-rose-700 border border-rose-200' : 'bg-amber-100 text-amber-700 border border-amber-200'}`}>
-                    {item.availableQuantity} left
+                  <span className={`text-[11px] font-mono font-extrabold px-2.5 py-1 rounded-lg shrink-0 ${item.availableQuantity === 0 ? 'bg-rose-100 text-rose-800 border border-rose-300' : 'bg-amber-100 text-amber-800 border border-amber-300'}`}>
+                    {item.availableQuantity === 0 ? '0 Out of Stock' : `${item.availableQuantity} / ${item.totalQuantity} (${item.percentRemaining}%)`}
                   </span>
                 </div>
               ))}
           </div>
         </Card>
       </div>
+
+      {/* 3. LOW STOCK BREAKDOWN MODAL POPUP */}
+      {isStockModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden border border-slate-200 flex flex-col max-h-[85vh]">
+
+            {/* Header */}
+            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-gradient-to-r from-amber-50/80 via-orange-50/40 to-white">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0 shadow-xs">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 tracking-tight">Low Stock Devices Breakdown</h3>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">
+                    Listing all parts currently requiring reorder attention ({((dynamicLowStock?.lowStockItems || []) as any[]).length + ((dynamicLowStock?.outOfStockItems || []) as any[]).length} items total)
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsStockModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold flex items-center justify-center text-lg transition-colors cursor-pointer"
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Table View of Low Stock Items */}
+            <div className="p-5 overflow-y-auto flex-1">
+              {isLoadingDynamic ? (
+                <div className="text-center py-12 text-slate-400 text-sm font-semibold flex flex-col items-center gap-2">
+                  <div className="w-8 h-8 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                  Fetching live stock breakdown data...
+                </div>
+              ) : (dynamicLowStock?.lowStockItems || []).length === 0 && (dynamicLowStock?.outOfStockItems || []).length === 0 ? (
+                <div className="text-center py-12 text-slate-500 text-sm font-semibold flex flex-col items-center gap-2">
+                  <CheckCircle2 className="w-10 h-10 text-emerald-500" />
+                  All inventory items are sufficiently stocked!
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-xl border border-slate-200">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-600 font-extrabold border-b border-slate-200">
+                        <th className="p-3">#</th>
+                        <th className="p-3">Part ID</th>
+                        <th className="p-3">Part Name / Device</th>
+                        <th className="p-3">Category / OEM</th>
+                        <th className="p-3 text-center">Available Stock</th>
+                        <th className="p-3 text-center">Min Level</th>
+                        <th className="p-3 text-right">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-xs text-slate-900">
+                      {/* Out of stock items */}
+                      {(dynamicLowStock?.outOfStockItems || []).map((item: any, idx: number) => {
+                        const partId = item.partId || item.spareId || item.partCode || 'N/A';
+                        const name = item.productName || item.partName || 'Spare Item';
+                        const category = item.category || item.oemName || 'General';
+                        const min = item.reorderLevel || item.minStock || 5;
+
+                        return (
+                          <tr key={`out-${idx}`} className="bg-rose-50/50 hover:bg-rose-100/50 transition-colors">
+                            <td className="p-3 text-slate-400 font-bold">{idx + 1}</td>
+                            <td className="p-3 font-mono font-extrabold text-rose-900">{partId}</td>
+                            <td className="p-3 font-bold text-slate-900">{name}</td>
+                            <td className="p-3 text-slate-600 font-medium">{category}</td>
+                            <td className="p-3 text-center font-black text-rose-700">0</td>
+                            <td className="p-3 text-center text-slate-600 font-semibold">{min}</td>
+                            <td className="p-3 text-right">
+                              <span className="px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 font-black text-[10px] uppercase border border-rose-300">
+                                OUT OF STOCK
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+
+                      {/* Low stock items */}
+                      {(dynamicLowStock?.lowStockItems || []).map((item: any, idx: number) => {
+                        const partId = item.partId || item.spareId || item.partCode || 'N/A';
+                        const name = item.productName || item.partName || 'Spare Item';
+                        const category = item.category || item.oemName || 'General';
+                        const avail = item.quantity ?? item.availableQuantity ?? 0;
+                        const min = item.reorderLevel || item.minStock || 5;
+
+                        return (
+                          <tr key={`low-${idx}`} className="hover:bg-amber-50/40 transition-colors">
+                            <td className="p-3 text-slate-400 font-bold">{(dynamicLowStock?.outOfStockItems || []).length + idx + 1}</td>
+                            <td className="p-3 font-mono font-extrabold text-amber-900">{partId}</td>
+                            <td className="p-3 font-bold text-slate-900">{name}</td>
+                            <td className="p-3 text-slate-600 font-medium">{category}</td>
+                            <td className="p-3 text-center font-black text-amber-700">{avail}</td>
+                            <td className="p-3 text-center text-slate-600 font-semibold">{min}</td>
+                            <td className="p-3 text-right">
+                              <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 font-black text-[10px] uppercase border border-amber-300">
+                                LOW STOCK
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-between items-center">
+              <span className="text-xs text-slate-500 font-medium">
+                Total Low Stock Parts: <strong className="text-slate-900 font-extrabold font-mono">{(dynamicLowStock?.lowStockItems || []).length + (dynamicLowStock?.outOfStockItems || []).length}</strong>
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsStockModalOpen(false)}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 };

@@ -23,6 +23,7 @@ model User {
   password      String
   role          String    @default("ENGINEER") // SUPER_ADMIN | INVENTORY_ADMIN | ENGINEER | READ_ONLY
   phone         String?
+  status        String    @default("ACTIVE") // ACTIVE | SUSPENDED | DISABLED
   isActive      Boolean   @default(true)
   lastLoginAt   DateTime?
   refreshTokens RefreshToken[]
@@ -45,6 +46,7 @@ model User {
   updatedAt DateTime @updatedAt
 
   @@index([role])
+  @@index([status])
   @@index([isActive])
   @@map("users")
 }
@@ -170,6 +172,9 @@ model InventoryItem {
   qrCode            String?   // Base64 QR image
   barcode           String?
   isDeleted         Boolean   @default(false)
+  isArchived        Boolean   @default(false)
+  archivedAt        DateTime?
+  archivedById      String?
 
   dispatchedToLocationId String?
   dispatchedToRoomId     String?
@@ -198,6 +203,7 @@ model InventoryItem {
   @@index([categoryId])
   @@index([locationId])
   @@index([createdById])
+  @@index([isArchived])
   @@index([store])
   @@index([status])
   @@index([isSerialized])
@@ -441,22 +447,31 @@ model Reservation {
 // ==============================================
 
 model ActivityLog {
-  id          String   @id @default(uuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  action      String
-  entity      String
-  entityId    String?
-  entityLabel String?
-  oldValue    String?
-  newValue    String?
-  ipAddress   String?
-  userAgent   String?
-  createdAt   DateTime @default(now())
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  userName     String?
+  userRole     String?
+  module       String   @default("System") // Inventory, Dispatch, Pickup, Reports, Import, Site Master, User Management, Authentication
+  action       String
+  entity       String?
+  entityId     String?
+  entityLabel  String?
+  partCode     String?
+  serialNumber String?
+  siteName     String?
+  oldValue     String?
+  newValue     String?
+  remarks      String?
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
 
   @@index([userId])
   @@index([action])
   @@index([entity])
+  @@index([module])
+  @@index([partCode])
   @@map("activity_logs")
 }
 
@@ -523,6 +538,34 @@ model ReplacementAuditLog {
   @@index([state])
   @@map("replacement_audit_logs")
 }
+
+// ==============================================
+// SWAP TRACKING & AUDIT HISTORY
+// ==============================================
+
+model SwapHistory {
+  id            String   @id @default(uuid())
+  roomId        String
+  roomName      String?
+  partId        String
+  buildingName  String?
+  floor         String?
+  oldSerialNo   String
+  newSerialNo   String
+  swappedBy     String   @default("System / Technician")
+  swapReason    String?  @default("Stock Replacement")
+  swappedAt     DateTime @default(now())
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([roomId])
+  @@index([partId])
+  @@index([oldSerialNo])
+  @@index([newSerialNo])
+  @@map("swap_histories")
+}
+
 
 // ==============================================
 // FILE UPLOADS

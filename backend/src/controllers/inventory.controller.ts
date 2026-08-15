@@ -56,6 +56,19 @@ export class InventoryController {
     ApiResponse.success(res, stats);
   }
 
+  async getStockAlerts(req: Request, res: Response): Promise<void> {
+    const alerts = await inventoryService.getStockAlerts();
+    res.status(200).json({
+      success: true,
+      ...alerts,
+    });
+  }
+
+  async getDynamicLowStockDetails(req: Request, res: Response): Promise<void> {
+    const details = await inventoryService.getDynamicLowStockDetails();
+    res.status(200).json(details);
+  }
+
   async importExcel(req: Request, res: Response): Promise<void> {
     if (!req.file) {
       throw new AppError(400, 'Please upload an Excel file');
@@ -150,6 +163,16 @@ export class InventoryController {
   async replenishItem(req: Request, res: Response): Promise<void> {
     const item = await inventoryService.replenishItem(req.params.id, req.body, req.user!.userId);
     ApiResponse.success(res, item, 'Stock item successfully re-stocked and set to AVAILABLE');
+  }
+
+  async archive(req: Request, res: Response): Promise<void> {
+    const item = await inventoryService.archiveItem(req.params.id, req.user!.userId);
+    ApiResponse.success(res, item, 'Inventory item archived successfully');
+  }
+
+  async restore(req: Request, res: Response): Promise<void> {
+    const item = await inventoryService.restoreArchivedItem(req.params.id, req.user!.userId);
+    ApiResponse.success(res, item, 'Archived inventory item restored successfully');
   }
 
   async getLocationHierarchy(req: Request, res: Response): Promise<void> {

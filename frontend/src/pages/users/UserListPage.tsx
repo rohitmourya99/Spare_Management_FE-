@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Search, UserPlus, Users, ShieldCheck,
   KeyRound, Edit, UserCheck, UserX, RefreshCw,
-  Phone, Mail, CheckCircle2, AlertCircle, Snowflake, Ban
+  Phone, Mail, CheckCircle2, AlertCircle, Snowflake, Ban, Save, X
 } from 'lucide-react';
 import api from '../../api';
 import { Layout } from '../../components/layout';
@@ -22,6 +22,15 @@ export const UserListPage: React.FC = () => {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+
+  // Role Change state
+  const [pendingRoles, setPendingRoles] = useState<Record<string, UserRole>>({});
+  const [confirmRoleModalOpen, setConfirmRoleModalOpen] = useState(false);
+  const [pendingRoleChange, setPendingRoleChange] = useState<{
+    user: User;
+    oldRole: UserRole;
+    newRole: UserRole;
+  } | null>(null);
 
   // Form states
   const [createForm, setCreateForm] = useState({
@@ -70,16 +79,19 @@ export const UserListPage: React.FC = () => {
 
   // Apply client-side status filter if set
   const users = rawUsers.filter((u) => {
-    if (statusFilter === 'ACTIVE') return u.isActive !== false;
-    if (statusFilter === 'FROZEN' || statusFilter === 'INACTIVE') return u.isActive === false;
+    const st = u.status || (u.isActive !== false ? 'ACTIVE' : 'DISABLED');
+    if (statusFilter === 'ACTIVE') return st === 'ACTIVE';
+    if (statusFilter === 'SUSPENDED') return st === 'SUSPENDED';
+    if (statusFilter === 'DISABLED') return st === 'DISABLED';
     return true;
   });
 
   // Calculate statistics
   const totalCount = pagination.total || users.length;
   const superAdminCount = rawUsers.filter((u) => u.role === 'SUPER_ADMIN').length;
-  const activeCount = rawUsers.filter((u) => u.isActive !== false).length;
-  const frozenCount = rawUsers.filter((u) => u.isActive === false).length;
+  const activeCount = rawUsers.filter((u) => (u.status || (u.isActive !== false ? 'ACTIVE' : 'DISABLED')) === 'ACTIVE').length;
+  const suspendedCount = rawUsers.filter((u) => u.status === 'SUSPENDED').length;
+  const disabledCount = rawUsers.filter((u) => (u.status || (u.isActive !== false ? 'ACTIVE' : 'DISABLED')) === 'DISABLED').length;
 
   const showNotification = (msg: string, isErr = false) => {
     if (isErr) {
@@ -126,26 +138,61 @@ export const UserListPage: React.FC = () => {
     }
   };
 
-  // Account Status Control: Freeze / Inactivate / Activate
-  const handleToggleStatus = async (user: User, newStatus: boolean) => {
+  // Account Status Control: Active / Suspended / Disabled
+  const handleUpdateStatus = async (user: User, newStatus: 'ACTIVE' | 'SUSPENDED' | 'DISABLED') => {
     try {
-      await api.patch(`/users/${user.id}/status`, { isActive: newStatus });
-      const statusLabel = newStatus ? 'Activated' : 'Frozen / Inactivated';
-      showNotification(`Account for ${user.name} has been ${statusLabel}.`);
+      await api.patch(`/users/${user.id}/status`, { status: newStatus });
+      showNotification(`Status for ${user.name} changed to ${newStatus}.`);
       queryClient.invalidateQueries({ queryKey: ['users'] });
     } catch (err: any) {
       showNotification(err.response?.data?.message || 'Failed to update account status', true);
     }
   };
 
-  // Role Assignment Update
-  const handleRoleChange = async (user: User, newRole: UserRole) => {
+  // Role Selection & Confirmation
+  const handleRoleSelect = (user: User, newRole: UserRole) => {
+    if (newRole === user.role) {
+      setPendingRoles((prev) => {
+        const next = { ...prev };
+        delete next[user.id];
+        return next;
+      });
+    } else {
+      setPendingRoles((prev) => ({ ...prev, [user.id]: newRole }));
+    }
+  };
+
+  const handleCancelRoleChange = (userId: string) => {
+    setPendingRoles((prev) => {
+      const next = { ...prev };
+      delete next[userId];
+      return next;
+    });
+  };
+
+  const handleInitiateSaveRole = (user: User) => {
+    const newRole = pendingRoles[user.id];
+    if (!newRole || newRole === user.role) return;
+    setPendingRoleChange({ user, oldRole: user.role, newRole });
+    setConfirmRoleModalOpen(true);
+  };
+
+  const handleConfirmRoleChange = async () => {
+    if (!pendingRoleChange) return;
+    const { user, newRole } = pendingRoleChange;
+    setIsSubmitting(true);
     try {
       await api.patch(`/users/${user.id}/role`, { role: newRole });
-      showNotification(`Role for ${user.name} changed to ${newRole}.`);
+      showNotification('User role updated successfully.');
+      handleCancelRoleChange(user.id);
+      setConfirmRoleModalOpen(false);
+      setPendingRoleChange(null);
       queryClient.invalidateQueries({ queryKey: ['users'] });
     } catch (err: any) {
-      showNotification(err.response?.data?.message || 'Failed to update role', true);
+      showNotification(err.response?.data?.message || 'Failed to update user role', true);
+      setConfirmRoleModalOpen(false);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -241,9 +288,15 @@ export const UserListPage: React.FC = () => {
           color="text-emerald-600"
         />
         <StatCard
-          title="Frozen / Inactive Accounts"
-          value={frozenCount}
+          title="Suspended Accounts"
+          value={suspendedCount}
           icon={UserX}
+          color="text-amber-600"
+        />
+        <StatCard
+          title="Disabled Accounts"
+          value={disabledCount}
+          icon={Ban}
           color="text-rose-600"
         />
       </div>
@@ -292,7 +345,8 @@ export const UserListPage: React.FC = () => {
           >
             <option value="ALL">All Statuses</option>
             <option value="ACTIVE">Active Only</option>
-            <option value="FROZEN">Frozen / Inactive</option>
+            <option value="SUSPENDED">Suspended Only</option>
+            <option value="DISABLED">Disabled Only</option>
           </select>
         </div>
 
@@ -385,22 +439,51 @@ export const UserListPage: React.FC = () => {
                         </span>
                       </td>
 
-                      {/* Role Dropdown */}
+                      {/* Role Dropdown with Unsaved Change Indicator & Save/Cancel buttons */}
                       <td className="px-4 py-3.5">
-                        <div className="flex items-center gap-2">
-                          {formatRoleBadge(u.role)}
-                          <select
-                            value={u.role}
-                            onChange={(e) => handleRoleChange(u, e.target.value as UserRole)}
-                            className="text-[10px] bg-white border border-slate-300 rounded px-1.5 py-0.5 text-slate-800 font-bold focus:outline-none focus:border-indigo-600 cursor-pointer"
-                            title="Change User Role"
-                          >
-                            <option value="SUPER_ADMIN">Super Admin</option>
-                            <option value="INVENTORY_ADMIN">Inventory Manager</option>
-                            <option value="ENGINEER">Engineer</option>
-                            <option value="READ_ONLY">Read Only</option>
-                          </select>
-                        </div>
+                        {(() => {
+                          const selectedRole = pendingRoles[u.id] || u.role;
+                          const isChanged = pendingRoles[u.id] && pendingRoles[u.id] !== u.role;
+
+                          return (
+                            <div className="flex items-center gap-2">
+                              {formatRoleBadge(selectedRole)}
+                              <select
+                                value={selectedRole}
+                                onChange={(e) => handleRoleSelect(u, e.target.value as UserRole)}
+                                className={`text-[10px] bg-white border rounded px-1.5 py-0.5 font-bold focus:outline-none focus:border-indigo-600 cursor-pointer ${
+                                  isChanged ? 'border-amber-500 ring-2 ring-amber-500/20 text-amber-900 font-extrabold' : 'border-slate-300 text-slate-800'
+                                }`}
+                                title="Change User Role"
+                              >
+                                <option value="SUPER_ADMIN">Super Admin</option>
+                                <option value="INVENTORY_ADMIN">Inventory Manager</option>
+                                <option value="ENGINEER">Engineer</option>
+                                <option value="READ_ONLY">Read Only</option>
+                              </select>
+
+                              {isChanged && (
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={() => handleInitiateSaveRole(u)}
+                                    className="p-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white shadow-2xs transition-transform hover:scale-105 flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5"
+                                    title="Save Role Change"
+                                  >
+                                    <Save className="w-3 h-3" />
+                                    <span>Save</span>
+                                  </button>
+                                  <button
+                                    onClick={() => handleCancelRoleChange(u.id)}
+                                    className="p-1 rounded bg-slate-200 hover:bg-slate-300 text-slate-700 transition-colors flex items-center justify-center"
+                                    title="Cancel Role Change"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </td>
 
                       {/* Phone */}
@@ -415,13 +498,23 @@ export const UserListPage: React.FC = () => {
                         )}
                       </td>
 
-                      {/* Account Status Badge */}
+                      {/* Account Status Badge & Selector */}
                       <td className="px-4 py-3.5">
-                        {isFrozen ? (
-                          <Badge variant="danger" dot>Frozen / Inactive</Badge>
-                        ) : (
-                          <Badge variant="success" dot>Active</Badge>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {(u.status === 'ACTIVE' || (!u.status && u.isActive !== false)) && <Badge variant="success" dot>Active</Badge>}
+                          {u.status === 'SUSPENDED' && <Badge variant="warning" dot>Suspended</Badge>}
+                          {(u.status === 'DISABLED' || (!u.status && u.isActive === false)) && <Badge variant="danger" dot>Disabled</Badge>}
+                          <select
+                            value={u.status || (u.isActive !== false ? 'ACTIVE' : 'DISABLED')}
+                            onChange={(e) => handleUpdateStatus(u, e.target.value as any)}
+                            className="text-[10px] bg-white border border-slate-300 rounded px-1.5 py-0.5 text-slate-800 font-bold focus:outline-none focus:border-indigo-600 cursor-pointer"
+                            title="Change User Status"
+                          >
+                            <option value="ACTIVE">Active</option>
+                            <option value="SUSPENDED">Suspended</option>
+                            <option value="DISABLED">Disabled</option>
+                          </select>
+                        </div>
                       </td>
 
                       {/* Last Login */}
@@ -458,27 +551,6 @@ export const UserListPage: React.FC = () => {
                           >
                             <KeyRound className="w-3.5 h-3.5" />
                           </button>
-
-                          {/* Freeze / Activate Button */}
-                          {isFrozen ? (
-                            <button
-                              onClick={() => handleToggleStatus(u, true)}
-                              className="px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-200 text-xs font-bold transition-colors flex items-center gap-1"
-                              title="Activate Account"
-                            >
-                              <UserCheck className="w-3 h-3" />
-                              Activate
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => handleToggleStatus(u, false)}
-                              className="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200 text-xs font-bold transition-colors flex items-center gap-1"
-                              title="Freeze Account"
-                            >
-                              <Ban className="w-3 h-3" />
-                              Freeze
-                            </button>
-                          )}
                         </div>
                       </td>
                     </tr>
@@ -678,6 +750,68 @@ export const UserListPage: React.FC = () => {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Confirm Role Change Modal */}
+      <Modal
+        isOpen={confirmRoleModalOpen}
+        onClose={() => {
+          if (!isSubmitting) {
+            setConfirmRoleModalOpen(false);
+            setPendingRoleChange(null);
+          }
+        }}
+        title="Confirm Role Change"
+        maxWidth="sm"
+      >
+        {pendingRoleChange && (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-700 font-medium">
+              Are you sure you want to change this user's role?
+            </p>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2.5 text-xs">
+              <div className="flex justify-between items-center py-1 border-b border-slate-200/80">
+                <span className="font-bold text-slate-500">User:</span>
+                <span className="font-extrabold text-slate-900">{pendingRoleChange.user.name}</span>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-slate-200/80">
+                <span className="font-bold text-slate-500">Old Role:</span>
+                <span className="font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                  {formatRoleBadge(pendingRoleChange.oldRole)}
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-1">
+                <span className="font-bold text-slate-500">New Role:</span>
+                <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                  {formatRoleBadge(pendingRoleChange.newRole)}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isSubmitting}
+                onClick={() => {
+                  setConfirmRoleModalOpen(false);
+                  setPendingRoleChange(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                isLoading={isSubmitting}
+                onClick={handleConfirmRoleChange}
+              >
+                Confirm
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </Layout>
   );

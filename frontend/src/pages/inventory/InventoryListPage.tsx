@@ -3,11 +3,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Search, Upload, ChevronLeft, ChevronRight, X, AlertTriangle, CheckCircle2,
   RefreshCw, Building2, MapPin, Calendar, Layers, ShieldCheck, History, ArrowRightLeft,
-  FileSpreadsheet, Filter, Check, Clock, Tag
+  FileSpreadsheet, Filter, Check, Clock, Tag, Download, Plus
 } from 'lucide-react';
 import api from '../../api';
 import { Layout } from '../../components/layout';
 import { Button, Card, Badge, Modal } from '../../components/ui';
+import { isRealSerial, formatSerialDisplay } from '../../utils/serialUtils';
 
 interface LocationInventoryItem {
   id: string;
@@ -31,16 +32,21 @@ interface LocationInventoryItem {
 
 interface ReplacementAuditLog {
   id: string;
-  partId: string;
-  oldFaultySerialNo: string;
-  newSpareSerialNo: string;
-  state: string;
-  buildingName: string;
   roomId: string;
-  roomName: string;
-  swapDate: string;
-  dispatchedById?: string;
+  roomName?: string;
+  partId: string;
+  buildingName?: string;
+  floor?: string;
+  oldSerialNo?: string;
+  oldFaultySerialNo?: string;
+  newSerialNo?: string;
+  newSpareSerialNo?: string;
+  swappedBy?: string;
   dispatchedByName?: string;
+  swapReason?: string;
+  swappedAt?: string;
+  swapDate?: string;
+  state?: string;
 }
 
 export const InventoryListPage: React.FC = () => {
@@ -65,6 +71,20 @@ export const InventoryListPage: React.FC = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadSummary, setUploadSummary] = useState<any>(null);
   const excelFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Modal for Manual Swap History Logging
+  const [logSwapModalOpen, setLogSwapModalOpen] = useState(false);
+  const [logSwapForm, setLogSwapForm] = useState({
+    roomId: '',
+    roomName: '',
+    partId: '',
+    buildingName: '',
+    floor: '',
+    oldSerialNo: '',
+    newSerialNo: '',
+    swappedBy: '',
+    swapReason: 'Stock Replacement',
+  });
 
   // Location Hierarchy Query
   const { data: hierarchyData } = useQuery({
@@ -114,20 +134,62 @@ export const InventoryListPage: React.FC = () => {
   const installedItems: LocationInventoryItem[] = locationData?.data || [];
   const locationPagination = locationData?.pagination;
 
-  // Query Replacement Audit Logs
+  // Query Swap History Records
   const auditParams: any = { search: auditSearch, page: auditPage, limit: 15 };
 
   const { data: auditData, isLoading: auditLoading } = useQuery({
-    queryKey: ['replacement-audit-logs', auditParams],
+    queryKey: ['swap-history', auditParams],
     queryFn: async () => {
-      const res = await api.get('/inventory/replacement-audits', { params: auditParams });
+      const res = await api.get('/swap-history', { params: auditParams });
       return res.data;
     },
     enabled: activeTab === 'audit-history',
   });
 
-  const auditLogs: ReplacementAuditLog[] = auditData?.data || [];
+  const auditLogs: ReplacementAuditLog[] = auditData?.items || auditData?.data || [];
   const auditPagination = auditData?.pagination;
+
+  // Manual Swap Mutation
+  const createSwapMutation = useMutation({
+    mutationFn: async (payload: typeof logSwapForm) => {
+      const res = await api.post('/swap-history', payload);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['swap-history'] });
+      setLogSwapModalOpen(false);
+      setLogSwapForm({
+        roomId: '',
+        roomName: '',
+        partId: '',
+        buildingName: '',
+        floor: '',
+        oldSerialNo: '',
+        newSerialNo: '',
+        swappedBy: '',
+        swapReason: 'Stock Replacement',
+      });
+    },
+  });
+
+  // Handle Export Swap History Excel
+  const handleExportSwapExcel = async () => {
+    try {
+      const res = await api.get('/swap-history/export', {
+        params: { search: auditSearch },
+        responseType: 'blob',
+      });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `Swap_Tracking_Audit_History_${new Date().toISOString().split('T')[0]}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (e) {
+      console.error('Export error:', e);
+    }
+  };
 
   // Handle 15-Field Excel File Upload
   const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -206,7 +268,7 @@ export const InventoryListPage: React.FC = () => {
           </button>
         </div>
 
-        {/* Tab 1 Header Action Button */}
+        {/* Tab Header Action Buttons */}
         {activeTab === 'location-inventory' && (
           <Button
             variant="primary"
@@ -216,6 +278,26 @@ export const InventoryListPage: React.FC = () => {
           >
             Upload 15-Field Inventory Excel
           </Button>
+        )}
+        {activeTab === 'audit-history' && (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleExportSwapExcel}
+              icon={<Download className="w-4 h-4 text-emerald-600" />}
+            >
+              Export Swap Excel
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setLogSwapModalOpen(true)}
+              icon={<Plus className="w-4 h-4" />}
+            >
+              Record Device Swap
+            </Button>
+          </div>
         )}
       </div>
 
@@ -370,17 +452,7 @@ export const InventoryListPage: React.FC = () => {
                   ) : (
                     installedItems.map((item, index) => {
                       const sequenceNo = ((page - 1) * 15) + index + 1;
-                      const rawSerial = item.partSerialNo || 'XYZ';
-                      const isXYZ = !rawSerial || rawSerial.toUpperCase().startsWith('XYZ');
-                      let serialDisplay = isXYZ ? 'XYZ' : rawSerial;
-                      if (!isXYZ && serialDisplay.includes('_')) {
-                        const firstPart = serialDisplay.split('_')[0]?.trim();
-                        if (firstPart && firstPart.toUpperCase() !== 'XYZ') {
-                          serialDisplay = firstPart;
-                        } else {
-                          serialDisplay = 'XYZ';
-                        }
-                      }
+                      const serialDisplay = formatSerialDisplay(item.partSerialNo, '');
                       const formatDate = (d: string | null | undefined) =>
                         d ? new Date(d).toLocaleDateString('en-IN') : null;
                       return (
@@ -392,9 +464,13 @@ export const InventoryListPage: React.FC = () => {
                           <td className="p-3 font-bold text-slate-900">{item.oem}</td>
                           <td className="p-3 font-mono font-bold text-indigo-600">{item.partId}</td>
                           <td className="p-3 font-mono">
-                            <span className={`px-2 py-0.5 rounded font-bold border text-xs ${serialDisplay === 'XYZ' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-800 border-emerald-200'}`}>
-                              {serialDisplay}
-                            </span>
+                            {serialDisplay ? (
+                              <span className="px-2 py-0.5 rounded font-bold border text-xs bg-emerald-50 text-emerald-800 border-emerald-200">
+                                {serialDisplay}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 font-normal italic">-</span>
+                            )}
                           </td>
                           <td className="p-3 font-mono text-slate-800 font-bold">{item.roomId}</td>
                           <td className="p-3 text-slate-700 font-medium">{item.locationClass}</td>
@@ -476,13 +552,13 @@ export const InventoryListPage: React.FC = () => {
                 <thead>
                   <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
                     <th className="p-3.5">Swap Date &amp; Time</th>
-                    <th className="p-3.5">Part ID</th>
-                    <th className="p-3.5">Replaced Faulty Serial No</th>
-                    <th className="p-3.5">New Spare Serial No</th>
-                    <th className="p-3.5">State</th>
-                    <th className="p-3.5">Building Name</th>
                     <th className="p-3.5">Room ID / Room Name</th>
-                    <th className="p-3.5">Dispatched By User</th>
+                    <th className="p-3.5">Building &amp; Floor</th>
+                    <th className="p-3.5">Part ID</th>
+                    <th className="p-3.5">Old Faulty Serial No</th>
+                    <th className="p-3.5">New Spare Serial No</th>
+                    <th className="p-3.5">Swapped By</th>
+                    <th className="p-3.5">Reason</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 text-slate-900">
@@ -501,37 +577,53 @@ export const InventoryListPage: React.FC = () => {
                       </td>
                     </tr>
                   ) : (
-                    auditLogs.map((log) => (
-                      <tr key={log.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="p-3.5 text-slate-700 font-semibold">
-                          {new Date(log.swapDate).toLocaleString('en-IN')}
-                        </td>
-                        <td className="p-3.5 font-mono font-bold text-indigo-600">{log.partId}</td>
-                        <td className="p-3.5 font-mono">
-                          <span className="bg-rose-50 text-rose-800 border border-rose-200 px-2.5 py-0.5 rounded font-bold">
-                            {log.oldFaultySerialNo}
-                          </span>
-                        </td>
-                        <td className="p-3.5 font-mono">
-                          <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 rounded font-bold">
-                            {log.newSpareSerialNo}
-                          </span>
-                        </td>
-                        <td className="p-3.5 font-bold text-slate-900">
-                          <span className="bg-slate-100 text-slate-800 px-2 py-0.5 rounded border border-slate-200 font-bold">
-                            {log.state}
-                          </span>
-                        </td>
-                        <td className="p-3.5 font-bold text-slate-900">{log.buildingName}</td>
-                        <td className="p-3.5 text-slate-800">
-                          <p className="font-bold text-slate-900">{log.roomId}</p>
-                          <p className="text-xs text-slate-500">{log.roomName}</p>
-                        </td>
-                        <td className="p-3.5 text-slate-700 font-semibold">
-                          {log.dispatchedByName || 'System Dispatcher'}
-                        </td>
-                      </tr>
-                    ))
+                    auditLogs.map((log) => {
+                      const oldSerial = formatSerialDisplay(log.oldSerialNo || log.oldFaultySerialNo, '');
+                      const newSerial = formatSerialDisplay(log.newSerialNo || log.newSpareSerialNo, '');
+                      const swapTime = log.swappedAt || log.swapDate;
+                      return (
+                        <tr key={log.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="p-3.5 text-slate-700 font-semibold">
+                            {swapTime ? new Date(swapTime).toLocaleString('en-IN') : '—'}
+                          </td>
+                          <td className="p-3.5 text-slate-800">
+                            <p className="font-bold text-indigo-600">{log.roomId}</p>
+                            {log.roomName && <p className="text-xs text-slate-500 font-medium">{log.roomName}</p>}
+                          </td>
+                          <td className="p-3.5 font-bold text-slate-900">
+                            <p>{log.buildingName || '—'}</p>
+                            {log.floor && <p className="text-xs text-slate-500 font-normal">Floor {log.floor}</p>}
+                          </td>
+                          <td className="p-3.5 font-mono font-bold text-slate-900">{log.partId}</td>
+                          <td className="p-3.5 font-mono">
+                            {oldSerial ? (
+                              <span className="bg-rose-50 text-rose-800 border border-rose-200 px-2.5 py-0.5 rounded font-bold">
+                                {oldSerial}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 font-normal italic">-</span>
+                            )}
+                          </td>
+                          <td className="p-3.5 font-mono">
+                            {newSerial ? (
+                              <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 rounded font-bold">
+                                {newSerial}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 font-normal italic">-</span>
+                            )}
+                          </td>
+                          <td className="p-3.5 font-bold text-slate-900">
+                            {log.swappedBy || log.dispatchedByName || 'Technician'}
+                          </td>
+                          <td className="p-3.5 text-slate-700 font-medium">
+                            <span className="bg-slate-100 text-slate-800 px-2 py-0.5 rounded border border-slate-200 font-medium text-[11px]">
+                              {log.swapReason || log.state || 'Stock Replacement'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -636,6 +728,122 @@ export const InventoryListPage: React.FC = () => {
             </div>
           )}
         </div>
+      </Modal>
+
+      {/* Record Device Swap Modal */}
+      <Modal isOpen={logSwapModalOpen} onClose={() => setLogSwapModalOpen(false)} title="Record Device Swap & Audit History" maxWidth="md">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            createSwapMutation.mutate(logSwapForm);
+          }}
+          className="space-y-4 text-xs"
+        >
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Room ID *</label>
+              <input
+                type="text"
+                required
+                placeholder="e.g. RM-101"
+                value={logSwapForm.roomId}
+                onChange={(e) => setLogSwapForm({ ...logSwapForm, roomId: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 font-semibold"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Room Name</label>
+              <input
+                type="text"
+                placeholder="e.g. Conference Room A"
+                value={logSwapForm.roomName}
+                onChange={(e) => setLogSwapForm({ ...logSwapForm, roomName: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Part ID *</label>
+              <input
+                type="text"
+                required
+                placeholder="e.g. PART-8890"
+                value={logSwapForm.partId}
+                onChange={(e) => setLogSwapForm({ ...logSwapForm, partId: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600 font-semibold"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Building Name</label>
+              <input
+                type="text"
+                placeholder="e.g. Building 4"
+                value={logSwapForm.buildingName}
+                onChange={(e) => setLogSwapForm({ ...logSwapForm, buildingName: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Old Faulty Serial No *</label>
+              <input
+                type="text"
+                required
+                placeholder="Old Serial Number"
+                value={logSwapForm.oldSerialNo}
+                onChange={(e) => setLogSwapForm({ ...logSwapForm, oldSerialNo: e.target.value })}
+                className="w-full px-3 py-2 border border-rose-300 rounded-xl text-rose-900 font-mono font-bold focus:outline-none focus:border-rose-600"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">New Spare Serial No *</label>
+              <input
+                type="text"
+                required
+                placeholder="New Serial Number"
+                value={logSwapForm.newSerialNo}
+                onChange={(e) => setLogSwapForm({ ...logSwapForm, newSerialNo: e.target.value })}
+                className="w-full px-3 py-2 border border-emerald-300 rounded-xl text-emerald-900 font-mono font-bold focus:outline-none focus:border-emerald-600"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Swapped By</label>
+              <input
+                type="text"
+                placeholder="Technician / User Name"
+                value={logSwapForm.swappedBy}
+                onChange={(e) => setLogSwapForm({ ...logSwapForm, swappedBy: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Swap Reason</label>
+              <input
+                type="text"
+                placeholder="e.g. Stock Replacement"
+                value={logSwapForm.swapReason}
+                onChange={(e) => setLogSwapForm({ ...logSwapForm, swapReason: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-600"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
+            <Button variant="ghost" size="sm" type="button" onClick={() => setLogSwapModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" size="sm" type="submit" isLoading={createSwapMutation.isPending}>
+              Save Swap Audit Entry
+            </Button>
+          </div>
+        </form>
       </Modal>
     </Layout>
   );

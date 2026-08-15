@@ -2,7 +2,10 @@ import xlsx from 'xlsx';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { generateQRCode } from '../utils/qrcode.util';
+import { AppError } from '../middleware/error.middleware';
+import { activityService } from './activity.service';
 import { logger } from '../config/logger';
+import { isBatchOrDummySerial } from '../utils/export.util';
 
 export interface ImportSummary {
   totalRows: number;
@@ -100,7 +103,7 @@ export class ExcelService {
           location = await prisma.location.findFirst();
         }
 
-        const isSerialized = Boolean(serialNumber && serialNumber.toString().trim() !== '');
+        const isSerialized = !isBatchOrDummySerial(serialNumber);
         const cleanSerial = isSerialized ? serialNumber.toString().trim() : null;
 
         // Check if item already exists by Serial Number or Part Code + Product Name + Store
@@ -539,7 +542,7 @@ export class ExcelService {
         const oem = getValue(row, ['OEM', 'oem', 'Manufacturer']);
         const partId = getValue(row, ['Part ID', 'partId', 'PartID', 'part_id', 'Part Code', 'partCode']);
         const rawSerial = getValue(row, ['Part Serial No.', 'Part Serial No', 'partSerialNo', 'serialNumber', 'Serial No', 'serial_no', 'Serial']);
-        const exactSerial = (!rawSerial || rawSerial === 'XYZ') ? 'XYZ' : rawSerial;
+        const exactSerial = isBatchOrDummySerial(rawSerial) ? '' : rawSerial.toString().trim();
         const roomId = getValue(row, ['Room ID', 'roomId', 'RoomID', 'room_id']);
         const locationClass = getValue(row, ['Location Class', 'locationClass', 'LocationClass', 'location_class', 'Class']);
         const solutionType = getValue(row, ['Solution Type', 'solutionType', 'SolutionType', 'solution_type']);
@@ -629,12 +632,12 @@ export class ExcelService {
           }
         } else {
           let finalSerial = exactSerial;
-          if (!finalSerial || finalSerial === 'XYZ' || finalSerial.trim() === '') {
-            finalSerial = `XYZ_${roomId}_${partId}_${occIndex + 1}`;
-          } else if (existingSerialSet.has(finalSerial.toLowerCase())) {
+          if (finalSerial && existingSerialSet.has(finalSerial.toLowerCase())) {
             finalSerial = `${exactSerial}_${roomId}_${occIndex + 1}`;
           }
-          existingSerialSet.add(finalSerial.toLowerCase());
+          if (finalSerial) {
+            existingSerialSet.add(finalSerial.toLowerCase());
+          }
 
           newRecordsToInsert.push({
             installationDate,
@@ -723,21 +726,13 @@ export class ExcelService {
     }
 
     try {
-      await prisma.activityLog.create({
-        data: {
-          userId,
-          action: 'IMPORT',
-          entity: 'LocationInventory',
-          entityLabel: `Sequenced Ultra-Fast Location Inventory Upload (${summary.imported} created, ${summary.updated} updated, ${summary.skipped} skipped, ${summary.failed} failed)`,
-          newValue: JSON.stringify({
-            totalRows: summary.totalRows,
-            validRows: summary.validRows,
-            imported: summary.imported,
-            updated: summary.updated,
-            skipped: summary.skipped,
-            failed: summary.failed,
-          }),
-        },
+      await activityService.logActivity({
+        userId,
+        module: 'Import',
+        action: 'Inventory Excel Imported',
+        entity: 'LocationInventory',
+        entityLabel: `15-Field Location Inventory Upload`,
+        remarks: `Total: ${summary.totalRows} rows (${summary.imported} imported, ${summary.updated} updated, ${summary.skipped} skipped, ${summary.failed} failed)`,
       });
     } catch (e) {}
 

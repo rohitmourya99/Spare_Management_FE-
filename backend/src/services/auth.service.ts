@@ -45,12 +45,39 @@ export class AuthService {
 
     if (!user) {
       logger.warn(`Login failed: No user found for input ${inputClean}`);
+      await prisma.activityLog.create({
+        data: {
+          userId: '00000000-0000-0000-0000-000000000000',
+          userName: inputClean,
+          userRole: 'UNKNOWN',
+          module: 'Authentication',
+          action: 'Failed Login',
+          entity: 'User',
+          entityLabel: inputClean,
+          remarks: `Failed login attempt for non-existent or wrong account handle: ${inputClean}`,
+          ipAddress,
+        },
+      }).catch(() => {});
       throw new AppError(401, 'Invalid email or password');
     }
 
-    if (!user.isActive) {
-      logger.warn(`Login failed: User ${inputClean} is deactivated`);
-      throw new AppError(401, 'Your account has been deactivated. Contact administrator.');
+    if (!user.isActive || user.status === 'SUSPENDED' || user.status === 'DISABLED') {
+      logger.warn(`Login failed: User ${inputClean} is deactivated/suspended/disabled`);
+      await prisma.activityLog.create({
+        data: {
+          userId: user.id,
+          userName: user.name,
+          userRole: user.role,
+          module: 'Authentication',
+          action: 'Failed Login',
+          entity: 'User',
+          entityId: user.id,
+          entityLabel: user.email,
+          remarks: `Failed login: User account status is ${user.status || 'Deactivated'}`,
+          ipAddress,
+        },
+      }).catch(() => {});
+      throw new AppError(401, `Your account is ${user.status || 'deactivated'}. Contact administrator.`);
     }
 
     let passwordMatch = await bcrypt.compare(cleanPassword, user.password);
@@ -75,6 +102,20 @@ export class AuthService {
 
     if (!passwordMatch) {
       logger.warn(`Login failed: Password mismatch for user ${inputClean}`);
+      await prisma.activityLog.create({
+        data: {
+          userId: user.id,
+          userName: user.name,
+          userRole: user.role,
+          module: 'Authentication',
+          action: 'Failed Login',
+          entity: 'User',
+          entityId: user.id,
+          entityLabel: user.email,
+          remarks: 'Failed login attempt: Password mismatch',
+          ipAddress,
+        },
+      }).catch(() => {});
       throw new AppError(401, 'Invalid email or password');
     }
 
@@ -101,10 +142,14 @@ export class AuthService {
     await prisma.activityLog.create({
       data: {
         userId: user.id,
-        action: 'LOGIN',
+        userName: user.name,
+        userRole: user.role,
+        module: 'Authentication',
+        action: 'Login',
         entity: 'User',
         entityId: user.id,
         entityLabel: user.email,
+        remarks: 'User logged in successfully',
         ipAddress,
       },
     });

@@ -160,7 +160,13 @@ export async function ensureDatabaseSeeded(): Promise<void> {
           count++;
           const spareId = `PDS-DEL-2026-${String(count).padStart(5, '0')}`;
           const cleanSerial = rawSerial ? String(rawSerial).trim() : null;
-          const isSerialized = Boolean(cleanSerial && cleanSerial !== 'null' && cleanSerial !== 'undefined' && cleanSerial !== '');
+          const isBatchSerial = cleanSerial ? (
+            cleanSerial.toUpperCase().includes('BATCH_') ||
+            cleanSerial.toUpperCase().startsWith('_BATCH') ||
+            cleanSerial.toUpperCase().startsWith('XYZ') ||
+            ['N/A', 'NA', 'NULL', 'UNDEFINED', 'NONE', 'BULK'].includes(cleanSerial.toUpperCase())
+          ) : true;
+          const isSerialized = !isBatchSerial;
 
           await prisma.inventoryItem.create({
             data: {
@@ -183,6 +189,53 @@ export async function ensureDatabaseSeeded(): Promise<void> {
           });
         }
         logger.info(`✅ Successfully loaded ${count} Spare Parts into database`);
+      }
+
+      // Cleanup legacy batch placeholder serial numbers in DB for non-serialized items
+      await prisma.inventoryItem.updateMany({
+        where: {
+          OR: [
+            { serialNumber: { contains: 'BATCH' } },
+            { serialNumber: { startsWith: 'XYZ' } },
+          ],
+        },
+        data: {
+          serialNumber: null,
+          isSerialized: false,
+        },
+      }).catch(() => {});
+
+      await prisma.locationInventory.updateMany({
+        where: {
+          OR: [
+            { partSerialNo: { contains: 'BATCH' } },
+            { partSerialNo: { startsWith: 'XYZ' } },
+          ],
+        },
+        data: {
+          partSerialNo: '',
+        },
+      }).catch(() => {});
+
+      // Sync ReplacementAuditLog records to SwapHistory if empty
+      const swapCount = await prisma.swapHistory.count().catch(() => 0);
+      if (swapCount === 0) {
+        const auditLogs = await prisma.replacementAuditLog.findMany().catch(() => []);
+        for (const log of auditLogs) {
+          await prisma.swapHistory.create({
+            data: {
+              roomId: log.roomId,
+              roomName: log.roomName,
+              partId: log.partId,
+              buildingName: log.buildingName,
+              oldSerialNo: log.oldFaultySerialNo,
+              newSerialNo: log.newSpareSerialNo,
+              swappedBy: log.dispatchedByName || 'System / Technician',
+              swapReason: 'Replacement Dispatch Audit',
+              swappedAt: log.swapDate,
+            },
+          }).catch(() => {});
+        }
       }
     }
   } catch (error) {

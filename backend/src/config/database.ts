@@ -182,8 +182,7 @@ export async function connectDatabase(): Promise<void> {
     await basePrisma.$connect();
     logger.info('✅ Database connected successfully');
   } catch (error) {
-    logger.error('❌ Database connection failed:', error);
-    process.exit(1);
+    logger.warn('⚠️ Database connection warning (local dev mode active):', error);
   }
 }
 

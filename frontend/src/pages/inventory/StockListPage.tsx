@@ -5,18 +5,21 @@ import {
   Search, Plus, Download, Upload, QrCode, Eye,
   ChevronLeft, ChevronRight, X, AlertTriangle, CheckCircle2,
   Package, RefreshCw, FileUp, Building2, MapPin, User, Phone, Mail,
-  Truck, Check, Clock, Tag, Cpu,
+  Truck, Check, Clock, Tag, Cpu, Archive
 } from 'lucide-react';
+import { useAuthStore } from '../../store/useAuthStore';
 import api from '../../api';
 import { Layout } from '../../components/layout';
 import { Button, Card, Badge, Modal } from '../../components/ui';
 import { InventoryItem } from '../../types';
+import { isRealSerial } from '../../utils/serialUtils';
 
 const statusVariant = (s: string): 'success' | 'danger' | 'warning' | 'default' =>
   s === 'AVAILABLE' ? 'success' : s === 'DISPATCHED' ? 'danger' : 'warning';
 
 export const StockListPage: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuthStore();
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
 
@@ -33,6 +36,7 @@ export const StockListPage: React.FC = () => {
   const [importSummary, setImportSummary] = useState<any>(null);
   const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Location / Reserved Info Modal State
   const [locationModalItem, setLocationModalItem] = useState<InventoryItem | null>(null);
@@ -165,13 +169,29 @@ export const StockListPage: React.FC = () => {
     },
   });
 
-  // Handle deep link ?action=import from Dashboard Quick Action
+  // Handle deep link ?action=import or ?filter=low_stock from Dashboard Quick Action
   useEffect(() => {
     if (searchParams.get('action') === 'import') {
       setImportSummary(null);
       setImportModalOpen(true);
       searchParams.delete('action');
       setSearchParams(searchParams);
+    }
+    const filterParam = searchParams.get('filter');
+    const searchParam = searchParams.get('search');
+    const focusParam = searchParams.get('focus');
+    if (filterParam === 'low_stock' || filterParam === 'LOW_STOCK') {
+      setFilterStatus('LOW_STOCK');
+    } else if (filterParam === 'out_of_stock' || filterParam === 'OUT_OF_STOCK') {
+      setFilterStatus('OUT_OF_STOCK');
+    }
+    if (searchParam) {
+      setSearch(searchParam);
+    }
+    if (focusParam === 'search') {
+      setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 100);
     }
   }, [searchParams, setSearchParams]);
 
@@ -305,32 +325,34 @@ export const StockListPage: React.FC = () => {
             ))}
           </div>
 
-          <div className="flex items-center gap-2.5 ml-auto">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => { setImportSummary(null); setImportModalOpen(true); }}
-              icon={<Upload className="w-3.5 h-3.5" />}
-            >
-              Import Stock List
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setNewSerialModalOpen(true)}
-              icon={<Plus className="w-3.5 h-3.5 text-emerald-600" />}
-            >
-              + New Serial No
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setAddItemModalOpen(true)}
-              icon={<Plus className="w-4 h-4" />}
-            >
-              Add Item
-            </Button>
-          </div>
+          {(user?.role === 'SUPER_ADMIN' || user?.role === 'INVENTORY_ADMIN') && (
+            <div className="flex items-center gap-2.5 ml-auto">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => { setImportSummary(null); setImportModalOpen(true); }}
+                icon={<Upload className="w-3.5 h-3.5" />}
+              >
+                Import Stock List
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setNewSerialModalOpen(true)}
+                icon={<Plus className="w-3.5 h-3.5 text-emerald-600" />}
+              >
+                + New Serial No
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setAddItemModalOpen(true)}
+                icon={<Plus className="w-4 h-4" />}
+              >
+                Add Item
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Row 2: Search Bar & Filters */}
@@ -338,6 +360,7 @@ export const StockListPage: React.FC = () => {
           <div className="relative w-full sm:w-80">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
             <input
+              ref={searchInputRef}
               type="text"
               placeholder="Search Serial, Part Code, OEM..."
               value={search}
@@ -368,6 +391,8 @@ export const StockListPage: React.FC = () => {
               className="px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-indigo-600 cursor-pointer"
             >
               <option value="">All Statuses</option>
+              <option value="LOW_STOCK">⚠️ Low Stock Items</option>
+              <option value="OUT_OF_STOCK">❌ Out of Stock</option>
               <option value="AVAILABLE">Available</option>
               <option value="RESERVED">Reserved</option>
               <option value="DISPATCHED">Dispatched</option>
@@ -429,7 +454,7 @@ export const StockListPage: React.FC = () => {
                       <td className="p-3.5 font-mono text-xs text-slate-700 font-semibold">{item.partCode || 'Standard Part'}</td>
 
                       <td className="p-3.5 font-mono text-xs font-bold whitespace-nowrap">
-                        {item.isSerialized && item.serialNumber ? (
+                        {item.isSerialized && isRealSerial(item.serialNumber) ? (
                           <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded border border-indigo-200 font-bold">
                             {item.serialNumber}
                           </span>
@@ -447,7 +472,7 @@ export const StockListPage: React.FC = () => {
                       </td>
 
                       <td className="p-3.5">
-                        <span className={`font-bold ${item.availableQuantity === 0 ? 'text-rose-600' : item.availableQuantity <= 2 ? 'text-amber-600' : 'text-slate-900'}`}>
+                        <span className={`font-bold ${item.availableQuantity === 0 ? 'text-rose-600' : item.availableQuantity <= (item.quantity * 0.5) ? 'text-amber-600' : 'text-slate-900'}`}>
                           {item.availableQuantity}
                         </span>
                         <span className="text-slate-500 text-xs font-medium"> / {item.quantity} {item.unit}</span>
@@ -468,15 +493,17 @@ export const StockListPage: React.FC = () => {
                           >
                             <Badge variant={statusVariant(item.status)}>{item.status}</Badge>
                           </button>
-                          <select
-                            value={item.status}
-                            onChange={(e) => updateStatusMutation.mutate({ id: item.id, status: e.target.value })}
-                            className="text-[10px] bg-white border border-slate-300 rounded px-1.5 py-0.5 text-slate-900 font-bold focus:outline-none focus:border-indigo-600 cursor-pointer"
-                          >
-                            <option value="AVAILABLE">Available</option>
-                            <option value="RESERVED">Reserved</option>
-                            <option value="DISPATCHED">Dispatched</option>
-                          </select>
+                          {(user?.role === 'SUPER_ADMIN' || user?.role === 'INVENTORY_ADMIN') && (
+                            <select
+                              value={item.status}
+                              onChange={(e) => updateStatusMutation.mutate({ id: item.id, status: e.target.value })}
+                              className="text-[10px] bg-white border border-slate-300 rounded px-1.5 py-0.5 text-slate-900 font-bold focus:outline-none focus:border-indigo-600 cursor-pointer"
+                            >
+                              <option value="AVAILABLE">Available</option>
+                              <option value="RESERVED">Reserved</option>
+                              <option value="DISPATCHED">Dispatched</option>
+                            </select>
+                          )}
                         </div>
                       </td>
 
@@ -504,6 +531,24 @@ export const StockListPage: React.FC = () => {
                           >
                             <Eye className="w-3.5 h-3.5" />
                           </button>
+                          {user?.role === 'SUPER_ADMIN' && (
+                            <button
+                              onClick={async () => {
+                                if (window.confirm(`Are you sure you want to archive "${item.productName}"?`)) {
+                                  try {
+                                    await api.post(`/inventory/${item.id}/archive`);
+                                    queryClient.invalidateQueries({ queryKey: ['inventory'] });
+                                  } catch (err: any) {
+                                    alert(err?.response?.data?.message || 'Failed to archive item');
+                                  }
+                                }
+                              }}
+                              className="p-1.5 rounded bg-slate-100 hover:bg-rose-600 text-slate-700 hover:text-white border border-slate-200 transition-colors"
+                              title="Archive Part"
+                            >
+                              <Archive className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                           {item.qrCode && (
                             <button
                               onClick={() => setQrModalItem(item)}

@@ -9,6 +9,7 @@ import api from '../../api';
 import { Layout } from '../../components/layout';
 import { Button, Card, Badge, Modal } from '../../components/ui';
 import { Site, InventoryItem } from '../../types';
+import { formatSerialDisplay } from '../../utils/serialUtils';
 
 const statusVariant = (s: string): 'success' | 'danger' | 'warning' | 'info' | 'default' =>
   s === 'DISPATCHED' ? 'danger' : s === 'APPROVED' ? 'warning' : s === 'CANCELLED' ? 'default' : 'info';
@@ -343,15 +344,18 @@ export const DispatchListPage: React.FC = () => {
 
                       {/* Serial Number (Locked Dispatched Serial) */}
                       <td className="p-3.5 font-mono text-xs whitespace-nowrap">
-                        {(d as any).originalSerialNumber || d.inventoryItem?.serialNumber ? (
-                          <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded border border-indigo-200 font-bold">
-                            {(d as any).originalSerialNumber || d.inventoryItem?.serialNumber}
-                          </span>
-                        ) : (
-                          <span className="text-slate-600 italic text-[11px] bg-slate-100 px-2 py-0.5 rounded border border-slate-200 font-medium">
-                            Bulk Item
-                          </span>
-                        )}
+                        {(() => {
+                          const s = formatSerialDisplay((d as any).originalSerialNumber || d.inventoryItem?.serialNumber, '');
+                          return s ? (
+                            <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded border border-indigo-200 font-bold">
+                              {s}
+                            </span>
+                          ) : (
+                            <span className="text-slate-600 italic text-[11px] bg-slate-100 px-2 py-0.5 rounded border border-slate-200 font-medium">
+                              Bulk Item
+                            </span>
+                          );
+                        })()}
                       </td>
 
                       {/* BHEL Site & Location Class */}

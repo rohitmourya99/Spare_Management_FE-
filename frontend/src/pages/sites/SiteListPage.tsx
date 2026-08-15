@@ -4,9 +4,11 @@ import { Search, MapPin, Phone, Mail, User, Upload, FileUp, CheckCircle2, AlertT
 import api from '../../api';
 import { Layout } from '../../components/layout';
 import { Card, Button, Modal } from '../../components/ui';
+import { useAuthStore } from '../../store/useAuthStore';
 import { Site } from '../../types';
 
 export const SiteListPage: React.FC = () => {
+  const { user } = useAuthStore();
   const [search, setSearch] = useState('');
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importSummary, setImportSummary] = useState<any>(null);
@@ -59,16 +61,18 @@ export const SiteListPage: React.FC = () => {
             className="w-full pl-10 pr-4 py-1.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-600 font-medium"
           />
         </div>
-        <div className="flex items-center gap-3">
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => { setImportSummary(null); setImportModalOpen(true); }}
-            icon={<Upload className="w-3.5 h-3.5" />}
-          >
-            Import Sites (SPOC Excel)
-          </Button>
-        </div>
+        {user?.role === 'SUPER_ADMIN' && (
+          <div className="flex items-center gap-3">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => { setImportSummary(null); setImportModalOpen(true); }}
+              icon={<Upload className="w-3.5 h-3.5" />}
+            >
+              Import Sites (SPOC Excel)
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

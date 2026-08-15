@@ -1,6 +1,7 @@
 import { prisma } from '../config/database';
-import { exportToExcel, exportToCSV, exportInventoryToPDF } from '../utils/export.util';
+import { exportToExcel, exportToCSV, exportInventoryToPDF, isBatchOrDummySerial } from '../utils/export.util';
 import { Response } from 'express';
+import { inventoryService } from './inventory.service';
 
 export class ReportsService {
   /**
@@ -132,22 +133,15 @@ export class ReportsService {
       }
 
       case 'low_stock': {
-        const items = await prisma.inventoryItem.findMany({
-          where: {
-            isDeleted: false,
-            availableQuantity: { lte: 2 },
-          },
-          include: { oem: true },
-          orderBy: { availableQuantity: 'asc' },
-        });
-        return items.map((i) => ({
-          'Spare ID': i.spareId,
-          'Product Name': i.productName,
-          OEM: i.oem.name,
-          Store: i.store,
-          'Available Stock': i.availableQuantity,
-          'Total Stock': i.quantity,
-          Status: i.availableQuantity === 0 ? 'OUT OF STOCK' : 'LOW STOCK',
+        const { allLowStockGroups } = await inventoryService.calculatePartCodeLowStock();
+        return allLowStockGroups.map((g) => ({
+          'Part Code': g.partCode,
+          'Product Name': g.productName,
+          OEM: g.oemName,
+          'Available Stock': g.availableQuantity,
+          'Total Uploaded Quantity': g.totalQuantity,
+          'Remaining Stock %': `${g.percentRemaining}%`,
+          Status: g.availableQuantity === 0 ? 'OUT OF STOCK' : 'LOW STOCK (<=50%)',
         }));
       }
 
@@ -195,10 +189,29 @@ export class ReportsService {
 
       case 'swap_tracking': {
         const where: any = {};
-        if (startDate || endDate) where.swapDate = dateFilter;
-        if (filters.state) where.state = { contains: filters.state, mode: 'insensitive' };
-        if (filters.building) where.buildingName = { contains: filters.building, mode: 'insensitive' };
-        if (filters.partId) where.partId = { contains: filters.partId, mode: 'insensitive' };
+        if (startDate || endDate) where.swappedAt = dateFilter;
+        if (filters.building) where.buildingName = { contains: filters.building };
+        if (filters.partId) where.partId = { contains: filters.partId };
+
+        const swaps = await prisma.swapHistory.findMany({
+          where,
+          orderBy: { swappedAt: 'desc' },
+        });
+
+        if (swaps.length > 0) {
+          return swaps.map((s) => ({
+            'Part ID': s.partId,
+            'Old Faulty Serial No': isBatchOrDummySerial(s.oldSerialNo) ? '-' : s.oldSerialNo,
+            'New Spare Serial No': isBatchOrDummySerial(s.newSerialNo) ? '-' : s.newSerialNo,
+            'Installed Room ID': s.roomId,
+            'Room Name': s.roomName || 'N/A',
+            'Building Name': s.buildingName || 'N/A',
+            Floor: s.floor || 'N/A',
+            'Swap Date': new Date(s.swappedAt).toISOString().replace('T', ' ').substring(0, 19),
+            'Swapped By': s.swappedBy || 'System / Technician',
+            'Swap Reason': s.swapReason || 'Stock Replacement',
+          }));
+        }
 
         const auditLogs = await prisma.replacementAuditLog.findMany({
           where,
@@ -208,16 +221,15 @@ export class ReportsService {
 
         return auditLogs.map((log) => ({
           'Part ID': log.partId,
-          'Dispatched Serial No': log.newSpareSerialNo,
+          'Old Faulty Serial No': isBatchOrDummySerial(log.oldFaultySerialNo) ? '-' : log.oldFaultySerialNo,
+          'New Spare Serial No': isBatchOrDummySerial(log.newSpareSerialNo) ? '-' : log.newSpareSerialNo,
           'Installed Room ID': log.roomId,
-          'Sublocation': 'N/A',
-          'State': log.state,
-          'Building Name': log.buildingName,
-          'Floor': 'N/A',
           'Room Name': log.roomName || 'N/A',
-          'Dispatch Date': new Date(log.swapDate).toISOString().replace('T', ' ').substring(0, 19),
-          'Dispatched By': log.dispatchedByName || log.dispatchedBy?.name || 'System Dispatcher',
-          'Comments / Remarks': `Swapped out Faulty Serial No: ${log.oldFaultySerialNo}`,
+          'Building Name': log.buildingName || 'N/A',
+          Floor: 'N/A',
+          'Swap Date': new Date(log.swapDate).toISOString().replace('T', ' ').substring(0, 19),
+          'Swapped By': log.dispatchedByName || log.dispatchedBy?.name || 'System Dispatcher',
+          'Swap Reason': log.state || 'Stock Replacement',
         }));
       }
 

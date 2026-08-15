@@ -8,6 +8,8 @@ import { Layout } from '../../components/layout';
 import { Card, Button } from '../../components/ui';
 import api from '../../api';
 
+import { useAuthStore } from '../../store/useAuthStore';
+
 interface ReportDef {
   key: string;
   title: string;
@@ -127,6 +129,8 @@ const REPORTS: ReportDef[] = [
 const categories = ['Stock List', 'Movements', 'BHEL Sites', 'Compliance'];
 
 export const ReportsPage: React.FC = () => {
+  const { user } = useAuthStore();
+  const [activeCategory, setActiveCategory] = useState<string>('All');
   const [loading, setLoading] = useState<string | null>(null);
   const [filterStore, setFilterStore] = useState('');
   const [filterDateFrom, setFilterDateFrom] = useState('');
@@ -137,6 +141,10 @@ export const ReportsPage: React.FC = () => {
   const [warrantyDays, setWarrantyDays] = useState('30');
 
   const download = async (reportKey: string, format: 'excel' | 'pdf' | 'csv') => {
+    if (user?.role === 'ENGINEER') {
+      alert('Field Engineers are restricted from downloading reports.');
+      return;
+    }
     setLoading(`${reportKey}-${format}`);
     try {
       const params: Record<string, string> = { format };

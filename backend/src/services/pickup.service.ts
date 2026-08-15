@@ -3,6 +3,7 @@ import { PickupStatus } from '../types';
 import { prisma } from '../config/database';
 import { AppError } from '../middleware/error.middleware';
 import { parsePagination, buildPagination } from '../utils/response.util';
+import { activityService } from './activity.service';
 
 export interface CreatePickupDto {
   inventoryItemId: string;
@@ -111,7 +112,7 @@ export class PickupService {
   async confirmReceive(id: string, userId: string) {
     const pickup = await prisma.pickup.findUnique({
       where: { id },
-      include: { inventoryItem: true },
+      include: { inventoryItem: true, site: true },
     });
     if (!pickup) throw new AppError(404, 'Pickup not found');
 
@@ -150,8 +151,18 @@ export class PickupService {
       }),
     ]);
 
-    await prisma.activityLog.create({
-      data: { userId, action: 'RECEIVE', entity: 'Pickup', entityId: id, entityLabel: pickup.pickupNo },
+    await activityService.logActivity({
+      userId,
+      module: 'Pickup',
+      action: 'Pickup Completed',
+      entity: 'Pickup',
+      entityId: id,
+      entityLabel: `${pickup.pickupNo} - ${item.productName}`,
+      partCode: item.partCode || undefined,
+      serialNumber: item.serialNumber || undefined,
+      siteName: pickup.site?.siteName,
+      oldValue: `Status: ${pickup.status}`,
+      newValue: `Status: RECEIVED, Available Stock: ${newAvail}`,
     });
 
     return updated;

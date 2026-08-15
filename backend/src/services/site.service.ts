@@ -1,6 +1,7 @@
 import { prisma } from '../config/database';
 import { AppError } from '../middleware/error.middleware';
 import { parsePagination, buildPagination } from '../utils/response.util';
+import { activityService } from './activity.service';
 
 export class SiteService {
   async getAll(filters: { search?: string; city?: string; state?: string; page?: string; limit?: string }) {
@@ -37,26 +38,44 @@ export class SiteService {
     return site;
   }
 
-  async create(data: {
-    siteName: string;
-    addressLine1?: string;
-    addressLine2?: string;
-    city?: string;
-    state?: string;
-    pin?: string;
-    contactPerson?: string;
-    phone?: string;
-    email?: string;
-    remarks?: string;
-  }) {
+  async create(
+    data: {
+      siteName: string;
+      addressLine1?: string;
+      addressLine2?: string;
+      city?: string;
+      state?: string;
+      pin?: string;
+      contactPerson?: string;
+      phone?: string;
+      email?: string;
+      remarks?: string;
+    },
+    userId?: string
+  ) {
     const fullAddress = [data.addressLine1, data.addressLine2, data.city, data.state, data.pin]
       .filter(Boolean)
       .join(', ');
 
-    return await prisma.site.create({ data: { ...data, fullAddress } });
+    const newSite = await prisma.site.create({ data: { ...data, fullAddress } });
+
+    if (userId) {
+      await activityService.logActivity({
+        userId,
+        module: 'Site Master',
+        action: 'Site Added',
+        entity: 'Site',
+        entityId: newSite.id,
+        entityLabel: newSite.siteName,
+        siteName: newSite.siteName,
+        newValue: `Contact: ${newSite.contactPerson || 'N/A'}, Address: ${fullAddress}`,
+      });
+    }
+
+    return newSite;
   }
 
-  async update(id: string, data: Partial<Parameters<SiteService['create']>[0]>) {
+  async update(id: string, data: Partial<Parameters<SiteService['create']>[0]>, userId?: string) {
     const site = await prisma.site.findUnique({ where: { id } });
     if (!site) throw new AppError(404, 'Site not found');
 
@@ -70,13 +89,45 @@ export class SiteService {
       .filter(Boolean)
       .join(', ');
 
-    return await prisma.site.update({ where: { id }, data: { ...data, fullAddress } });
+    const updated = await prisma.site.update({ where: { id }, data: { ...data, fullAddress } });
+
+    if (userId) {
+      let action = 'Site Master Updated';
+      if (data.contactPerson || data.phone || data.email) action = 'SPOC Updated';
+      if (data.addressLine1 || data.city || data.state || data.pin) action = 'Address Updated';
+
+      await activityService.logActivity({
+        userId,
+        module: 'Site Master',
+        action,
+        entity: 'Site',
+        entityId: updated.id,
+        entityLabel: updated.siteName,
+        siteName: updated.siteName,
+        oldValue: `Contact: ${site.contactPerson || 'N/A'}, Address: ${site.fullAddress || 'N/A'}`,
+        newValue: `Contact: ${updated.contactPerson || 'N/A'}, Address: ${updated.fullAddress || 'N/A'}`,
+      });
+    }
+
+    return updated;
   }
 
-  async delete(id: string) {
+  async delete(id: string, userId?: string) {
     const site = await prisma.site.findUnique({ where: { id } });
     if (!site) throw new AppError(404, 'Site not found');
     await prisma.site.delete({ where: { id } });
+
+    if (userId) {
+      await activityService.logActivity({
+        userId,
+        module: 'Site Master',
+        action: 'Site Deleted',
+        entity: 'Site',
+        entityId: id,
+        entityLabel: site.siteName,
+        siteName: site.siteName,
+      });
+    }
   }
 
   async getAll_dropdown() {

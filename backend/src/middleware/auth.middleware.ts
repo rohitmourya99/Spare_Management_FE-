@@ -11,8 +11,10 @@ export { UserRole };
 
 export interface JwtPayload {
   userId: string;
+  name?: string;
   email: string;
   role: UserRole;
+  status?: string;
   iat?: number;
   exp?: number;
 }
@@ -57,18 +59,20 @@ export const authenticate = async (
     // Verify user still exists and is active
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
-      select: { id: true, email: true, role: true, isActive: true },
+      select: { id: true, name: true, email: true, role: true, status: true, isActive: true },
     });
 
-    if (!user || !user.isActive) {
-      ApiResponse.unauthorized(res, 'User not found or deactivated');
+    if (!user || !user.isActive || user.status === 'SUSPENDED' || user.status === 'DISABLED') {
+      ApiResponse.unauthorized(res, 'User account is deactivated, suspended, or disabled');
       return;
     }
 
     req.user = {
       userId: user.id,
+      name: user.name,
       email: user.email,
       role: user.role as UserRole,
+      status: user.status,
     };
 
     next();

@@ -9,6 +9,8 @@ import {
 import api from '../../api';
 import { Layout } from '../../components/layout';
 import { Button, Card, Badge, Modal } from '../../components/ui';
+import { isRealSerial } from '../../utils/serialUtils';
+import { useAuthStore } from '../../store/useAuthStore';
 import { Site, InventoryItem, OEM } from '../../types';
 
 interface Pickup {
@@ -72,6 +74,7 @@ const calcTurnaroundDuration = (startVal?: string | Date, endVal?: string | Date
 };
 
 export const PickupListPage: React.FC = () => {
+  const { user } = useAuthStore();
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
 
@@ -365,14 +368,16 @@ export const PickupListPage: React.FC = () => {
                 className="w-full pl-10 pr-4 py-1.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-600 font-medium"
               />
             </div>
-            <Button
-              variant="primary"
-              size="sm"
-              icon={<Plus className="w-4 h-4" />}
-              onClick={() => { setOemSuccess(null); setOemForm(defaultOemForm()); setIsOemModalOpen(true); }}
-            >
-              Add OEM Receipt
-            </Button>
+            {(user?.role === 'SUPER_ADMIN' || user?.role === 'INVENTORY_ADMIN') && (
+              <Button
+                variant="primary"
+                size="sm"
+                icon={<Plus className="w-4 h-4" />}
+                onClick={() => { setOemSuccess(null); setOemForm(defaultOemForm()); setIsOemModalOpen(true); }}
+              >
+                Add OEM Receipt
+              </Button>
+            )}
           </div>
 
           <Card noPadding>
@@ -413,7 +418,7 @@ export const PickupListPage: React.FC = () => {
                         <td className="p-3.5 text-slate-800 text-xs font-semibold">{item.oem?.name || '—'}</td>
                         <td className="p-3.5 font-mono text-xs text-slate-700 font-semibold">{item.partCode || '—'}</td>
                         <td className="p-3.5">
-                          {item.serialNumber ? (
+                          {isRealSerial(item.serialNumber) ? (
                             <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded border border-indigo-200 font-mono text-xs font-bold">
                               {item.serialNumber}
                             </span>

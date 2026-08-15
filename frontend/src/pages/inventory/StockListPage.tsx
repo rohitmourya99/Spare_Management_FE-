@@ -336,14 +336,6 @@ export const StockListPage: React.FC = () => {
                 Import Stock List
               </Button>
               <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setNewSerialModalOpen(true)}
-                icon={<Plus className="w-3.5 h-3.5 text-emerald-600" />}
-              >
-                + New Serial No
-              </Button>
-              <Button
                 variant="primary"
                 size="sm"
                 onClick={() => setAddItemModalOpen(true)}

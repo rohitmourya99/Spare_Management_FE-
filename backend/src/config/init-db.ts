@@ -22,7 +22,17 @@ function getRowValue(row: Record<string, any>, ...possibleKeys: string[]): any {
  */
 export async function ensureDatabaseSeeded(): Promise<void> {
   try {
-    // 0. Seed & Tag Default Organization (BHEL)
+    // 0. Auto-sync PostgreSQL database schema if new tables/columns are missing
+    try {
+      const { execSync } = require('child_process');
+      logger.info('🔄 Verifying and syncing database schema with Prisma...');
+      execSync('npx prisma db push --skip-generate', { stdio: 'inherit' });
+      logger.info('✅ Database schema verified & synced.');
+    } catch (syncErr) {
+      logger.warn('Prisma DB push notice:', syncErr);
+    }
+
+    // 1. Seed & Tag Default Organization (BHEL)
     try {
       await prisma.organization.upsert({
         where: { id: 'BHEL' },

@@ -34,6 +34,10 @@ export const DashboardPage: React.FC = () => {
     retry: false,
   });
 
+  const inv = data?.inventorySummary || {};
+  const delhi = data?.delhiStoreSummary || {};
+  const blr = data?.bengaluruStoreSummary || {};
+
   const { data: dynamicLowStock, isLoading: isLoadingDynamic, refetch: refetchDynamicLowStock } = useQuery({
     queryKey: ['dynamic-low-stock'],
     queryFn: async () => {
@@ -99,15 +103,104 @@ export const DashboardPage: React.FC = () => {
     Boolean(i.serialNumber && i.serialNumber !== 'N/A' && i.serialNumber !== '-');
 
   const getAvailableQty = (i: any) =>
-    Number(i.availableQuantity ?? i.quantity ?? i.available_quantity ?? 0);
+    Number(i.availableQuantity ?? i.currentQuantity ?? i.quantity ?? i.available_quantity ?? 0);
 
-  const getMinStockThreshold = (i: any) =>
-    Number(i.minStock ?? i.min_stock ?? i.minimumStock ?? 5);
+  const getInitialCapacity = (i: any) =>
+    Number(i.quantity ?? i.totalQuantity ?? i.initialQuantity ?? i.availableQuantity ?? 1);
 
   const getStoreName = (i: any) =>
     (i.store || i.storeLocation || i.locationName || i.location?.name || i.location || i.warehouse || i.store_location || '')
       .toString()
       .toLowerCase();
+
+  // Real-time Stock List 50% Threshold Analysis & Banner Sync
+  const stockMetrics = useMemo(() => {
+    if (!inventoryItemsData || !Array.isArray(inventoryItemsData)) {
+      const low = inv.lowStockCount ?? 0;
+      const out = inv.outOfStockCount ?? 0;
+      return {
+        lowStockCount: low,
+        outOfStockCount: out,
+        affectedTypesCount: low + out,
+        lowStockItems: data?.lowStockAlerts || [],
+      };
+    }
+
+    const groups = new Map<string, {
+      partCode: string;
+      productName: string;
+      oemName: string;
+      totalQuantity: number;
+      availableQuantity: number;
+      sampleItem: any;
+    }>();
+
+    for (const item of inventoryItemsData) {
+      const key = (item.partCode || item.productName || item.spareId || 'UNKNOWN').trim();
+      const existing = groups.get(key);
+      const total = getInitialCapacity(item);
+      const avail = getAvailableQty(item);
+
+      if (!existing) {
+        groups.set(key, {
+          partCode: key,
+          productName: item.productName || key,
+          oemName: item.oem?.name || 'Standard OEM',
+          totalQuantity: total,
+          availableQuantity: avail,
+          sampleItem: item,
+        });
+      } else {
+        existing.totalQuantity += total;
+        existing.availableQuantity += avail;
+      }
+    }
+
+    let lowStockCount = 0;
+    let outOfStockCount = 0;
+    const lowStockItems: any[] = [];
+
+    for (const g of groups.values()) {
+      const isOut = g.availableQuantity === 0;
+      const isLow = g.availableQuantity > 0 && g.availableQuantity <= (g.totalQuantity * 0.5);
+
+      if (isOut) {
+        outOfStockCount++;
+        lowStockItems.push({
+          ...g.sampleItem,
+          partCode: g.partCode,
+          productName: g.productName,
+          oemName: g.oemName,
+          totalQuantity: g.totalQuantity,
+          availableQuantity: g.availableQuantity,
+          percentRemaining: 0,
+          isOutOfStock: true,
+        });
+      } else if (isLow) {
+        lowStockCount++;
+        const percent = Math.round((g.availableQuantity / g.totalQuantity) * 100);
+        lowStockItems.push({
+          ...g.sampleItem,
+          partCode: g.partCode,
+          productName: g.productName,
+          oemName: g.oemName,
+          totalQuantity: g.totalQuantity,
+          availableQuantity: g.availableQuantity,
+          percentRemaining: percent,
+          isOutOfStock: false,
+        });
+      }
+    }
+
+    const affectedTypesCount = lowStockCount + outOfStockCount;
+
+    return {
+      lowStockCount,
+      outOfStockCount,
+      affectedTypesCount,
+      lowStockItems,
+    };
+  }, [inventoryItemsData, inv, data?.lowStockAlerts]);
 
   // Filter Stock items based on active card filter & search input
   const filteredInventoryItems = useMemo(() => {
@@ -128,7 +221,7 @@ export const DashboardPage: React.FC = () => {
         items = items.filter((i: any) => getStoreName(i).includes('bengaluru') || getStoreName(i).includes('blr'));
         break;
       case 'LOW_STOCK':
-        items = items.filter((i: any) => getAvailableQty(i) <= getMinStockThreshold(i) && getAvailableQty(i) > 0);
+        items = items.filter((i: any) => getAvailableQty(i) <= (getInitialCapacity(i) * 0.5) && getAvailableQty(i) > 0);
         break;
       case 'OUT_OF_STOCK':
         items = items.filter((i: any) => getAvailableQty(i) === 0);
@@ -281,10 +374,6 @@ export const DashboardPage: React.FC = () => {
       </Layout>
     );
   }
-
-  const inv = data?.inventorySummary || {};
-  const delhi = data?.delhiStoreSummary || {};
-  const blr = data?.bengaluruStoreSummary || {};
 
   const quickActions = [
     { label: 'Import Excel', icon: Upload, path: '/stock-list?action=import', gradient: 'from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 border-b-2 border-indigo-900/30' },
@@ -712,7 +801,7 @@ export const DashboardPage: React.FC = () => {
       </div>
 
       {/* Low Stock Alert Bar & Breakdown */}
-      {((dynamicLowStock?.counts?.lowStock ?? inv.lowStockCount ?? 0) > 0 || (dynamicLowStock?.counts?.outOfStock ?? inv.outOfStockCount ?? 0) > 0) && (
+      {stockMetrics.affectedTypesCount > 0 && (
         <div className="mb-6 p-5 rounded-2xl bg-gradient-to-br from-amber-50 via-orange-50/40 to-amber-50/80 border border-amber-200/90 shadow-md">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -723,11 +812,13 @@ export const DashboardPage: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-extrabold text-amber-950">Stock Reorder Warning</p>
                   <span className="bg-amber-200 text-amber-900 text-[10px] font-black px-2 py-0.5 rounded-full border border-amber-300">
-                    {dynamicLowStock?.counts?.totalWarning ?? dynamicLowStock?.lowStockItems?.length ?? data?.lowStockAlerts?.length ?? inv.lowStockCount} Part Types Affected
+                    {stockMetrics.affectedTypesCount} Part Types Affected
                   </span>
                 </div>
                 <p className="text-xs text-amber-800 font-medium mt-0.5">
-                  <span className="font-bold text-amber-950">{dynamicLowStock?.counts?.lowStock ?? inv.lowStockCount ?? 0} item(s)</span> are running low. {(dynamicLowStock?.counts?.outOfStock ?? inv.outOfStockCount ?? 0) > 0 && <span className="font-bold text-rose-700">{(dynamicLowStock?.counts?.outOfStock ?? inv.outOfStockCount ?? 0)} item(s) are completely out of stock.</span>}
+                  <span className="font-bold text-amber-950">{stockMetrics.affectedTypesCount} Part Types Affected: </span>
+                  <span className="font-bold text-amber-950">{stockMetrics.lowStockCount} item(s) are running low. </span>
+                  <span className="font-bold text-rose-700">{stockMetrics.outOfStockCount} item(s) are completely out of stock.</span>
                 </p>
               </div>
             </div>
@@ -738,10 +829,10 @@ export const DashboardPage: React.FC = () => {
               <div className="flex items-center justify-between mb-3">
                 <p className="text-xs font-black text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
                   <ShieldAlert className="w-4 h-4 text-amber-600" />
-                  Dynamic Low-Stock &amp; Out-of-Stock Parts Breakdown ({dynamicLowStock?.counts?.lowStock ?? inv.lowStockCount ?? 0} Low Stock Items)
+                  Dynamic 50% Threshold Low-Stock Breakdown ({stockMetrics.lowStockCount} Low Stock / {stockMetrics.outOfStockCount} Out of Stock)
                 </p>
                 <span className="text-[11px] font-semibold text-amber-800">
-                  Showing all {(dynamicLowStock?.lowStockItems || data?.lowStockAlerts || []).length} real-time low-stock part records
+                  Showing all {stockMetrics.lowStockItems.length} real-time affected part records
                 </span>
               </div>
 
@@ -754,25 +845,26 @@ export const DashboardPage: React.FC = () => {
                       <th className="p-2.5">OEM Vendor</th>
                       <th className="p-2.5">Store Location</th>
                       <th className="p-2.5">Current Stock</th>
-                      <th className="p-2.5">Min Threshold</th>
+                      <th className="p-2.5">50% Reorder Threshold</th>
                       <th className="p-2.5">Stock Status</th>
                       <th className="p-2.5 text-right">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-amber-100/70 text-xs text-slate-900">
-                    {(dynamicLowStock?.lowStockItems || data?.lowStockAlerts || []).length === 0 ? (
+                    {stockMetrics.lowStockItems.length === 0 ? (
                       <tr>
                         <td colSpan={8} className="p-4 text-center text-amber-800 text-xs font-semibold">
                           No low stock breakdown records available.
                         </td>
                       </tr>
                     ) : (
-                      (dynamicLowStock?.lowStockItems || data?.lowStockAlerts || []).map((item: any, idx: number) => {
+                      stockMetrics.lowStockItems.map((item: any, idx: number) => {
                         const partId = item.partId || item.spareId || item.partCode || 'N/A';
                         const name = item.productName || item.partName || 'Spare Item';
                         const oem = item.oemName || 'Standard OEM';
                         const avail = item.availableQuantity ?? item.quantity ?? 0;
-                        const min = item.reorderLevel || item.minStock || Math.ceil((item.totalQuantity || 10) * 0.5);
+                        const totalCap = item.totalQuantity || 10;
+                        const minThreshold = Math.ceil(totalCap * 0.5);
                         const storeLoc = item.store || item.location || 'Delhi';
                         const isZero = avail === 0;
 
@@ -799,7 +891,7 @@ export const DashboardPage: React.FC = () => {
                               </span>
                             </td>
                             <td className="p-2.5 font-semibold text-slate-600">
-                              {min} {item.unit || 'PCS'}
+                              {minThreshold} {item.unit || 'PCS'} <span className="text-[10px] text-slate-400 font-normal">(50% of {totalCap})</span>
                             </td>
                             <td className="p-2.5">
                               <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase border ${isZero ? 'bg-rose-100 text-rose-800 border-rose-300' : 'bg-amber-100 text-amber-800 border-amber-300'}`}>
@@ -1054,7 +1146,7 @@ export const DashboardPage: React.FC = () => {
                         <th className="p-3">Part Name / Device</th>
                         <th className="p-3">Category / OEM</th>
                         <th className="p-3 text-center">Available Stock</th>
-                        <th className="p-3 text-center">Min Level</th>
+                        <th className="p-3 text-center">50% Reorder Limit</th>
                         <th className="p-3 text-right">Status</th>
                       </tr>
                     </thead>
@@ -1064,7 +1156,7 @@ export const DashboardPage: React.FC = () => {
                         const partId = item.partId || item.spareId || item.partCode || 'N/A';
                         const name = item.productName || item.partName || 'Spare Item';
                         const category = item.category || item.oemName || 'General';
-                        const min = item.reorderLevel || item.minStock || 5;
+                        const min = Math.ceil((item.totalQuantity || item.initialQuantity || 10) * 0.5);
 
                         return (
                           <tr key={`out-${idx}`} className="bg-rose-50/50 hover:bg-rose-100/50 transition-colors">
@@ -1073,7 +1165,7 @@ export const DashboardPage: React.FC = () => {
                             <td className="p-3 font-bold text-slate-900">{name}</td>
                             <td className="p-3 text-slate-600 font-medium">{category}</td>
                             <td className="p-3 text-center font-black text-rose-700">0</td>
-                            <td className="p-3 text-center text-slate-600 font-semibold">{min}</td>
+                            <td className="p-3 text-center text-slate-600 font-semibold">{min} (50% threshold)</td>
                             <td className="p-3 text-right">
                               <span className="px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 font-black text-[10px] uppercase border border-rose-300">
                                 OUT OF STOCK
@@ -1089,7 +1181,7 @@ export const DashboardPage: React.FC = () => {
                         const name = item.productName || item.partName || 'Spare Item';
                         const category = item.category || item.oemName || 'General';
                         const avail = item.quantity ?? item.availableQuantity ?? 0;
-                        const min = item.reorderLevel || item.minStock || 5;
+                        const min = Math.ceil((item.totalQuantity || item.initialQuantity || (avail * 2)) * 0.5);
 
                         return (
                           <tr key={`low-${idx}`} className="hover:bg-amber-50/40 transition-colors">

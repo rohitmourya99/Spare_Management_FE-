@@ -40,6 +40,11 @@ export const DispatchListPage: React.FC = () => {
   const [selectedSite, setSelectedSite] = useState<Site | null>(null);
   const [itemSearch, setItemSearch] = useState('');
   const [detailsDispatch, setDetailsDispatch] = useState<any | null>(null);
+  const [selectedFaultyItem, setSelectedFaultyItem] = useState<{
+    id?: string;
+    partId: string;
+    partSerialNo: string;
+  } | null>(null);
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastType, setToastType] = useState<'success' | 'error'>('success');
@@ -213,9 +218,11 @@ export const DispatchListPage: React.FC = () => {
   const resetForm = () => {
     setForm({
       inventoryItemId: '', siteId: '', sublocation: '', floor: '', buildingName: '', roomName: '', solutionType: '', locationClass: '', roomId: '', quantity: 1, courierName: '', trackingNo: '', dispatchDate: new Date().toISOString().split('T')[0], expectedDelivery: '', remarks: '',
-    });
+      faultyItemId: undefined, faultyPartCode: undefined, faultySerialNumber: undefined,
+    } as any);
     setSelectedItem(null);
     setSelectedSite(null);
+    setSelectedFaultyItem(null);
     setItemSearch('');
   };
 
@@ -326,8 +333,9 @@ export const DispatchListPage: React.FC = () => {
             <thead>
               <tr>
                 <th className="p-3.5">Dispatch No</th>
-                <th className="p-3.5">Spare Item</th>
-                <th className="p-3.5">Serial Number</th>
+                <th className="p-3.5">Spare Item &amp; Source</th>
+                <th className="p-3.5">Dispatched S/N</th>
+                <th className="p-3.5">Replaced Faulty Item</th>
                 <th className="p-3.5">BHEL Site &amp; Class</th>
                 <th className="p-3.5">SPOC Contact</th>
                 <th className="p-3.5 text-center">Qty</th>
@@ -340,14 +348,14 @@ export const DispatchListPage: React.FC = () => {
             <tbody className="divide-y divide-slate-200 text-slate-900">
               {isLoading ? (
                 <tr>
-                  <td colSpan={10} className="p-10 text-center text-slate-500">
+                  <td colSpan={11} className="p-10 text-center text-slate-500">
                     <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-600" />
                     <span className="text-sm font-semibold">Loading dispatches...</span>
                   </td>
                 </tr>
               ) : dispatches.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="p-10 text-center text-slate-500 font-semibold">
+                  <td colSpan={11} className="p-10 text-center text-slate-500 font-semibold">
                     <Truck className="w-8 h-8 mx-auto mb-2 text-slate-400" />
                     No dispatch records found.
                   </td>
@@ -367,16 +375,22 @@ export const DispatchListPage: React.FC = () => {
                         {d.dispatchNo}
                       </td>
 
-                      {/* Spare Item & OEM */}
+                      {/* Spare Item & Source Store Location */}
                       <td className="p-3.5">
                         <p className="font-bold text-slate-900 text-xs">{d.inventoryItem?.productName || 'Spare Item'}</p>
-                        <p className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1 font-medium">
-                          <Cpu className="w-3 h-3 text-slate-400 shrink-0" />
-                          <span>{d.inventoryItem?.oem?.name || 'Standard OEM'}</span>
-                        </p>
+                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                          <span className="text-[10px] text-slate-500 font-medium">
+                            OEM: {d.inventoryItem?.oem?.name || 'Standard OEM'}
+                          </span>
+                          {d.inventoryItem?.store && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.2 bg-indigo-50 text-indigo-700 rounded border border-indigo-200">
+                              From: {d.inventoryItem.store} Store
+                            </span>
+                          )}
+                        </div>
                       </td>
 
-                      {/* Serial Number (Locked Dispatched Serial) */}
+                      {/* Serial Number (Dispatched Item) */}
                       <td className="p-3.5 font-mono text-xs whitespace-nowrap">
                         {(() => {
                           const s = formatSerialDisplay((d as any).originalSerialNumber || d.inventoryItem?.serialNumber, '');
@@ -386,10 +400,27 @@ export const DispatchListPage: React.FC = () => {
                             </span>
                           ) : (
                             <span className="text-slate-600 italic text-[11px] bg-slate-100 px-2 py-0.5 rounded border border-slate-200 font-medium">
-                              Bulk Item
+                              Non-Serialized
                             </span>
                           );
                         })()}
+                      </td>
+
+                      {/* Replaced Faulty Item Card/Badge */}
+                      <td className="p-3.5 text-xs whitespace-nowrap">
+                        {(d as any).replacedFaulty ? (
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 border border-amber-200 text-amber-900 rounded-lg font-medium text-xs shadow-2xs">
+                            <RefreshCw className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                            <div>
+                              <span className="font-bold block text-[11px]">Replaced: {(d as any).replacedFaulty.partCode}</span>
+                              <span className="text-[10px] font-mono text-amber-700 block">
+                                SN: {(d as any).replacedFaulty.serialNumber}
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 text-xs font-mono text-[11px]">— (Fresh Installation)</span>
+                        )}
                       </td>
 
                       {/* BHEL Site & Location Class */}
@@ -703,32 +734,75 @@ export const DispatchListPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Dynamic Room Inspection Panel */}
+          {/* Dynamic Room Inspection Panel with 1-Click Faulty Item Swap */}
           {form.roomId && form.roomId.trim() !== '' && (
-            <div className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-2">
-              <p className="text-xs font-bold text-indigo-950 flex items-center justify-between">
-                <span>🔍 Installed Items Inspection in Room: <strong>{form.roomId}</strong></span>
-                {roomItemsLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-600" />}
-              </p>
+            <div className="p-3.5 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-2.5">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
+                  <span>🔍 Installed Items Inspection in Room: <strong>{form.roomId}</strong></span>
+                </p>
+                <span className="text-[10px] text-indigo-700 font-medium">Click an item below to select as faulty for swap</span>
+              </div>
+
+              {roomItemsLoading && <RefreshCw className="w-4 h-4 animate-spin text-indigo-600 mx-auto" />}
+
               {roomItemsData && roomItemsData.length > 0 ? (
-                <div className="max-h-36 overflow-y-auto bg-white border border-indigo-200 rounded-lg p-2 divide-y divide-slate-100 text-xs">
-                  {roomItemsData.map((item: any) => (
-                    <div key={item.id} className="py-1.5 flex items-center justify-between">
-                      <div>
-                        <span className="font-bold text-slate-900">{item.partId}</span>
-                        <span className="text-slate-500 ml-2 font-mono text-[11px]">SN: {item.partSerialNo}</span>
+                <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+                  {roomItemsData.map((item: any) => {
+                    const isSelected = selectedFaultyItem?.partSerialNo === item.partSerialNo && selectedFaultyItem?.partId === item.partId;
+                    return (
+                      <div
+                        key={item.id || item.partSerialNo}
+                        onClick={() => {
+                          if (isSelected) {
+                            setSelectedFaultyItem(null);
+                            setForm(f => ({ ...f, faultyItemId: undefined, faultyPartCode: undefined, faultySerialNumber: undefined } as any));
+                          } else {
+                            const faulty = { id: item.id, partId: item.partId, partSerialNo: item.partSerialNo };
+                            setSelectedFaultyItem(faulty);
+                            setForm(f => ({
+                              ...f,
+                              faultyItemId: item.id,
+                              faultyPartCode: item.partId,
+                              faultySerialNumber: item.partSerialNo,
+                            } as any));
+                          }
+                        }}
+                        className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between text-xs ${
+                          isSelected
+                            ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-400/30 shadow-sm'
+                            : 'bg-white border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/30'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-slate-900">{item.partId}</span>
+                            {isSelected && (
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-600 text-white rounded-md flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3" /> Selected Faulty
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-slate-500 font-mono text-[11px] mt-0.5">
+                            SN: {item.partSerialNo || 'Non-Serialized'} · OEM: {item.oem}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[10px] font-bold text-slate-500 block">
+                            {item.installationDate ? new Date(item.installationDate).toLocaleDateString('en-IN') : 'Installed'}
+                          </span>
+                          <span className={`text-[10px] font-bold ${isSelected ? 'text-emerald-700 underline' : 'text-indigo-600'}`}>
+                            {isSelected ? '✓ Ready for Swap' : '+ Click to Select Faulty'}
+                          </span>
+                        </div>
                       </div>
-                      <div className="text-right text-[11px]">
-                        <span className="text-slate-600 font-semibold">{item.oem}</span>
-                        <span className="text-slate-400 ml-2">
-                          {item.installationDate ? new Date(item.installationDate).toLocaleDateString('en-IN') : '—'}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
-                <p className="text-[11px] text-slate-600 italic">No existing inventory items installed in room {form.roomId}. New dispatch item will be registered to this room.</p>
+                <p className="text-[11px] text-slate-600 italic bg-white p-2.5 rounded-lg border border-slate-200">
+                  No existing inventory items installed in room <strong>{form.roomId}</strong>. New dispatch item will be registered as fresh installation to this room.
+                </p>
               )}
             </div>
           )}

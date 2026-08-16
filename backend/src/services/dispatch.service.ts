@@ -11,6 +11,9 @@ export interface CreateDispatchDto {
   stockItemId?: string;
   dispatchedSerialNo?: string;
   faultySerialNo?: string;
+  faultyItemId?: string;
+  faultyPartCode?: string;
+  faultySerialNumber?: string;
   siteId?: string;
   unit?: string;
   sublocation?: string;
@@ -62,7 +65,7 @@ export class DispatchService {
       prisma.dispatch.findMany({
         where,
         include: {
-          inventoryItem: { select: { spareId: true, productName: true, model: true, serialNumber: true, isSerialized: true, oem: { select: { name: true } } } },
+          inventoryItem: { select: { spareId: true, productName: true, model: true, partCode: true, store: true, serialNumber: true, isSerialized: true, oem: { select: { name: true } } } },
           site: { select: { siteName: true, locationClass: true, unitDivision: true, city: true, state: true, pin: true, contactPerson: true, phone: true, email: true, fullAddress: true } },
           createdBy: { select: { name: true } },
           approvedBy: { select: { name: true } },
@@ -74,7 +77,7 @@ export class DispatchService {
       prisma.dispatch.count({ where }),
     ]);
 
-    // Map originalSerialNumber from remarks or inventoryItem for immutability
+    // Map originalSerialNumber and replacedFaulty from remarks for immutability
     const mappedDispatches = dispatches.map((d) => {
       let originalSerial = d.inventoryItem?.serialNumber || null;
       if (d.remarks && d.remarks.includes('[Dispatched SN:')) {
@@ -83,9 +86,22 @@ export class DispatchService {
           originalSerial = match[1].trim();
         }
       }
+
+      let replacedFaulty: { partCode?: string; serialNumber?: string } | null = null;
+      if (d.remarks && d.remarks.includes('[Replaced Faulty:')) {
+        const match = d.remarks.match(/\[Replaced Faulty:\s*([^|]+)\|\s*SN:\s*([^\]]+)\]/);
+        if (match) {
+          replacedFaulty = {
+            partCode: match[1].trim(),
+            serialNumber: match[2].trim(),
+          };
+        }
+      }
+
       return {
         ...d,
         originalSerialNumber: originalSerial,
+        replacedFaulty,
       };
     });
 
@@ -205,13 +221,20 @@ export class DispatchService {
       }
     }
 
-    // Optional user remarks / comments
+    // Optional user remarks / comments & faulty item swap formatting
     const userComments = (data.comments || data.remarks || '').trim();
     const originalSerial = data.dispatchedSerialNo || item.serialNumber || 'Bulk';
-    const lockedRemarks = userComments ? `[Dispatched SN: ${originalSerial}] ${userComments}` : `[Dispatched SN: ${originalSerial}]`;
+    
+    const faultyPart = data.faultyPartCode || (data.faultyItemId ? 'Installed Faulty' : null);
+    const faultySerial = data.faultySerialNumber || data.faultySerialNo || null;
+    const faultyText = faultyPart || faultySerial
+      ? `[Replaced Faulty: ${faultyPart || 'Faulty'} | SN: ${faultySerial || 'Non-Serialized'}]`
+      : '';
 
-    // Transaction to create dispatch & update inventory stock & record movement
-    const [dispatch] = await prisma.$transaction([
+    const lockedRemarks = [faultyText, `[Dispatched SN: ${originalSerial}]`, userComments].filter(Boolean).join(' ');
+
+    // Transaction array for atomic database operations
+    const txOperations: Prisma.PrismaPromise<any>[] = [
       prisma.dispatch.create({
         data: {
           dispatchNo,
@@ -237,7 +260,7 @@ export class DispatchService {
           approvedAt: now,
         },
         include: {
-          inventoryItem: { select: { spareId: true, productName: true, serialNumber: true } },
+          inventoryItem: { select: { spareId: true, productName: true, serialNumber: true, store: true, partCode: true } },
           site: { select: { siteName: true } },
         },
       }),
@@ -264,7 +287,29 @@ export class DispatchService {
           remarks: `Dispatched to site (${buildingName} / Room ${data.roomId || 'N/A'}) (Dispatch #${dispatchNo})`,
         },
       }),
-    ]);
+    ];
+
+    if (faultyPart || faultySerial) {
+      txOperations.push(
+        prisma.swapHistory.create({
+          data: {
+            roomId: data.roomId || 'ROOM-GENERAL',
+            roomName: data.roomName || '',
+            partId: faultyPart || item.partCode || item.productName,
+            buildingName: buildingName,
+            floor: data.floor || '',
+            oldSerialNo: faultySerial || 'Non-Serialized',
+            newSerialNo: originalSerial,
+            swappedBy: userId,
+            swapReason: `Dispatch Replacement (Dispatch #${dispatchNo})`,
+          },
+        })
+      );
+    }
+
+    // Run all core creation & update queries inside a single Prisma transaction
+    const txResults = await prisma.$transaction(txOperations);
+    const dispatch = txResults[0];
 
     // Non-critical post-transaction automation wrapped safely
     try {

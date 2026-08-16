@@ -44,70 +44,80 @@ export class DispatchService {
     page?: string;
     limit?: string;
   }, organizationId: string = 'BHEL') {
-    const { page, limit, skip } = parsePagination(filters);
-    const orgFilter = buildOrgFilter(organizationId);
-    const where: Prisma.DispatchWhereInput = { AND: [orgFilter] };
+    try {
+      const { page, limit, skip } = parsePagination(filters);
+      const orgFilter = buildOrgFilter(organizationId);
+      const where: Prisma.DispatchWhereInput = { AND: [orgFilter] };
 
-    if (filters.status) where.status = filters.status;
-    if (filters.siteId) where.siteId = filters.siteId;
-    if (filters.search) {
-      (where.AND as any[]).push({
-        OR: [
-          { dispatchNo: { contains: filters.search } },
-          { trackingNo: { contains: filters.search } },
-          { site: { siteName: { contains: filters.search } } },
-          { inventoryItem: { productName: { contains: filters.search } } },
-          { buildingName: { contains: filters.search } },
-          { roomId: { contains: filters.search } },
-        ],
-      });
-    }
-
-    const [dispatches, total] = await Promise.all([
-      prisma.dispatch.findMany({
-        where,
-        include: {
-          inventoryItem: { select: { spareId: true, productName: true, model: true, partCode: true, store: true, serialNumber: true, isSerialized: true, oem: { select: { name: true } } } },
-          site: { select: { siteName: true, locationClass: true, unitDivision: true, city: true, state: true, pin: true, contactPerson: true, phone: true, email: true, fullAddress: true } },
-          createdBy: { select: { name: true } },
-          approvedBy: { select: { name: true } },
-        },
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: limit,
-      }),
-      prisma.dispatch.count({ where }),
-    ]);
-
-    // Map originalSerialNumber and replacedFaulty from remarks for immutability
-    const mappedDispatches = dispatches.map((d) => {
-      let originalSerial = d.inventoryItem?.serialNumber || null;
-      if (d.remarks && d.remarks.includes('[Dispatched SN:')) {
-        const match = d.remarks.match(/\[Dispatched SN:\s*([^\]]+)\]/);
-        if (match && match[1]) {
-          originalSerial = match[1].trim();
-        }
+      if (filters.status) where.status = filters.status;
+      if (filters.siteId) where.siteId = filters.siteId;
+      if (filters.search) {
+        (where.AND as any[]).push({
+          OR: [
+            { dispatchNo: { contains: filters.search } },
+            { trackingNo: { contains: filters.search } },
+            { site: { siteName: { contains: filters.search } } },
+            { inventoryItem: { productName: { contains: filters.search } } },
+            { buildingName: { contains: filters.search } },
+            { roomId: { contains: filters.search } },
+          ],
+        });
       }
 
-      let replacedFaulty: { partCode?: string; serialNumber?: string } | null = null;
-      if (d.remarks && d.remarks.includes('[Replaced Faulty:')) {
-        const match = d.remarks.match(/\[Replaced Faulty:\s*([^|]+)\|\s*SN:\s*([^\]]+)\]/);
-        if (match) {
+      const [dispatches, total] = await Promise.all([
+        prisma.dispatch.findMany({
+          where,
+          include: {
+            inventoryItem: { select: { spareId: true, productName: true, model: true, partCode: true, store: true, serialNumber: true, isSerialized: true, oem: { select: { name: true } } } },
+            site: { select: { siteName: true, locationClass: true, unitDivision: true, city: true, state: true, pin: true, contactPerson: true, phone: true, email: true, fullAddress: true } },
+            createdBy: { select: { name: true } },
+            approvedBy: { select: { name: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+          skip,
+          take: limit,
+        }),
+        prisma.dispatch.count({ where }),
+      ]);
+
+      // Map originalSerialNumber and replacedFaulty from remarks for immutability
+      const mappedDispatches = (dispatches || []).map((d) => {
+        let originalSerial = d.serialNumber || d.inventoryItem?.serialNumber || null;
+        if (d.remarks && d.remarks.includes('[Dispatched SN:')) {
+          const match = d.remarks.match(/\[Dispatched SN:\s*([^\]]+)\]/);
+          if (match && match[1]) {
+            originalSerial = match[1].trim();
+          }
+        }
+
+        let replacedFaulty: { partCode?: string; serialNumber?: string } | null = null;
+        if (d.faultyPartCode || d.faultySerialNumber) {
           replacedFaulty = {
-            partCode: match[1].trim(),
-            serialNumber: match[2].trim(),
+            partCode: d.faultyPartCode || undefined,
+            serialNumber: d.faultySerialNumber || undefined,
           };
+        } else if (d.remarks && d.remarks.includes('[Replaced Faulty:')) {
+          const match = d.remarks.match(/\[Replaced Faulty:\s*([^|]+)\|\s*SN:\s*([^\]]+)\]/);
+          if (match) {
+            replacedFaulty = {
+              partCode: match[1].trim(),
+              serialNumber: match[2].trim(),
+            };
+          }
         }
-      }
 
-      return {
-        ...d,
-        originalSerialNumber: originalSerial,
-        replacedFaulty,
-      };
-    });
+        return {
+          ...d,
+          originalSerialNumber: originalSerial,
+          replacedFaulty,
+        };
+      });
 
-    return { dispatches: mappedDispatches, pagination: buildPagination(page, limit, total) };
+      return { dispatches: mappedDispatches, pagination: buildPagination(page, limit, total) };
+    } catch (err) {
+      console.error('dispatchService.getAll error:', err);
+      return { dispatches: [], pagination: { page: 1, limit: 10, total: 0, totalPages: 0, hasNext: false, hasPrev: false } };
+    }
   }
 
   async getById(id: string) {

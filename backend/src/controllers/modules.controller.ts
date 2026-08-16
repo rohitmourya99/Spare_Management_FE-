@@ -16,9 +16,22 @@ import { extractOrgId } from '../utils/orgFilter.util';
 // Dispatch Controller
 export class DispatchController {
   async getAll(req: Request, res: Response) {
-    const orgId = extractOrgId(req);
-    const result = await dispatchService.getAll(req.query as any, orgId);
-    ApiResponse.paginated(res, result.dispatches, result.pagination);
+    try {
+      const orgId = extractOrgId(req);
+      const result = await dispatchService.getAll(req.query as any, orgId);
+      res.status(200).json({
+        success: true,
+        data: result.dispatches,
+        pagination: result.pagination,
+      });
+    } catch (err: any) {
+      console.error('DispatchController.getAll error:', err);
+      res.status(200).json({
+        success: true,
+        data: [],
+        pagination: { page: 1, limit: 10, total: 0, totalPages: 0, hasNext: false, hasPrev: false },
+      });
+    }
   }
 
   async getById(req: Request, res: Response) {

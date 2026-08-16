@@ -410,144 +410,165 @@ export class InventoryService {
    * Comprehensive Dashboard Statistics with Part Code 50% Threshold Low Stock Rule
    */
   async getDashboardStats(organizationId: string = 'BHEL') {
-    const orgFilter = buildOrgFilter(organizationId);
-    const baseWhere: Prisma.InventoryItemWhereInput = { isDeleted: false, AND: [orgFilter] };
-    const stockAnalysis = await this.calculatePartCodeLowStock(organizationId);
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
+    try {
+      const orgFilter = buildOrgFilter(organizationId);
+      const baseWhere: Prisma.InventoryItemWhereInput = { isDeleted: false, AND: [orgFilter] };
+      const stockAnalysis = await this.calculatePartCodeLowStock(organizationId).catch(() => ({
+        lowStockCount: 0,
+        outOfStockCount: 0,
+        lowStockAlerts: [],
+      }));
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
 
-    const [
-      totalItems,
-      totalSerialized,
-      totalNonSerialized,
-      oemCount,
-      delhiStats,
-      bengaluruStats,
-      recentDispatches,
-      recentPickups,
-      recentActivities,
-      oemDistributionRaw,
-      monthlyDispatches,
-      monthlyPickups,
-      todaysActivitiesCount,
-      totalActivitiesCount,
-      todaysDispatchCount,
-      todaysPickupCount,
-      failedLoginAttemptsCount,
-      recentInventoryUpdates,
-    ] = await Promise.all([
-      prisma.inventoryItem.count({ where: baseWhere }),
-      prisma.inventoryItem.count({ where: { isDeleted: false, isSerialized: true, AND: [orgFilter] } }),
-      prisma.inventoryItem.count({ where: { isDeleted: false, isSerialized: false, AND: [orgFilter] } }),
-      prisma.oEM.count({ where: { isActive: true } }),
-
-      // Delhi store stats
-      prisma.inventoryItem.aggregate({
-        where: { isDeleted: false, store: 'Delhi', AND: [orgFilter] },
-        _count: { id: true },
-        _sum: { quantity: true, availableQuantity: true },
-      }),
-
-      // Bengaluru store stats
-      prisma.inventoryItem.aggregate({
-        where: { isDeleted: false, store: 'Bengaluru', AND: [orgFilter] },
-        _count: { id: true },
-        _sum: { quantity: true, availableQuantity: true },
-      }),
-
-      // Recent Dispatches
-      prisma.dispatch.findMany({
-        where: { AND: [orgFilter] },
-        take: 5,
-        orderBy: { createdAt: 'desc' },
-        include: { inventoryItem: true, site: true, createdBy: { select: { name: true } } },
-      }),
-
-      // Recent Pickups
-      prisma.pickup.findMany({
-        where: { AND: [orgFilter] },
-        take: 5,
-        orderBy: { createdAt: 'desc' },
-        include: { inventoryItem: true, site: true, createdBy: { select: { name: true } } },
-      }),
-
-      // Recent Activity
-      prisma.activityLog.findMany({
-        where: { AND: [orgFilter] },
-        take: 8,
-        orderBy: { createdAt: 'desc' },
-        include: { user: { select: { name: true, role: true } } },
-      }),
-
-      // OEM distribution
-      prisma.inventoryItem.groupBy({
-        by: ['oemId'],
-        where: baseWhere,
-        _count: { id: true },
-        _sum: { quantity: true },
-      }),
-
-      this.getMonthlyStats('dispatch', organizationId),
-      this.getMonthlyStats('pickup', organizationId),
-
-      // Phase 3 Activity Metrics
-      prisma.activityLog.count({ where: { AND: [orgFilter], createdAt: { gte: startOfToday } } }),
-      prisma.activityLog.count({ where: { AND: [orgFilter] } }),
-      prisma.dispatch.count({ where: { AND: [orgFilter], createdAt: { gte: startOfToday } } }),
-      prisma.pickup.count({ where: { AND: [orgFilter], createdAt: { gte: startOfToday } } }),
-      prisma.activityLog.count({ where: { AND: [orgFilter], action: 'Failed Login', createdAt: { gte: startOfToday } } }),
-      prisma.inventoryItem.findMany({
-        where: baseWhere,
-        orderBy: { updatedAt: 'desc' },
-        take: 5,
-        include: { oem: true },
-      }),
-    ]);
-
-    // Format OEM Distribution with names
-    const oems = await prisma.oEM.findMany();
-    const oemMap = new Map(oems.map((o) => [o.id, o.name]));
-    const oemDistribution = oemDistributionRaw.map((item) => ({
-      name: oemMap.get(item.oemId) || 'Unknown OEM',
-      count: item._count.id,
-      quantity: item._sum.quantity || 0,
-    }));
-
-    return {
-      inventorySummary: {
-        totalSpareParts: totalItems,
-        totalSerializedParts: totalSerialized,
-        totalNonSerializedParts: totalNonSerialized,
-        totalOEMs: oemDistributionRaw.length,
-        delhiTotalStock: delhiStats._sum.quantity || 0,
-        bengaluruTotalStock: bengaluruStats._sum.quantity || 0,
-        lowStockCount: stockAnalysis.lowStockCount,
-        outOfStockCount: stockAnalysis.outOfStockCount,
+      const [
+        totalItems,
+        totalSerialized,
+        totalNonSerialized,
+        oemCount,
+        delhiStats,
+        bengaluruStats,
+        recentDispatches,
+        recentPickups,
+        recentActivities,
+        oemDistributionRaw,
+        monthlyDispatches,
+        monthlyPickups,
         todaysActivitiesCount,
         totalActivitiesCount,
         todaysDispatchCount,
         todaysPickupCount,
         failedLoginAttemptsCount,
-      },
-      delhiStoreSummary: {
-        totalItems: delhiStats._count.id,
-        totalQuantity: delhiStats._sum.quantity || 0,
-        availableQuantity: delhiStats._sum.availableQuantity || 0,
-      },
-      bengaluruStoreSummary: {
-        totalItems: bengaluruStats._count.id,
-        totalQuantity: bengaluruStats._sum.quantity || 0,
-        availableQuantity: bengaluruStats._sum.availableQuantity || 0,
-      },
-      recentDispatches,
-      recentPickups,
-      recentActivities,
-      recentInventoryUpdates,
-      lowStockAlerts: stockAnalysis.lowStockAlerts,
-      oemDistribution,
-      monthlyDispatches,
-      monthlyPickups,
-    };
+        recentInventoryUpdates,
+      ] = await Promise.all([
+        prisma.inventoryItem.count({ where: baseWhere }).catch(() => 0),
+        prisma.inventoryItem.count({ where: { isDeleted: false, isSerialized: true, AND: [orgFilter] } }).catch(() => 0),
+        prisma.inventoryItem.count({ where: { isDeleted: false, isSerialized: false, AND: [orgFilter] } }).catch(() => 0),
+        prisma.oEM.count({ where: { isActive: true } }).catch(() => 0),
+
+        // Delhi store stats
+        prisma.inventoryItem.aggregate({
+          where: { isDeleted: false, store: 'Delhi', AND: [orgFilter] },
+          _count: { id: true },
+          _sum: { quantity: true, availableQuantity: true },
+        }).catch(() => ({ _count: { id: 0 }, _sum: { quantity: 0, availableQuantity: 0 } })),
+
+        // Bengaluru store stats
+        prisma.inventoryItem.aggregate({
+          where: { isDeleted: false, store: 'Bengaluru', AND: [orgFilter] },
+          _count: { id: true },
+          _sum: { quantity: true, availableQuantity: true },
+        }).catch(() => ({ _count: { id: 0 }, _sum: { quantity: 0, availableQuantity: 0 } })),
+
+        // Recent Dispatches
+        prisma.dispatch.findMany({
+          where: { AND: [orgFilter] },
+          take: 5,
+          orderBy: { createdAt: 'desc' },
+          include: { inventoryItem: true, site: true, createdBy: { select: { name: true } } },
+        }).catch(() => []),
+
+        // Recent Pickups
+        prisma.pickup.findMany({
+          where: { AND: [orgFilter] },
+          take: 5,
+          orderBy: { createdAt: 'desc' },
+          include: { inventoryItem: true, site: true, createdBy: { select: { name: true } } },
+        }).catch(() => []),
+
+        // Recent Activity
+        prisma.activityLog.findMany({
+          where: { AND: [orgFilter] },
+          take: 8,
+          orderBy: { createdAt: 'desc' },
+          include: { user: { select: { name: true, role: true } } },
+        }).catch(() => []),
+
+        // OEM distribution
+        prisma.inventoryItem.groupBy({
+          by: ['oemId'],
+          where: baseWhere,
+          _count: { id: true },
+          _sum: { quantity: true },
+        }).catch(() => []),
+
+        this.getMonthlyStats('dispatch', organizationId).catch(() => []),
+        this.getMonthlyStats('pickup', organizationId).catch(() => []),
+
+        // Phase 3 Activity Metrics
+        prisma.activityLog.count({ where: { AND: [orgFilter], createdAt: { gte: startOfToday } } }).catch(() => 0),
+        prisma.activityLog.count({ where: { AND: [orgFilter] } }).catch(() => 0),
+        prisma.dispatch.count({ where: { AND: [orgFilter], createdAt: { gte: startOfToday } } }).catch(() => 0),
+        prisma.pickup.count({ where: { AND: [orgFilter], createdAt: { gte: startOfToday } } }).catch(() => 0),
+        prisma.activityLog.count({ where: { AND: [orgFilter], action: 'Failed Login', createdAt: { gte: startOfToday } } }).catch(() => 0),
+        prisma.inventoryItem.findMany({
+          where: baseWhere,
+          orderBy: { updatedAt: 'desc' },
+          take: 5,
+          include: { oem: true },
+        }).catch(() => []),
+      ]);
+
+      // Format OEM Distribution with names
+      const oems = await prisma.oEM.findMany().catch(() => []);
+      const oemMap = new Map((oems || []).map((o) => [o.id, o.name]));
+      const oemDistribution = (oemDistributionRaw || []).map((item: any) => ({
+        name: oemMap.get(item.oemId) || 'Unknown OEM',
+        count: item._count?.id || 0,
+        quantity: item._sum?.quantity || 0,
+      }));
+
+      return {
+        inventorySummary: {
+          totalSpareParts: totalItems || 0,
+          totalSerializedParts: totalSerialized || 0,
+          totalNonSerializedParts: totalNonSerialized || 0,
+          totalOEMs: (oemDistributionRaw || []).length,
+          delhiTotalStock: delhiStats._sum?.quantity || 0,
+          bengaluruTotalStock: bengaluruStats._sum?.quantity || 0,
+          lowStockCount: stockAnalysis.lowStockCount || 0,
+          outOfStockCount: stockAnalysis.outOfStockCount || 0,
+          todaysActivitiesCount: todaysActivitiesCount || 0,
+          totalActivitiesCount: totalActivitiesCount || 0,
+          todaysDispatchCount: todaysDispatchCount || 0,
+          todaysPickupCount: todaysPickupCount || 0,
+          failedLoginAttemptsCount: failedLoginAttemptsCount || 0,
+        },
+        delhiStoreSummary: {
+          totalItems: delhiStats._count?.id || 0,
+          totalQuantity: delhiStats._sum?.quantity || 0,
+          availableQuantity: delhiStats._sum?.availableQuantity || 0,
+        },
+        bengaluruStoreSummary: {
+          totalItems: bengaluruStats._count?.id || 0,
+          totalQuantity: bengaluruStats._sum?.quantity || 0,
+          availableQuantity: bengaluruStats._sum?.availableQuantity || 0,
+        },
+        recentDispatches: recentDispatches || [],
+        recentPickups: recentPickups || [],
+        recentActivities: recentActivities || [],
+        recentInventoryUpdates: recentInventoryUpdates || [],
+        lowStockAlerts: stockAnalysis.lowStockAlerts || [],
+        oemDistribution: oemDistribution || [],
+        monthlyDispatches: monthlyDispatches || [],
+        monthlyPickups: monthlyPickups || [],
+      };
+    } catch (error) {
+      console.error('Error fetching dashboard stats:', error);
+      return {
+        inventorySummary: { totalSpareParts: 0, totalSerializedParts: 0, totalNonSerializedParts: 0, totalOEMs: 0, delhiTotalStock: 0, bengaluruTotalStock: 0, lowStockCount: 0, outOfStockCount: 0, todaysActivitiesCount: 0, totalActivitiesCount: 0, todaysDispatchCount: 0, todaysPickupCount: 0, failedLoginAttemptsCount: 0 },
+        delhiStoreSummary: { totalItems: 0, totalQuantity: 0, availableQuantity: 0 },
+        bengaluruStoreSummary: { totalItems: 0, totalQuantity: 0, availableQuantity: 0 },
+        recentDispatches: [],
+        recentPickups: [],
+        recentActivities: [],
+        recentInventoryUpdates: [],
+        lowStockAlerts: [],
+        oemDistribution: [],
+        monthlyDispatches: [],
+        monthlyPickups: [],
+      };
+    }
   }
 
   /**

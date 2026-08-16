@@ -256,23 +256,22 @@ const organizationRoutes = Router();
 organizationRoutes.use(authenticate);
 organizationRoutes.get('/', async (_req, res, next) => {
   try {
-    let orgs = await prisma.organization.findMany({
+    // Ensure BHEL and METLIFE organizations exist in database
+    await prisma.organization.upsert({
+      where: { id: 'BHEL' },
+      update: { name: 'BHEL', code: 'BHEL', status: 'ACTIVE' },
+      create: { id: 'BHEL', name: 'BHEL', code: 'BHEL', status: 'ACTIVE' },
+    });
+    await prisma.organization.upsert({
+      where: { id: 'METLIFE' },
+      update: { name: 'METLIFE', code: 'METLIFE', status: 'ACTIVE' },
+      create: { id: 'METLIFE', name: 'METLIFE', code: 'METLIFE', status: 'ACTIVE' },
+    });
+
+    const orgs = await prisma.organization.findMany({
       where: { status: 'ACTIVE' },
       orderBy: { name: 'asc' },
     });
-    if (!orgs || orgs.length === 0) {
-      orgs = [
-        {
-          id: 'BHEL',
-          name: 'BHEL',
-          code: 'BHEL',
-          status: 'ACTIVE',
-          googleSheetId: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ];
-    }
     res.json({ success: true, data: orgs });
   } catch (err) {
     res.json({
@@ -282,6 +281,15 @@ organizationRoutes.get('/', async (_req, res, next) => {
           id: 'BHEL',
           name: 'BHEL',
           code: 'BHEL',
+          status: 'ACTIVE',
+          googleSheetId: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          id: 'METLIFE',
+          name: 'METLIFE',
+          code: 'METLIFE',
           status: 'ACTIVE',
           googleSheetId: null,
           createdAt: new Date(),

@@ -37,24 +37,18 @@ export function buildOrgFilter(organizationId?: string | null): any {
         { organizationId: 'BHEL' },
         { organizationId: 'METLIFE' },
         { organizationId: null },
+        { organizationId: '' },
       ],
     };
   }
 
   const cleanOrg = String(organizationId).trim();
-  if (cleanOrg === 'BHEL') {
-    return {
-      OR: [
-        { organizationId: 'BHEL' },
-        { organizationId: null },
-      ],
-    };
-  }
-
   return {
     OR: [
       { organizationId: cleanOrg },
+      { organizationId: 'BHEL' },
       { organizationId: null },
+      { organizationId: '' },
     ],
   };
 }

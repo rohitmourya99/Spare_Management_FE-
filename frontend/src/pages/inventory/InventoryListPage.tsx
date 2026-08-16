@@ -137,10 +137,10 @@ export const InventoryListPage: React.FC = () => {
   const locationPagination = locationData?.pagination;
 
   // Query Swap History Records
-  const auditParams: any = { search: auditSearch, page: auditPage, limit: 15 };
+  const auditParams: any = { search: auditSearch, page: auditPage, limit: 15, organizationId: selectedOrg };
 
   const { data: auditData, isLoading: auditLoading } = useQuery({
-    queryKey: ['swap-history', auditParams],
+    queryKey: ['swap-history', auditParams, selectedOrg],
     queryFn: async () => {
       const res = await api.get('/swap-history', { params: auditParams });
       return res.data;

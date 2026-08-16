@@ -343,24 +343,22 @@ export class DispatchService {
       }),
     ];
 
-    if (faultyPart || faultySerial) {
-      txOperations.push(
-        prisma.swapHistory.create({
-          data: {
-            roomId: data.roomId || 'ROOM-GENERAL',
-            roomName: data.roomName || '',
-            partId: faultyPart || item.partCode || item.productName,
-            buildingName: buildingName,
-            floor: data.floor || '',
-            oldSerialNo: faultySerial || 'Non-Serialized',
-            newSerialNo: originalSerial,
-            sourceWarehouse: item.store || 'Delhi Store',
-            swappedBy: userId,
-            swapReason: `Dispatch Replacement (Dispatch #${dispatchNo})`,
-          },
-        })
-      );
-    }
+    txOperations.push(
+      prisma.swapHistory.create({
+        data: {
+          roomId: data.roomId || 'ROOM-GENERAL',
+          roomName: data.roomName || '',
+          partId: item.partCode || item.spareId || item.productName,
+          buildingName: buildingName,
+          floor: data.floor || '',
+          oldSerialNo: faultySerial || (faultyPart ? `Faulty: ${faultyPart}` : 'N/A (Fresh Item)'),
+          newSerialNo: originalSerial,
+          sourceWarehouse: item.store || 'Delhi Store',
+          swappedBy: (data as any).createdBy || userId || 'Technician',
+          swapReason: faultyText || `Outbound Dispatch (Dispatch #${dispatchNo})`,
+        },
+      })
+    );
 
     // Run all core creation & update queries inside a single Prisma transaction
     const txResults = await prisma.$transaction(txOperations);

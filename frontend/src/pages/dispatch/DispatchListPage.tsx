@@ -45,6 +45,7 @@ export const DispatchListPage: React.FC = () => {
     partId: string;
     partSerialNo: string;
   } | null>(null);
+  const [selectedStoreTab, setSelectedStoreTab] = useState<string>('ALL');
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastType, setToastType] = useState<'success' | 'error'>('success');
@@ -223,6 +224,7 @@ export const DispatchListPage: React.FC = () => {
     setSelectedItem(null);
     setSelectedSite(null);
     setSelectedFaultyItem(null);
+    setSelectedStoreTab('ALL');
     setItemSearch('');
   };
 
@@ -588,24 +590,66 @@ export const DispatchListPage: React.FC = () => {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-bold text-slate-800 mb-1">Select Stock Item to Dispatch *</label>
-            <select
-              required
-              value={form.inventoryItemId || ''}
-              onChange={(e) => {
-                const id = e.target.value;
-                const item = (stockItemsData || []).find((i: any) => i.id === id) || null;
-                setSelectedItem(item);
-                setForm(f => ({ ...f, inventoryItemId: id }));
-              }}
-              className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:border-indigo-600 max-h-48"
-            >
-              <option value="">-- Choose Stock Item ({(stockItemsData || []).length} Available) --</option>
-              {(stockItemsData || []).map((item: InventoryItem) => (
-                <option key={item.id} value={item.id}>
-                  {item.productName} ({item.partCode || item.model || 'No Code'}) — S/N: {item.serialNumber || 'Bulk'} (Qty: {item.availableQuantity})
-                </option>
-              ))}
-            </select>
+
+            {/* Dynamic Warehouse Sub-Tabs */}
+            <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl mb-2.5 overflow-x-auto">
+              {(() => {
+                const storeTabCounts: Record<string, number> = { ALL: (stockItemsData || []).length };
+                (stockItemsData || []).forEach((item: any) => {
+                  const storeName = item.store || 'Delhi';
+                  storeTabCounts[storeName] = (storeTabCounts[storeName] || 0) + 1;
+                });
+                const availableStores = ['ALL', ...Array.from(new Set((stockItemsData || []).map((item: any) => item.store || 'Delhi'))).sort()];
+
+                return availableStores.map((st: string) => {
+                  const label = st === 'ALL' ? 'All Stores' : `${st} Store`;
+                  const count = storeTabCounts[st] || 0;
+                  const isActive = selectedStoreTab === st;
+                  return (
+                    <button
+                      key={st}
+                      type="button"
+                      onClick={() => setSelectedStoreTab(st)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                        isActive
+                          ? 'bg-white text-indigo-700 shadow-sm border border-slate-200 ring-1 ring-indigo-500/20'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                      }`}
+                    >
+                      <span>📍 {label}</span>
+                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${isActive ? 'bg-indigo-100 text-indigo-800 font-extrabold' : 'bg-slate-200 text-slate-700'}`}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                });
+              })()}
+            </div>
+
+            {/* Stock Items Dropdown Filtered by Active Sub-Tab */}
+            {(() => {
+              const filteredStockItems = (stockItemsData || []).filter((i: any) => selectedStoreTab === 'ALL' || (i.store || 'Delhi') === selectedStoreTab);
+              return (
+                <select
+                  required
+                  value={form.inventoryItemId || ''}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    const item = (stockItemsData || []).find((i: any) => i.id === id) || null;
+                    setSelectedItem(item);
+                    setForm(f => ({ ...f, inventoryItemId: id }));
+                  }}
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:border-indigo-600 max-h-48"
+                >
+                  <option value="">-- Choose Stock Item ({filteredStockItems.length} Available in {selectedStoreTab === 'ALL' ? 'All Stores' : selectedStoreTab + ' Store'}) --</option>
+                  {filteredStockItems.map((item: InventoryItem) => (
+                    <option key={item.id} value={item.id}>
+                      {item.productName} ({item.partCode || item.model || 'No Code'}) — S/N: {item.serialNumber || 'Bulk'} (Store: {item.store || 'Delhi'}) (Qty: {item.availableQuantity})
+                    </option>
+                  ))}
+                </select>
+              );
+            })()}
             {selectedItem && (
               <div className="mt-2 p-2.5 bg-indigo-50 border border-indigo-200 rounded-xl flex items-center justify-between text-xs">
                 <div>

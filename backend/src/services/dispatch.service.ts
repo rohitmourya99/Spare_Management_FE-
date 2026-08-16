@@ -331,6 +331,7 @@ export class DispatchService {
             floor: data.floor || '',
             oldSerialNo: faultySerial || 'Non-Serialized',
             newSerialNo: originalSerial,
+            sourceWarehouse: item.store || 'Delhi Store',
             swappedBy: userId,
             swapReason: `Dispatch Replacement (Dispatch #${dispatchNo})`,
           },

@@ -589,17 +589,18 @@ model ReplacementAuditLog {
 // ==============================================
 
 model SwapHistory {
-  id            String   @id @default(uuid())
-  roomId        String
-  roomName      String?
-  partId        String
-  buildingName  String?
-  floor         String?
-  oldSerialNo   String
-  newSerialNo   String
-  swappedBy     String   @default("System / Technician")
-  swapReason    String?  @default("Stock Replacement")
-  swappedAt     DateTime @default(now())
+  id              String   @id @default(uuid())
+  roomId          String
+  roomName        String?
+  partId          String
+  buildingName    String?
+  floor           String?
+  oldSerialNo     String
+  newSerialNo     String
+  sourceWarehouse String?  @default("Delhi Store")
+  swappedBy       String   @default("System / Technician")
+  swapReason      String?  @default("Stock Replacement")
+  swappedAt       DateTime @default(now())
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt

@@ -22,6 +22,7 @@ export interface CreateSwapHistoryDto {
   floor?: string;
   oldSerialNo: string;
   newSerialNo: string;
+  sourceWarehouse?: string;
   swappedBy?: string;
   swapReason?: string;
   swappedAt?: Date | string;
@@ -38,6 +39,7 @@ export class SwapHistoryService {
         floor: data.floor?.trim() || null,
         oldSerialNo: data.oldSerialNo.trim(),
         newSerialNo: data.newSerialNo.trim(),
+        sourceWarehouse: data.sourceWarehouse?.trim() || 'Delhi Store',
         swappedBy: data.swappedBy?.trim() || 'System / Technician',
         swapReason: data.swapReason?.trim() || 'Stock Replacement',
         swappedAt: data.swappedAt ? new Date(data.swappedAt) : new Date(),

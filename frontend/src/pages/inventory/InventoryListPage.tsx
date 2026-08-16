@@ -585,6 +585,7 @@ export const InventoryListPage: React.FC = () => {
                 <thead>
                   <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
                     <th className="p-3.5">Swap Date &amp; Time</th>
+                    <th className="p-3.5">Source Warehouse</th>
                     <th className="p-3.5">Room ID / Room Name</th>
                     <th className="p-3.5">Building &amp; Floor</th>
                     <th className="p-3.5">Part ID</th>
@@ -597,27 +598,33 @@ export const InventoryListPage: React.FC = () => {
                 <tbody className="divide-y divide-slate-200 text-slate-900">
                   {auditLoading ? (
                     <tr>
-                      <td colSpan={8} className="p-8 text-center text-slate-500 font-semibold">
+                      <td colSpan={9} className="p-8 text-center text-slate-500 font-semibold">
                         <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-indigo-600" />
                         Loading swap tracking audit logs...
                       </td>
                     </tr>
                   ) : auditLogs.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="p-8 text-center text-slate-500 font-semibold">
+                      <td colSpan={9} className="p-8 text-center text-slate-500 font-semibold">
                         <History className="w-8 h-8 mx-auto mb-2 text-slate-400" />
                         No serial replacement audit history logs recorded yet.
                       </td>
                     </tr>
                   ) : (
-                    auditLogs.map((log) => {
+                    auditLogs.map((log: any) => {
                       const oldSerial = formatSerialDisplay(log.oldSerialNo || log.oldFaultySerialNo, '');
                       const newSerial = formatSerialDisplay(log.newSerialNo || log.newSpareSerialNo, '');
                       const swapTime = log.swappedAt || log.swapDate;
+                      const storeName = log.sourceWarehouse || log.store || 'Delhi Store';
                       return (
                         <tr key={log.id} className="hover:bg-slate-50 transition-colors">
                           <td className="p-3.5 text-slate-700 font-semibold">
                             {swapTime ? new Date(swapTime).toLocaleString('en-IN') : '—'}
+                          </td>
+                          <td className="p-3.5">
+                            <span className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-800 border border-indigo-200 px-2.5 py-1 rounded-lg font-bold text-xs shadow-2xs">
+                              📍 From: {storeName}
+                            </span>
                           </td>
                           <td className="p-3.5 text-slate-800">
                             <p className="font-bold text-indigo-600">{log.roomId}</p>

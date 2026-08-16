@@ -222,6 +222,7 @@ export interface SwapHistoryItem {
   floor?: string;
   oldSerialNo: string;
   newSerialNo: string;
+  sourceWarehouse?: string;
   swappedBy: string;
   swapReason?: string;
   swappedAt: string;

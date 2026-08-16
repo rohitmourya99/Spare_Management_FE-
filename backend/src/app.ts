@@ -67,13 +67,23 @@ app.use(compression({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Rate limiting
+// Rate limiting: Generous limits for active IMS usage, skip auth, health & organization routes
 const limiter = rateLimit({
-  windowMs: env.RATE_LIMIT_WINDOW_MS,
-  max: env.RATE_LIMIT_MAX_REQUESTS,
+  windowMs: env.RATE_LIMIT_WINDOW_MS || 900000,
+  max: env.RATE_LIMIT_MAX_REQUESTS || 10000,
   message: { success: false, message: 'Too many requests, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => {
+    const url = req.originalUrl || req.url || req.path || '';
+    return (
+      url.includes('/auth/login') ||
+      url.includes('/auth/refresh-token') ||
+      url.includes('/organizations') ||
+      url.includes('/health') ||
+      env.isDevelopment
+    );
+  },
 });
 app.use('/api', limiter);
 

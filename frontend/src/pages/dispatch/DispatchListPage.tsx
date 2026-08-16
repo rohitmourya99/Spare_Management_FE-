@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import {
@@ -90,13 +90,13 @@ export const DispatchListPage: React.FC = () => {
     },
   });
 
-  const { data: itemsData } = useQuery({
-    queryKey: ['inventory-search-dispatch', itemSearch],
+  const { data: stockItemsData } = useQuery({
+    queryKey: ['available-inventory-dispatch', selectedOrg],
     queryFn: async () => {
-      const res = await api.get('/inventory', { params: { search: itemSearch, limit: 10 } });
-      return res.data.data as InventoryItem[];
+      const res = await api.get('/inventory', { params: { status: 'AVAILABLE', limit: 300 } });
+      return (res.data.data || []) as InventoryItem[];
     },
-    enabled: isModalOpen && itemSearch.length > 0,
+    enabled: isModalOpen,
   });
 
   const { data: hierarchyData } = useQuery({
@@ -107,6 +107,50 @@ export const DispatchListPage: React.FC = () => {
     },
     enabled: isModalOpen,
   });
+
+  const sublocationOptions = useMemo(() => {
+    if (!hierarchyData) return [];
+    const items = hierarchyData.items || [];
+    const rawSubs = items.map((i: any) => i.subUnit || i.sublocation).concat(hierarchyData.sublocations || []);
+    return Array.from(new Set(rawSubs.filter(Boolean))).sort() as string[];
+  }, [hierarchyData]);
+
+  const roomOptions = useMemo(() => {
+    if (!hierarchyData) return [];
+    const items = hierarchyData.items || [];
+    let filtered = items;
+    if (form.sublocation && form.sublocation.trim()) {
+      const subTarget = form.sublocation.trim().toLowerCase();
+      filtered = items.filter((i: any) =>
+        (i.subUnit && String(i.subUnit).trim().toLowerCase() === subTarget) ||
+        (i.sublocation && String(i.sublocation).trim().toLowerCase() === subTarget)
+      );
+    }
+    const rms = filtered.map((i: any) => i.roomId).concat(
+      !form.sublocation ? (hierarchyData.roomIds || []) : []
+    );
+    return Array.from(new Set(rms.filter(Boolean))).sort() as string[];
+  }, [hierarchyData, form.sublocation]);
+
+  const handleRoomSelect = (roomId: string) => {
+    setForm(f => {
+      const newForm = { ...f, roomId };
+      if (hierarchyData?.items) {
+        const matched = hierarchyData.items.find((i: any) => i.roomId === roomId);
+        if (matched) {
+          newForm.buildingName = matched.buildingName || newForm.buildingName;
+          newForm.floor = matched.floor || newForm.floor;
+          newForm.solutionType = matched.solutionType || newForm.solutionType;
+          newForm.locationClass = matched.locationClass || newForm.locationClass;
+          newForm.roomName = matched.roomName || newForm.roomName;
+          if (matched.subUnit || matched.sublocation) {
+            newForm.sublocation = matched.subUnit || matched.sublocation;
+          }
+        }
+      }
+      return newForm;
+    });
+  };
 
   const { data: roomItemsData, isLoading: roomItemsLoading } = useQuery({
     queryKey: ['room-items', form.roomId],
@@ -130,21 +174,8 @@ export const DispatchListPage: React.FC = () => {
         roomName: f.roomName || first.roomName || '',
         sublocation: f.sublocation || first.subUnit || first.sublocation || '',
       }));
-    } else if (hierarchyData?.items && form.roomId) {
-      const matched = hierarchyData.items.find((i: any) => i.roomId === form.roomId);
-      if (matched) {
-        setForm(f => ({
-          ...f,
-          buildingName: f.buildingName || matched.buildingName || '',
-          floor: f.floor || matched.floor || '',
-          solutionType: f.solutionType || matched.solutionType || '',
-          locationClass: f.locationClass || matched.locationClass || '',
-          roomName: f.roomName || matched.roomName || '',
-          sublocation: f.sublocation || matched.subUnit || '',
-        }));
-      }
     }
-  }, [roomItemsData, hierarchyData, form.roomId]);
+  }, [roomItemsData]);
 
   const createMutation = useMutation({
     mutationFn: async (payload: typeof form) => {
@@ -521,44 +552,33 @@ export const DispatchListPage: React.FC = () => {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-bold text-slate-800 mb-1">Select Stock Item to Dispatch *</label>
-            {selectedItem ? (
-              <div className="flex items-center justify-between p-3 bg-indigo-50 border border-indigo-200 rounded-xl">
+            <select
+              required
+              value={form.inventoryItemId || ''}
+              onChange={(e) => {
+                const id = e.target.value;
+                const item = (stockItemsData || []).find((i: any) => i.id === id) || null;
+                setSelectedItem(item);
+                setForm(f => ({ ...f, inventoryItemId: id }));
+              }}
+              className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:border-indigo-600 max-h-48"
+            >
+              <option value="">-- Choose Stock Item ({(stockItemsData || []).length} Available) --</option>
+              {(stockItemsData || []).map((item: InventoryItem) => (
+                <option key={item.id} value={item.id}>
+                  {item.productName} ({item.partCode || item.model || 'No Code'}) — S/N: {item.serialNumber || 'Bulk'} (Qty: {item.availableQuantity})
+                </option>
+              ))}
+            </select>
+            {selectedItem && (
+              <div className="mt-2 p-2.5 bg-indigo-50 border border-indigo-200 rounded-xl flex items-center justify-between text-xs">
                 <div>
-                  <p className="text-xs font-bold text-indigo-950">{selectedItem.productName}</p>
+                  <p className="font-bold text-indigo-950">{selectedItem.productName}</p>
                   <p className="text-[11px] text-indigo-700 font-mono font-bold mt-0.5">
-                    SN: {selectedItem.serialNumber || 'Bulk Unit'} · Avail Qty: {selectedItem.availableQuantity}
+                    SN: {selectedItem.serialNumber || 'Bulk'} · Avail Qty: {selectedItem.availableQuantity}
                   </p>
                 </div>
-                <button type="button" onClick={() => setSelectedItem(null)} className="text-slate-400 hover:text-slate-700">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <input
-                  type="text"
-                  placeholder="Type product name or serial number..."
-                  value={itemSearch}
-                  onChange={(e) => setItemSearch(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 font-medium focus:outline-none focus:border-indigo-600"
-                />
-                {itemsData && itemsData.length > 0 && (
-                  <div className="max-h-40 overflow-y-auto bg-white border border-slate-300 rounded-xl divide-y divide-slate-100 shadow-md">
-                    {itemsData.map(item => (
-                      <div
-                        key={item.id}
-                        onClick={() => { setSelectedItem(item); setForm(f => ({ ...f, inventoryItemId: item.id })); }}
-                        className="p-2.5 hover:bg-indigo-50 cursor-pointer flex items-center justify-between text-xs"
-                      >
-                        <div>
-                          <p className="font-bold text-slate-900">{item.productName}</p>
-                          <p className="text-[10px] text-slate-500 font-mono">SN: {item.serialNumber || 'Bulk'}</p>
-                        </div>
-                        <Badge variant="info">Avail: {item.availableQuantity}</Badge>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <Badge variant="info">Avail: {selectedItem.availableQuantity}</Badge>
               </div>
             )}
           </div>
@@ -578,11 +598,11 @@ export const DispatchListPage: React.FC = () => {
                   list="sublocation-options"
                   placeholder="Select or type Sublocation..."
                   value={form.sublocation}
-                  onChange={(e) => setForm(f => ({ ...f, sublocation: e.target.value }))}
+                  onChange={(e) => setForm(f => ({ ...f, sublocation: e.target.value, roomId: '' }))}
                   className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:border-indigo-600"
                 />
                 <datalist id="sublocation-options">
-                  {(hierarchyData?.sublocations || []).map((s: string) => <option key={s} value={s} />)}
+                  {sublocationOptions.map((s: string) => <option key={s} value={s} />)}
                 </datalist>
               </div>
 
@@ -594,11 +614,11 @@ export const DispatchListPage: React.FC = () => {
                   list="roomid-options"
                   placeholder="Select or type Room ID..."
                   value={form.roomId}
-                  onChange={(e) => setForm(f => ({ ...f, roomId: e.target.value }))}
+                  onChange={(e) => handleRoomSelect(e.target.value)}
                   className="w-full px-2.5 py-1.5 bg-white border border-indigo-300 rounded-lg text-xs font-mono font-bold text-indigo-700 focus:outline-none focus:border-indigo-600"
                 />
                 <datalist id="roomid-options">
-                  {(hierarchyData?.roomIds || []).map((rm: string) => <option key={rm} value={rm} />)}
+                  {roomOptions.map((rm: string) => <option key={rm} value={rm} />)}
                 </datalist>
               </div>
             </div>
@@ -816,7 +836,7 @@ export const DispatchListPage: React.FC = () => {
               className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 font-bold focus:outline-none focus:border-indigo-600"
             >
               <option value="">Select Spare Item to Swap &amp; Dispatch...</option>
-              {(itemsData || []).filter(i => i.availableQuantity > 0).map((i: any) => (
+              {(stockItemsData || []).filter((i: InventoryItem) => i.availableQuantity > 0).map((i: InventoryItem) => (
                 <option key={i.id} value={i.id}>
                   {i.productName} — SN: {i.serialNumber || i.spareId} ({i.store} Store)
                 </option>

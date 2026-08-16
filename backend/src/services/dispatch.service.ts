@@ -119,7 +119,7 @@ export class DispatchService {
     };
   }
 
-  async create(data: CreateDispatchDto, userId: string) {
+  async create(data: CreateDispatchDto, userId: string, organizationId: string = 'BHEL') {
     const itemId = data.inventoryItemId || data.stockItemId;
     if (!itemId) throw new AppError(400, 'Inventory item ID is required');
 
@@ -128,6 +128,8 @@ export class DispatchService {
       include: { oem: true },
     });
     if (!item) throw new AppError(404, 'Inventory item not found');
+
+    const targetOrgId = (data as any).organizationId || organizationId || item.organizationId || 'BHEL';
 
     const qtyToDispatch = data.quantity || 1;
     if (item.availableQuantity < qtyToDispatch) {
@@ -160,22 +162,26 @@ export class DispatchService {
       const siteName = `${buildingName} ${data.roomName ? '- ' + data.roomName : ''} (${data.roomId || 'Site'})`.trim();
       
       let existingSite = await prisma.site.findFirst({
-        where: { siteName: { equals: siteName } },
+        where: {
+          OR: [
+            { siteName: { equals: siteName } },
+            { fullAddress: { equals: siteName } },
+          ],
+        },
       });
-
-      if (!existingSite) {
-        existingSite = await prisma.site.findFirst();
-      }
 
       if (!existingSite) {
         existingSite = await prisma.site.create({
           data: {
             siteName,
-            unitDivision: 'Main Unit',
+            unitDivision: data.unit || 'Main Unit',
             subLocation: data.sublocation || 'Main Sublocation',
             locationClass: data.locationClass || 'Class A',
-            city: 'Delhi',
-            state: 'Delhi',
+            addressLine1: `${buildingName}, Room: ${data.roomId || 'N/A'}`,
+            fullAddress: siteName,
+            city: data.state || 'Delhi',
+            state: data.state || 'Delhi',
+            organizationId: targetOrgId,
           },
         });
       }
@@ -211,6 +217,7 @@ export class DispatchService {
           dispatchNo,
           inventoryItemId: itemId,
           siteId: targetSiteId,
+          organizationId: targetOrgId,
           quantity: qtyToDispatch,
           courierName: data.courierName || null,
           trackingNo: data.trackingNo || null,
@@ -259,78 +266,81 @@ export class DispatchService {
       }),
     ]);
 
-    // Automation: append/update room inventory in LocationInventory
-    if (data.roomId || buildingName) {
-      const partSerialNo = originalSerial || item.spareId;
-      const partId = item.partCode || item.partId || item.productName;
-      const oemName = item.oem?.name || 'Standard OEM';
+    // Non-critical post-transaction automation wrapped safely
+    try {
+      if (data.roomId || buildingName) {
+        const partSerialNo = originalSerial !== 'Bulk' && originalSerial ? originalSerial : `${item.spareId}-${Date.now()}`;
+        const partId = item.partCode || item.partId || item.productName;
+        const oemName = item.oem?.name || 'Standard OEM';
 
-      const existingLocInv = await prisma.locationInventory.findUnique({
-        where: { partSerialNo },
-      });
-
-      if (existingLocInv) {
-        await prisma.locationInventory.update({
-          where: { id: existingLocInv.id },
-          data: {
-            installationDate: dispatchTimestamp,
-            oem: oemName,
-            partId,
-            roomId: data.roomId || existingLocInv.roomId,
-            locationClass: data.locationClass || existingLocInv.locationClass,
-            solutionType: data.solutionType || existingLocInv.solutionType,
-            buildingName: buildingName || existingLocInv.buildingName,
-            roomName: data.roomName || existingLocInv.roomName,
-            floor: data.floor || existingLocInv.floor,
-            subUnit: data.sublocation || existingLocInv.subUnit,
-          },
+        const existingLocInv = await prisma.locationInventory.findUnique({
+          where: { partSerialNo },
         });
-      } else {
-        await prisma.locationInventory.create({
+
+        if (existingLocInv) {
+          await prisma.locationInventory.update({
+            where: { id: existingLocInv.id },
+            data: {
+              installationDate: dispatchTimestamp,
+              oem: oemName,
+              partId,
+              roomId: data.roomId || existingLocInv.roomId,
+              locationClass: data.locationClass || existingLocInv.locationClass,
+              solutionType: data.solutionType || existingLocInv.solutionType,
+              buildingName: buildingName || existingLocInv.buildingName,
+              roomName: data.roomName || existingLocInv.roomName,
+              floor: data.floor || existingLocInv.floor,
+              subUnit: data.sublocation || existingLocInv.subUnit,
+            },
+          });
+        } else {
+          await prisma.locationInventory.create({
+            data: {
+              installationDate: dispatchTimestamp,
+              oem: oemName,
+              partId,
+              partSerialNo,
+              roomId: data.roomId || 'ROOM-GENERAL',
+              buildingName: buildingName,
+              roomName: data.roomName || '',
+              floor: data.floor || '',
+              unit: data.unit || 'Main Unit',
+              subUnit: data.sublocation || 'Main Sublocation',
+              state: data.state || 'Delhi',
+              solutionType: data.solutionType || 'General',
+              locationClass: data.locationClass || 'Class A',
+            },
+          });
+        }
+      }
+
+      if (userComments) {
+        await prisma.comment.create({
           data: {
-            installationDate: dispatchTimestamp,
-            oem: oemName,
-            partId,
-            partSerialNo,
-            roomId: data.roomId || 'ROOM-GENERAL',
-            buildingName: buildingName,
-            roomName: data.roomName || '',
-            floor: data.floor || '',
-            unit: data.unit || 'Main Unit',
-            subUnit: data.sublocation || 'Main Sublocation',
-            state: data.state || 'Delhi',
-            solutionType: data.solutionType || 'General',
-            locationClass: data.locationClass || 'Class A',
+            inventoryItemId: itemId,
+            userId,
+            comment: `[DISPATCH REMARK - #${dispatchNo}] ${userComments}`,
           },
         });
       }
-    }
 
-    // Save comments in Comment model if remarks supplied
-    if (userComments) {
-      await prisma.comment.create({
-        data: {
-          inventoryItemId: itemId,
-          userId,
-          comment: `[DISPATCH REMARK - #${dispatchNo}] ${userComments}`,
-        },
+      await activityService.logActivity({
+        userId,
+        module: 'Dispatch',
+        action: 'Dispatch Created',
+        entity: 'Dispatch',
+        entityId: dispatch.id,
+        entityLabel: `${dispatch.dispatchNo} - ${item.productName}`,
+        partCode: item.partCode || item.partId || undefined,
+        serialNumber: originalSerial,
+        siteName: buildingName || dispatch.site?.siteName || undefined,
+        oldValue: `Stock: ${item.availableQuantity}`,
+        newValue: `Dispatched Qty: ${qtyToDispatch}, Remaining: ${newAvail}`,
+        remarks: userComments || `Dispatched to ${buildingName} / Room ${data.roomId || 'N/A'}`,
       });
+    } catch (automationError) {
+      console.warn('Post-dispatch non-critical automation warning:', automationError);
     }
-
-    await activityService.logActivity({
-      userId,
-      module: 'Dispatch',
-      action: 'Dispatch Created',
-      entity: 'Dispatch',
-      entityId: dispatch.id,
-      entityLabel: `${dispatch.dispatchNo} - ${item.productName}`,
-      partCode: item.partCode || item.partId || undefined,
-      serialNumber: originalSerial,
-      siteName: buildingName || dispatch.site?.siteName || undefined,
-      oldValue: `Stock: ${item.availableQuantity}`,
-      newValue: `Dispatched Qty: ${qtyToDispatch}, Remaining: ${newAvail}`,
-      remarks: userComments || `Dispatched to ${buildingName} / Room ${data.roomId || 'N/A'}`,
-    });
 
     return dispatch;
   }

@@ -1252,20 +1252,6 @@ export class InventoryService {
    * Fetch distinct site-to-room hierarchy data for cascading frontend dropdown selectors
    */
   async getLocationHierarchy(organizationId: string = 'BHEL') {
-    if (organizationId !== 'BHEL') {
-      return {
-        units: [],
-        sublocations: [],
-        states: [],
-        floors: [],
-        buildingNames: [],
-        roomNames: [],
-        solutionTypes: [],
-        locationClasses: [],
-        roomIds: [],
-        items: [],
-      };
-    }
     const items = await prisma.locationInventory.findMany({
       select: {
         unit: true,

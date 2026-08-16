@@ -27,7 +27,8 @@ export class DispatchController {
   }
 
   async create(req: Request, res: Response) {
-    const dispatch = await dispatchService.create(req.body, req.user!.userId);
+    const orgId = extractOrgId(req);
+    const dispatch = await dispatchService.create(req.body, req.user!.userId, orgId);
     ApiResponse.created(res, dispatch, 'Dispatch created successfully');
   }
 

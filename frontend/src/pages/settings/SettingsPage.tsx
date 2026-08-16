@@ -15,7 +15,7 @@ export const SettingsPage: React.FC = () => {
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingOrg, setEditingOrg] = useState<any | null>(null);
-  const [formData, setFormData] = useState({ name: '', code: '', primaryWarehouseName: '', googleSheetId: '' });
+  const [formData, setFormData] = useState({ name: '', code: '', primaryWarehouseName: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -38,7 +38,6 @@ export const SettingsPage: React.FC = () => {
     const cleanName = formData.name.trim();
     const cleanCode = formData.code.trim();
     const cleanWarehouse = formData.primaryWarehouseName.trim();
-    const cleanSheetId = formData.googleSheetId.trim();
 
     if (!cleanName || !cleanCode) {
       setModalError('Organization Name and Code are required.');
@@ -52,12 +51,11 @@ export const SettingsPage: React.FC = () => {
         const res = await api.put(`/organizations/${editingOrg.id}`, {
           name: cleanName,
           code: cleanCode,
-          googleSheetId: cleanSheetId || null,
         });
         if (res.data?.success || res.status === 200) {
           await refetchOrganizations();
           setEditingOrg(null);
-          setFormData({ name: '', code: '', primaryWarehouseName: '', googleSheetId: '' });
+          setFormData({ name: '', code: '', primaryWarehouseName: '' });
           setSuccessMsg(`Organization '${cleanName}' updated successfully!`);
           setTimeout(() => setSuccessMsg(null), 4000);
         } else {
@@ -69,13 +67,12 @@ export const SettingsPage: React.FC = () => {
           name: cleanName,
           code: cleanCode,
           primaryWarehouseName: cleanWarehouse || undefined,
-          googleSheetId: cleanSheetId || undefined,
         });
 
         if (res.data?.success || res.status === 201 || res.status === 200) {
           await refetchOrganizations();
           setIsAddModalOpen(false);
-          setFormData({ name: '', code: '', primaryWarehouseName: '', googleSheetId: '' });
+          setFormData({ name: '', code: '', primaryWarehouseName: '' });
           setSuccessMsg(`Organization '${cleanName}' created successfully!`);
 
           setTimeout(() => setSuccessMsg(null), 4000);
@@ -136,7 +133,6 @@ export const SettingsPage: React.FC = () => {
                 <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-black text-slate-600 uppercase tracking-wider">
                   <th className="py-3 px-4">Organization Name</th>
                   <th className="py-3 px-4">Org Code</th>
-                  <th className="py-3 px-4">Google Sheet ID / URL</th>
                   <th className="py-3 px-4">Status</th>
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
@@ -156,15 +152,6 @@ export const SettingsPage: React.FC = () => {
                         )}
                       </td>
                       <td className="py-3.5 px-4 font-mono font-bold text-slate-600 uppercase">{org.code || org.id}</td>
-                      <td className="py-3.5 px-4 text-slate-600 font-mono text-[11px]">
-                        {org.googleSheetId ? (
-                          <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 font-bold rounded border border-emerald-200">
-                            {org.googleSheetId.length > 20 ? `${org.googleSheetId.substring(0, 18)}...` : org.googleSheetId}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 italic">Not Linked</span>
-                        )}
-                      </td>
                       <td className="py-3.5 px-4">
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -180,7 +167,6 @@ export const SettingsPage: React.FC = () => {
                                 name: org.name,
                                 code: org.code || org.id,
                                 primaryWarehouseName: '',
-                                googleSheetId: org.googleSheetId || '',
                               });
                             }}
                             className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition-all cursor-pointer"
@@ -249,7 +235,7 @@ export const SettingsPage: React.FC = () => {
                   <h3 className="text-base font-black text-slate-900">
                     {editingOrg ? `Edit ${editingOrg.name}` : 'Add New Organization'}
                   </h3>
-                  <p className="text-xs text-slate-500 font-medium">Create or manage client profile & sheet integration</p>
+                  <p className="text-xs text-slate-500 font-medium">Create or manage client profile</p>
                 </div>
               </div>
               <button
@@ -310,19 +296,6 @@ export const SettingsPage: React.FC = () => {
                   />
                 </div>
               )}
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Google Sheet ID / URL <span className="text-slate-400 font-normal">(Optional)</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
-                  value={formData.googleSheetId}
-                  onChange={(e) => setFormData({ ...formData, googleSheetId: e.target.value })}
-                  className="w-full px-3.5 py-2 text-xs font-semibold font-mono bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-500 focus:outline-none transition-all"
-                />
-              </div>
 
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
                 <button

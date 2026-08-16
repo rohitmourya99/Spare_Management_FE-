@@ -6,7 +6,6 @@ export interface Organization {
   name: string;
   code: string;
   status: string;
-  googleSheetId?: string;
 }
 
 interface OrganizationContextType {

@@ -288,28 +288,6 @@ export const StockListPage: React.FC = () => {
     }
   };
 
-  // Handle 2-Way Google Sheet Sync (Pull/Push)
-  const [isSyncing, setIsSyncing] = useState(false);
-
-  const handleSyncSheet = async (action: 'pull' | 'push') => {
-    setIsSyncing(true);
-    try {
-      const res = await api.post(`/sync/google-sheet/${action}`);
-      if (res.data?.success) {
-        setToastMessage(res.data.message || `Google Sheet ${action} completed successfully!`);
-        queryClient.invalidateQueries({ queryKey: ['inventory'] });
-        queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
-      } else {
-        alert(res.data?.message || `Failed to ${action} Google Sheet.`);
-      }
-    } catch (err: any) {
-      const errMsg = err?.response?.data?.message || err?.message || `Failed to ${action} Google Sheet.`;
-      alert(`Google Sheet Sync Error: ${errMsg}`);
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
   // Fetch Dispatched / Reserved Site Location & SPOC Details
   const handleStatusBadgeClick = async (e: React.MouseEvent, item: InventoryItem) => {
     e.stopPropagation();
@@ -380,31 +358,6 @@ export const StockListPage: React.FC = () => {
 
           {(user?.role === 'SUPER_ADMIN' || user?.role === 'INVENTORY_ADMIN') && (
             <div className="flex items-center gap-2.5 ml-auto flex-wrap">
-              {/* Google Sheets 2-Way Sync Controls */}
-              <div className="relative group inline-block">
-                <button
-                  disabled={isSyncing}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-extrabold transition-all shadow-xs cursor-pointer disabled:opacity-50"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 text-emerald-600 ${isSyncing ? 'animate-spin' : ''}`} />
-                  <span>{isSyncing ? 'Syncing...' : 'Sync Google Sheet 📊'}</span>
-                </button>
-                <div className="absolute right-0 top-full mt-1 hidden group-hover:block w-48 bg-white border border-slate-200 rounded-xl shadow-xl z-30 p-1.5 text-xs font-bold text-slate-800">
-                  <button
-                    onClick={() => handleSyncSheet('pull')}
-                    className="w-full text-left px-3 py-2 hover:bg-slate-100 rounded-lg flex items-center gap-2 cursor-pointer"
-                  >
-                    📥 Pull Data from Sheet
-                  </button>
-                  <button
-                    onClick={() => handleSyncSheet('push')}
-                    className="w-full text-left px-3 py-2 hover:bg-slate-100 rounded-lg flex items-center gap-2 cursor-pointer"
-                  >
-                    📤 Push Data to Sheet
-                  </button>
-                </div>
-              </div>
-
               <Button
                 variant="secondary"
                 size="sm"

@@ -13,7 +13,6 @@ import {
   activityController,
 } from '../controllers/modules.controller';
 import { swapHistoryController } from '../controllers/swapHistory.controller';
-import { googleSheetsService } from '../services/googleSheets.service';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { UserRole } from '../types';
 import { ApiResponse } from '../utils/response.util';
@@ -302,7 +301,7 @@ organizationRoutes.get('/', async (_req, res, next) => {
 
 organizationRoutes.post('/', async (req, res, next) => {
   try {
-    const { name, code, primaryWarehouseName, googleSheetId } = req.body;
+    const { name, code, primaryWarehouseName } = req.body;
     if (!name || !code) {
       res.status(400).json({ success: false, message: 'Organization Name and Organization Code are required' });
       return;
@@ -332,7 +331,6 @@ organizationRoutes.post('/', async (req, res, next) => {
         name: cleanName,
         code: cleanCode,
         status: 'ACTIVE',
-        googleSheetId: googleSheetId ? String(googleSheetId).trim() : null,
       },
     });
 
@@ -362,7 +360,7 @@ organizationRoutes.post('/', async (req, res, next) => {
 organizationRoutes.put('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { name, code, status, googleSheetId } = req.body;
+    const { name, code, status } = req.body;
 
     const existing = await prisma.organization.findUnique({ where: { id } });
     if (!existing) {
@@ -376,7 +374,6 @@ organizationRoutes.put('/:id', async (req, res, next) => {
         ...(name ? { name: String(name).trim() } : {}),
         ...(code ? { code: String(code).trim().toUpperCase() } : {}),
         ...(status ? { status: String(status).toUpperCase() } : {}),
-        ...(googleSheetId !== undefined ? { googleSheetId: googleSheetId ? String(googleSheetId).trim() : null } : {}),
       },
     });
 
@@ -388,52 +385,6 @@ organizationRoutes.put('/:id', async (req, res, next) => {
     });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err?.message || 'Failed to update organization' });
-  }
-});
-
-// ==============================================
-// GOOGLE SHEETS 2-WAY SYNC ROUTES (/api/sync/google-sheet)
-// ==============================================
-const syncRoutes = Router();
-syncRoutes.use(authenticate);
-
-syncRoutes.post('/import', async (req, res, next) => {
-  try {
-    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
-    const result = await googleSheetsService.importFromSheet(orgId, req.user?.userId);
-    res.json(result);
-  } catch (err) {
-    next(err);
-  }
-});
-
-syncRoutes.post('/pull', async (req, res, next) => {
-  try {
-    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
-    const result = await googleSheetsService.importFromSheet(orgId, req.user?.userId);
-    res.json(result);
-  } catch (err) {
-    next(err);
-  }
-});
-
-syncRoutes.post('/export', async (req, res, next) => {
-  try {
-    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
-    const result = await googleSheetsService.exportToSheet(orgId);
-    res.json(result);
-  } catch (err) {
-    next(err);
-  }
-});
-
-syncRoutes.post('/push', async (req, res, next) => {
-  try {
-    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
-    const result = await googleSheetsService.exportToSheet(orgId);
-    res.json(result);
-  } catch (err) {
-    next(err);
   }
 });
 
@@ -452,7 +403,6 @@ router.use('/users', userRoutes);
 router.use('/activity', activityRoutes);
 router.use('/swap-history', swapHistoryRoutes);
 router.use('/organizations', organizationRoutes);
-router.use('/sync/google-sheet', syncRoutes);
 
 // ==============================================
 // WAREHOUSE ROUTES (/api/warehouses)

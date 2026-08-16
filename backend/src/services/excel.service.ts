@@ -136,21 +136,18 @@ export class ExcelService {
     const prefix = store === 'Bengaluru' ? 'PDS-BLR' : 'PDS-DEL';
     const year = new Date().getFullYear();
 
+    const cleanStr = (val: any) => (val !== undefined && val !== null ? String(val).trim() : '');
+
     // STEP 3: In-Memory Row Processing & Flexible Column Extraction
     for (let i = 0; i < rawData.length; i++) {
       const row = rawData[i];
       const rowNum = i + 2;
 
       try {
-        const productNameRaw = getVal(row, 'Spare Item', 'Part Name', 'Product Name', 'Description', 'Item Name');
-        if (!productNameRaw || productNameRaw.toString().trim() === '') {
-          summary.skipped++;
-          continue;
-        }
-
-        const productName = productNameRaw.toString().trim();
-        const oemName = (getVal(row, 'OEM', 'Manufacturer') || 'Generic').toString().trim();
-        const partCode = (getVal(row, 'Spare Part Code', 'Part Code', 'Part Number', 'Item Code') || '').toString().trim();
+        const productName = cleanStr(getVal(row, 'Spare Item', 'Part Name', 'Product Name', 'Description', 'Item Name'));
+        const oemRaw = cleanStr(getVal(row, 'OEM', 'Manufacturer'));
+        const partCode = cleanStr(getVal(row, 'Spare Part Code', 'Part Code', 'Part Number', 'Item Code', 'Part ID'));
+        const locationName = cleanStr(getVal(row, 'Warehouse Location', 'Location', 'Store Location', 'Building Name', 'Building'));
         
         // Flexible Serial Number column mapping
         const serialNumberRaw = getVal(
@@ -165,16 +162,29 @@ export class ExcelService {
           'Serial',
           'Part Serial No'
         );
+        const cleanSerialRaw = cleanStr(serialNumberRaw);
 
+        // Row Validation: Skip if all essential fields are empty/whitespace
+        if (!productName && !partCode && !locationName && !cleanSerialRaw && (!oemRaw || oemRaw.toLowerCase() === 'generic')) {
+          summary.skipped++;
+          continue;
+        }
+
+        // Must have at least a product name or part code to be valid
+        if (!productName && !partCode) {
+          summary.skipped++;
+          continue;
+        }
+
+        const oemName = oemRaw || 'Generic';
+        const finalProductName = productName || partCode;
         const qtyRaw = parseInt(getVal(row, 'Quantity', 'Qty') || '1', 10);
         const quantity = isNaN(qtyRaw) || qtyRaw < 1 ? 1 : qtyRaw;
-        const description = getVal(row, 'Description', 'Remarks') || productName;
-        const model = getVal(row, 'Model') || partCode;
+        const description = cleanStr(getVal(row, 'Description', 'Remarks')) || finalProductName;
+        const model = cleanStr(getVal(row, 'Model')) || partCode;
 
         const isNotSerial = isBatchOrDummySerial(serialNumberRaw);
-        const cleanSerial = !isNotSerial && serialNumberRaw && serialNumberRaw.toString().trim() !== ''
-          ? serialNumberRaw.toString().trim()
-          : null;
+        const cleanSerial = !isNotSerial && cleanSerialRaw !== '' ? cleanSerialRaw : null;
         const isSerialized = Boolean(cleanSerial);
 
         const oemId = await getOemId(oemName);
@@ -188,9 +198,9 @@ export class ExcelService {
           spareId,
           oemId,
           categoryId,
-          productName,
-          description: description ? description.toString().trim() : null,
-          model: model ? model.toString().trim() : null,
+          productName: finalProductName,
+          description: description || null,
+          model: model || null,
           partCode,
           serialNumber: cleanSerial,
           isSerialized,

@@ -16,7 +16,7 @@ import { InventoryItem } from '../../types';
 import { isRealSerial } from '../../utils/serialUtils';
 
 const statusVariant = (s: string): 'success' | 'danger' | 'warning' | 'default' =>
-  s === 'AVAILABLE' ? 'success' : s === 'DISPATCHED' ? 'danger' : 'warning';
+  s === 'AVAILABLE' ? 'success' : 'warning';
 
 export const StockListPage: React.FC = () => {
   const navigate = useNavigate();
@@ -526,25 +526,30 @@ export const StockListPage: React.FC = () => {
                       </td>
 
                       <td className="p-3.5" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={(e) => handleStatusBadgeClick(e, item)}
-                            className="hover:scale-105 transition-transform"
-                            title={item.status !== 'AVAILABLE' ? 'Click to view Location details' : 'Status'}
-                          >
-                            <Badge variant={statusVariant(item.status)}>{item.status}</Badge>
-                          </button>
-                          {(user?.role === 'SUPER_ADMIN' || user?.role === 'INVENTORY_ADMIN') && (
-                            <select
-                              value={item.status}
-                              onChange={(e) => updateStatusMutation.mutate({ id: item.id, status: e.target.value })}
-                              className="text-[10px] bg-white border border-slate-300 rounded px-1.5 py-0.5 text-slate-900 font-bold focus:outline-none focus:border-indigo-600 cursor-pointer"
-                            >
-                              <option value="AVAILABLE">Available</option>
-                              <option value="RESERVED">Reserved</option>
-                            </select>
-                          )}
-                        </div>
+                        {(() => {
+                          const displayStatus = item.status === 'AVAILABLE' ? 'AVAILABLE' : 'RESERVED';
+                          return (
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={(e) => handleStatusBadgeClick(e, item)}
+                                className="hover:scale-105 transition-transform"
+                                title={displayStatus !== 'AVAILABLE' ? 'Click to view Location details' : 'Status'}
+                              >
+                                <Badge variant={statusVariant(displayStatus)}>{displayStatus}</Badge>
+                              </button>
+                              {(user?.role === 'SUPER_ADMIN' || user?.role === 'INVENTORY_ADMIN') && (
+                                <select
+                                  value={displayStatus}
+                                  onChange={(e) => updateStatusMutation.mutate({ id: item.id, status: e.target.value })}
+                                  className="text-[10px] bg-white border border-slate-300 rounded px-1.5 py-0.5 text-slate-900 font-bold focus:outline-none focus:border-indigo-600 cursor-pointer"
+                                >
+                                  <option value="AVAILABLE">Available</option>
+                                  <option value="RESERVED">Reserved</option>
+                                </select>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </td>
 
                       <td className="p-3.5 text-right" onClick={(e) => e.stopPropagation()}>

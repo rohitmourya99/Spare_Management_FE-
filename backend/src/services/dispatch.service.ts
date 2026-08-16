@@ -251,7 +251,7 @@ export class DispatchService {
     const dispatchNo = `DS-${new Date().getFullYear()}-${String(count + 1).padStart(5, '0')}`;
 
     const newAvail = Math.max(0, item.availableQuantity - qtyToDispatch);
-    const newStatus = 'DISPATCHED';
+    const newStatus = 'RESERVED';
 
     // Capture exact live timestamp
     const now = new Date();

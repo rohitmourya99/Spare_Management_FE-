@@ -20,7 +20,10 @@ interface OrganizationContextType {
 const OrganizationContext = createContext<OrganizationContextType>({
   selectedOrg: 'BHEL',
   setSelectedOrg: () => {},
-  organizations: [{ id: 'BHEL', name: 'BHEL', code: 'BHEL', status: 'ACTIVE' }],
+  organizations: [
+    { id: 'BHEL', name: 'BHEL', code: 'BHEL', status: 'ACTIVE' },
+    { id: 'METLIFE', name: 'METLIFE', code: 'METLIFE', status: 'ACTIVE' },
+  ],
   isLoadingOrgs: false,
   refetchOrganizations: async () => {},
 });
@@ -32,6 +35,7 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const [organizations, setOrganizations] = useState<Organization[]>([
     { id: 'BHEL', name: 'BHEL', code: 'BHEL', status: 'ACTIVE' },
+    { id: 'METLIFE', name: 'METLIFE', code: 'METLIFE', status: 'ACTIVE' },
   ]);
   const [isLoadingOrgs, setIsLoadingOrgs] = useState<boolean>(false);
 

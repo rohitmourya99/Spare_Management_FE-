@@ -3,11 +3,17 @@ import { logger } from '../config/logger';
 
 export async function patchLegacyOrganizationRecords(): Promise<void> {
   try {
-    // 1. Guarantee BHEL Organization exists in DB
+    // 1. Guarantee BHEL & METLIFE Organizations exist in DB
     await prisma.organization.upsert({
       where: { id: 'BHEL' },
       update: { name: 'BHEL', code: 'BHEL', status: 'ACTIVE' },
       create: { id: 'BHEL', name: 'BHEL', code: 'BHEL', status: 'ACTIVE' },
+    });
+
+    await prisma.organization.upsert({
+      where: { id: 'METLIFE' },
+      update: { name: 'METLIFE', code: 'METLIFE', status: 'ACTIVE' },
+      create: { id: 'METLIFE', name: 'METLIFE', code: 'METLIFE', status: 'ACTIVE' },
     });
 
     // 2. Patch null organizationId records across all tables

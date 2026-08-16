@@ -350,6 +350,8 @@ export class DispatchService {
       // 4. Log Swap History Audit Record
       await tx.swapHistory.create({
         data: {
+          organizationId: targetOrgId,
+          dispatchId: newDispatch.id,
           roomId: data.roomId || 'ROOM-GENERAL',
           roomName: data.roomName || '',
           partId: item.partCode || item.spareId || item.productName,
@@ -357,6 +359,8 @@ export class DispatchService {
           floor: data.floor || '',
           oldSerialNo: faultySerial || (faultyPart ? `Faulty: ${faultyPart}` : 'N/A (Fresh Item)'),
           newSerialNo: originalSerial,
+          replacedPartCode: faultyPart || null,
+          replacedSerialNumber: faultySerial || null,
           sourceWarehouse: item.store || 'Delhi Store',
           swappedBy: (data as any).createdBy || userId || 'Technician',
           swapReason: faultyText || `Outbound Dispatch (Dispatch #${dispatchNo})`,

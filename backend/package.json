@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "prisma generate && tsc",
-    "build:render": "prisma generate && tsc",
+    "build:render": "npx prisma db push --accept-data-loss && prisma generate && tsc",
     "postinstall": "prisma generate",
     "start": "node dist/server.js",
     "test": "jest",

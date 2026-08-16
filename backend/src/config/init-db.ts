@@ -8,6 +8,7 @@ import fs from 'fs';
 import { patchLegacyOrganizationRecords } from '../utils/patchLegacyOrg';
 import { deduplicateStockItems } from '../utils/deduplicateStockItems';
 import { sanitizeDatabaseSerialNumbers } from '../utils/sanitizeSerials';
+import { cleanupDispatchSites } from '../utils/cleanupSites';
 
 function getRowValue(row: Record<string, any>, ...possibleKeys: string[]): any {
   const rowKeys = Object.keys(row);
@@ -26,10 +27,11 @@ function getRowValue(row: Record<string, any>, ...possibleKeys: string[]): any {
  */
 export async function ensureDatabaseSeeded(): Promise<void> {
   try {
-    // 0. Seed & Tag Default Organization (BHEL) and deduplicate stock items & sanitize serials
+    // 0. Seed & Tag Default Organization (BHEL) and deduplicate stock items & sanitize serials & cleanup sites
     await patchLegacyOrganizationRecords();
     await deduplicateStockItems();
     await sanitizeDatabaseSerialNumbers();
+    await cleanupDispatchSites();
 
     // 1. Ensure Default Users (Admin@123, Inv@123, Eng@123, View@123)
     const hashedAdmin = await bcrypt.hash('Admin@123', 10);

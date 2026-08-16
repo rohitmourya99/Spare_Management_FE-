@@ -184,67 +184,52 @@ export class DispatchService {
 
     const buildingName = data.buildingName || (data.roomId ? `Room ${data.roomId}` : 'Main Building');
 
-    // Auto-fetch SPOC details from Site master for active organization
+    // Read-only Site Master resolution (strictly reference existing SiteMaster records, DO NOT create or update SiteMaster)
     let spocName: string | null = null;
     let spocPhone: string | null = null;
+    let targetSiteId: string | null = data.siteId || null;
 
-    if (data.sublocation || data.buildingName || data.roomId) {
+    if (targetSiteId) {
+      const selectedSite = await prisma.site.findUnique({
+        where: { id: targetSiteId },
+      });
+      if (selectedSite) {
+        if (selectedSite.contactPerson && selectedSite.contactPerson.trim()) {
+          spocName = selectedSite.contactPerson.trim();
+        }
+        if (selectedSite.phone && selectedSite.phone.trim()) {
+          spocPhone = selectedSite.phone.trim();
+        }
+      }
+    } else if (data.sublocation || data.buildingName || data.roomId) {
       const spocMaster = await prisma.site.findFirst({
         where: {
           organizationId: targetOrgId,
           OR: [
-            ...(data.sublocation ? [{ subLocation: { equals: data.sublocation } }] : []),
-            ...(data.buildingName ? [{ siteName: { contains: data.buildingName } }] : []),
+            ...(data.sublocation ? [{ subLocation: { equals: data.sublocation, mode: 'insensitive' as const } }] : []),
+            ...(data.buildingName ? [{ siteName: { contains: data.buildingName, mode: 'insensitive' as const } }] : []),
+            ...(data.buildingName ? [{ unitDivision: { contains: data.buildingName, mode: 'insensitive' as const } }] : []),
           ],
-          contactPerson: { not: null },
         },
       });
-      if (spocMaster && spocMaster.contactPerson && spocMaster.contactPerson.trim() !== '') {
-        spocName = spocMaster.contactPerson.trim();
-        spocPhone = spocMaster.phone ? spocMaster.phone.trim() : null;
+      if (spocMaster) {
+        targetSiteId = spocMaster.id;
+        if (spocMaster.contactPerson && spocMaster.contactPerson.trim()) {
+          spocName = spocMaster.contactPerson.trim();
+          spocPhone = spocMaster.phone ? spocMaster.phone.trim() : null;
+        }
       }
     }
 
-    // Resolve or find/create Site if siteId is missing
-    let targetSiteId = data.siteId;
     if (!targetSiteId) {
-      const siteName = `${buildingName} ${data.roomName ? '- ' + data.roomName : ''} (${data.roomId || 'Site'})`.trim();
-      
-      let existingSite = await prisma.site.findFirst({
-        where: {
-          OR: [
-            { siteName: { equals: siteName } },
-            { fullAddress: { equals: siteName } },
-          ],
-        },
+      const fallbackSite = await prisma.site.findFirst({
+        where: { organizationId: targetOrgId },
       });
-
-      if (!existingSite) {
-        existingSite = await prisma.site.create({
-          data: {
-            siteName,
-            unitDivision: data.unit || 'Main Unit',
-            subLocation: data.sublocation || 'Main Sublocation',
-            locationClass: data.locationClass || 'Class A',
-            addressLine1: `${buildingName}, Room: ${data.roomId || 'N/A'}`,
-            fullAddress: siteName,
-            city: data.state || 'Delhi',
-            state: data.state || 'Delhi',
-            contactPerson: spocName || null,
-            phone: spocPhone || null,
-            organizationId: targetOrgId,
-          },
-        });
-      } else if (spocName && !existingSite.contactPerson) {
-        await prisma.site.update({
-          where: { id: existingSite.id },
-          data: {
-            contactPerson: spocName,
-            phone: spocPhone || existingSite.phone,
-          },
-        });
+      if (fallbackSite) {
+        targetSiteId = fallbackSite.id;
+        spocName = spocName || fallbackSite.contactPerson || null;
+        spocPhone = spocPhone || fallbackSite.phone || null;
       }
-      targetSiteId = existingSite.id;
     }
 
     const count = await prisma.dispatch.count();

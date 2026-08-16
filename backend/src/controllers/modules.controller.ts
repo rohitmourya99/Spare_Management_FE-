@@ -12,6 +12,7 @@ import { AppError } from '../middleware/error.middleware';
 import { UserRole } from '../types';
 import { exportToCSV, exportToExcel } from '../utils/export.util';
 import { extractOrgId } from '../utils/orgFilter.util';
+import { cleanupDispatchSites as cleanupDispatchSitesUtil } from '../utils/cleanupSites';
 
 // Dispatch Controller
 export class DispatchController {
@@ -178,10 +179,16 @@ export class SiteController {
       userId: req.user!.userId,
       module: 'Import',
       action: 'Site Master Imported',
-      entity: 'Site',
-      remarks: `Uploaded ${summary?.validRows || 0} site records`,
+      entity: 'SiteMaster',
+      entityLabel: `BHEL SPOC Site Master Excel Import (${summary.imported} imported, ${summary.updated} updated)`,
+      newValue: `Processed ${summary.totalRows} rows`,
     });
-    ApiResponse.success(res, summary, 'Site master imported successfully');
+    ApiResponse.success(res, summary, `Site Master Excel import completed`);
+  }
+
+  async cleanupDispatchSites(req: Request, res: Response) {
+    const result = await cleanupDispatchSitesUtil();
+    ApiResponse.success(res, result, `Successfully cleaned up ${result.cleanedCount} auto-created site master records`);
   }
 }
 

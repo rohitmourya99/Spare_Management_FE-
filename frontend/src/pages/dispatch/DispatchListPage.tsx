@@ -675,8 +675,25 @@ export const DispatchListPage: React.FC = () => {
           <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
             <p className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
               <Building2 className="w-4 h-4 text-indigo-600" />
-              Simplified Location &amp; Room Selector
+              BHEL Site Master &amp; Room Location
             </p>
+
+            {/* SPOC / Site Master Selection Dropdown (Read-Only from SiteMaster) */}
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700 mb-1">Select BHEL SPOC / Site Location (From Site Master)</label>
+              <select
+                value={form.siteId || ''}
+                onChange={(e) => handleSelectSite(e.target.value)}
+                className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:border-indigo-600"
+              >
+                <option value="">-- Choose BHEL SPOC Location from Site Master --</option>
+                {(sitesData || []).map((s: Site) => (
+                  <option key={s.id} value={s.id}>
+                    {s.siteName} ({s.unitDivision || 'Unit'} - {s.subLocation || 'Subloc'}) {s.contactPerson ? `· SPOC: ${s.contactPerson}` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>

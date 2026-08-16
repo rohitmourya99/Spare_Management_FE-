@@ -179,6 +179,7 @@ siteRoutes.use(authenticate);
 siteRoutes.get('/dropdown', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.READ_ONLY), (req, res, next) => siteController.getDropdown(req, res).catch(next));
 siteRoutes.get('/', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.READ_ONLY), (req, res, next) => siteController.getAll(req, res).catch(next));
 siteRoutes.post('/import', authorize(UserRole.SUPER_ADMIN), upload.single('file'), (req, res, next) => siteController.importSites(req, res).catch(next));
+siteRoutes.post('/cleanup-dispatch-sites', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN), (req, res, next) => siteController.cleanupDispatchSites(req, res).catch(next));
 siteRoutes.get('/:id', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.READ_ONLY), (req, res, next) => siteController.getById(req, res).catch(next));
 siteRoutes.post('/', authorize(UserRole.SUPER_ADMIN), (req, res, next) => siteController.create(req, res).catch(next));
 siteRoutes.put('/:id', authorize(UserRole.SUPER_ADMIN), (req, res, next) => siteController.update(req, res).catch(next));

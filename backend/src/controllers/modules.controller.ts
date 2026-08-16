@@ -29,7 +29,7 @@ export class DispatchController {
   async create(req: Request, res: Response) {
     const orgId = extractOrgId(req);
     const dispatch = await dispatchService.create(req.body, req.user!.userId, orgId);
-    ApiResponse.created(res, dispatch, 'Dispatch created successfully');
+    res.status(200).json({ success: true, message: 'Dispatch created successfully', data: dispatch });
   }
 
   async approve(req: Request, res: Response) {

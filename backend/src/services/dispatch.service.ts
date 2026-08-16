@@ -172,6 +172,27 @@ export class DispatchService {
 
     const buildingName = data.buildingName || (data.roomId ? `Room ${data.roomId}` : 'Main Building');
 
+    // Auto-fetch SPOC details from Site master for active organization
+    let spocName: string | null = null;
+    let spocPhone: string | null = null;
+
+    if (data.sublocation || data.buildingName || data.roomId) {
+      const spocMaster = await prisma.site.findFirst({
+        where: {
+          organizationId: targetOrgId,
+          OR: [
+            ...(data.sublocation ? [{ subLocation: { equals: data.sublocation } }] : []),
+            ...(data.buildingName ? [{ siteName: { contains: data.buildingName } }] : []),
+          ],
+          contactPerson: { not: null },
+        },
+      });
+      if (spocMaster && spocMaster.contactPerson && spocMaster.contactPerson.trim() !== '') {
+        spocName = spocMaster.contactPerson.trim();
+        spocPhone = spocMaster.phone ? spocMaster.phone.trim() : null;
+      }
+    }
+
     // Resolve or find/create Site if siteId is missing
     let targetSiteId = data.siteId;
     if (!targetSiteId) {
@@ -197,7 +218,17 @@ export class DispatchService {
             fullAddress: siteName,
             city: data.state || 'Delhi',
             state: data.state || 'Delhi',
+            contactPerson: spocName || null,
+            phone: spocPhone || null,
             organizationId: targetOrgId,
+          },
+        });
+      } else if (spocName && !existingSite.contactPerson) {
+        await prisma.site.update({
+          where: { id: existingSite.id },
+          data: {
+            contactPerson: spocName,
+            phone: spocPhone || existingSite.phone,
           },
         });
       }

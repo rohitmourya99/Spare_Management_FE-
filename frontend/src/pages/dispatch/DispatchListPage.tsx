@@ -317,9 +317,6 @@ export const DispatchListPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2.5">
-          <Button variant="secondary" size="sm" icon={<RefreshCw className="w-4 h-4 text-indigo-600" />} onClick={() => setSwapModalOpen(true)}>
-            Swap Faulty Serial
-          </Button>
           <Button variant="primary" size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setIsModalOpen(true)}>
             Create New Dispatch
           </Button>
@@ -441,9 +438,17 @@ export const DispatchListPage: React.FC = () => {
                       </td>
 
                       {/* SPOC Contact */}
-                      <td className="p-3.5 text-xs">
-                        <p className="font-bold text-slate-900">{d.site?.contactPerson || 'Site SPOC'}</p>
-                        {d.site?.phone && <p className="text-slate-600 font-mono text-[11px] font-semibold mt-0.5">{d.site?.phone}</p>}
+                      <td className="p-3.5 text-xs font-medium">
+                        {d.site?.contactPerson ? (
+                          <div>
+                            <p className="font-bold text-slate-900">{d.site.contactPerson}</p>
+                            {d.site.phone ? (
+                              <p className="text-slate-600 font-mono text-[11px] font-semibold mt-0.5">{d.site.phone}</p>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 font-mono text-[11px]">— N/A</span>
+                        )}
                       </td>
 
                       {/* Qty */}

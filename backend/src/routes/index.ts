@@ -119,6 +119,7 @@ inventoryRoutes.post('/:id/replenish', authorize(UserRole.SUPER_ADMIN, UserRole.
 inventoryRoutes.post('/replace-serial', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.ENGINEER), (req, res, next) => inventoryController.replaceSerial(req, res).catch(next));
 inventoryRoutes.put('/:id/replace-serial', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.ENGINEER), (req, res, next) => inventoryController.replaceSerial(req, res).catch(next));
 inventoryRoutes.post('/fix-inflated-counts', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN), (req, res, next) => inventoryController.fixInflatedCounts(req, res).catch(next));
+inventoryRoutes.post('/reset-test-data', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN), (req, res, next) => inventoryController.resetTestData(req, res).catch(next));
 inventoryRoutes.post('/:id/archive', authorize(UserRole.SUPER_ADMIN), (req, res, next) => inventoryController.archive(req, res).catch(next));
 inventoryRoutes.post('/:id/restore', authorize(UserRole.SUPER_ADMIN), (req, res, next) => inventoryController.restore(req, res).catch(next));
 
@@ -390,7 +391,11 @@ organizationRoutes.put('/:id', async (req, res, next) => {
   }
 });
 
-// Mount sub-routers
+const adminRoutes = Router();
+adminRoutes.use(authenticate, authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN));
+adminRoutes.post('/reset-test-data', (req, res, next) => inventoryController.resetTestData(req, res).catch(next));
+
+router.use('/admin', adminRoutes);
 router.use('/auth', authRoutes);
 router.use('/inventory', inventoryRoutes);
 router.use('/stock-list', inventoryRoutes);

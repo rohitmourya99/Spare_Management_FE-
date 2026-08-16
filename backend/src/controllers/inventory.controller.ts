@@ -8,6 +8,7 @@ import { prisma } from '../config/database';
 import { AppError } from '../middleware/error.middleware';
 import { extractOrgId } from '../utils/orgFilter.util';
 import { fixInflatedStockCounts } from '../utils/fixInflatedStock';
+import { resetTestData as resetTestDataUtil } from '../utils/resetTestData';
 
 export class InventoryController {
   async getAll(req: Request, res: Response): Promise<void> {
@@ -203,6 +204,12 @@ export class InventoryController {
   async fixInflatedCounts(req: Request, res: Response): Promise<void> {
     const result = await fixInflatedStockCounts();
     ApiResponse.success(res, result, 'Stock inflation cleanup and Delhi store 70 baseline sync completed');
+  }
+
+  async resetTestData(req: Request, res: Response): Promise<void> {
+    const orgId = extractOrgId(req);
+    const result = await resetTestDataUtil(orgId);
+    ApiResponse.success(res, result, 'Test data (Dispatches, Stock, Audit Logs) wiped successfully. Master Data intact.');
   }
 
   async getLocationHierarchy(req: Request, res: Response): Promise<void> {

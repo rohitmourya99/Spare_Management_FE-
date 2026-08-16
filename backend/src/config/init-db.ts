@@ -10,6 +10,7 @@ import { deduplicateStockItems } from '../utils/deduplicateStockItems';
 import { sanitizeDatabaseSerialNumbers } from '../utils/sanitizeSerials';
 import { cleanupDispatchSites } from '../utils/cleanupSites';
 import { fixInflatedStockCounts } from '../utils/fixInflatedStock';
+import { resetTestData } from '../utils/resetTestData';
 
 function getRowValue(row: Record<string, any>, ...possibleKeys: string[]): any {
   const rowKeys = Object.keys(row);
@@ -28,8 +29,9 @@ function getRowValue(row: Record<string, any>, ...possibleKeys: string[]): any {
  */
 export async function ensureDatabaseSeeded(): Promise<void> {
   try {
-    // 0. Seed & Tag Default Organization (BHEL) and deduplicate stock items & sanitize serials & cleanup sites & fix stock inflation
+    // 0. Seed & Tag Default Organization (BHEL), reset test data, deduplicate stock items & sanitize serials & cleanup sites
     await patchLegacyOrganizationRecords();
+    await resetTestData('BHEL');
     await deduplicateStockItems();
     await sanitizeDatabaseSerialNumbers();
     await cleanupDispatchSites();

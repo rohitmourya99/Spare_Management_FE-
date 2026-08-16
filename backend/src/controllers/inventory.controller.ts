@@ -7,6 +7,7 @@ import { exportToExcel, exportToCSV, exportInventoryToPDF, formatInventoryForExp
 import { prisma } from '../config/database';
 import { AppError } from '../middleware/error.middleware';
 import { extractOrgId } from '../utils/orgFilter.util';
+import { fixInflatedStockCounts } from '../utils/fixInflatedStock';
 
 export class InventoryController {
   async getAll(req: Request, res: Response): Promise<void> {
@@ -197,6 +198,11 @@ export class InventoryController {
   async restore(req: Request, res: Response): Promise<void> {
     const item = await inventoryService.restoreArchivedItem(req.params.id, req.user!.userId);
     ApiResponse.success(res, item, 'Archived inventory item restored successfully');
+  }
+
+  async fixInflatedCounts(req: Request, res: Response): Promise<void> {
+    const result = await fixInflatedStockCounts();
+    ApiResponse.success(res, result, 'Stock inflation cleanup and Delhi store 70 baseline sync completed');
   }
 
   async getLocationHierarchy(req: Request, res: Response): Promise<void> {

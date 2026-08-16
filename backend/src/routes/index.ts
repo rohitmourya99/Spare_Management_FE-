@@ -118,6 +118,7 @@ inventoryRoutes.post('/:id/replenish', authorize(UserRole.SUPER_ADMIN, UserRole.
 // Replacement Serial Number In-Place Update Endpoint
 inventoryRoutes.post('/replace-serial', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.ENGINEER), (req, res, next) => inventoryController.replaceSerial(req, res).catch(next));
 inventoryRoutes.put('/:id/replace-serial', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN, UserRole.ENGINEER), (req, res, next) => inventoryController.replaceSerial(req, res).catch(next));
+inventoryRoutes.post('/fix-inflated-counts', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN), (req, res, next) => inventoryController.fixInflatedCounts(req, res).catch(next));
 inventoryRoutes.post('/:id/archive', authorize(UserRole.SUPER_ADMIN), (req, res, next) => inventoryController.archive(req, res).catch(next));
 inventoryRoutes.post('/:id/restore', authorize(UserRole.SUPER_ADMIN), (req, res, next) => inventoryController.restore(req, res).catch(next));
 

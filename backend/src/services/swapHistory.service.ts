@@ -2,8 +2,10 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { parsePagination, buildPagination } from '../utils/response.util';
 import { isBatchOrDummySerial } from '../utils/export.util';
+import { buildOrgFilter } from '../utils/orgFilter.util';
 
 export interface SwapHistoryFilters {
+  organizationId?: string;
   search?: string;
   roomId?: string;
   partId?: string;
@@ -15,6 +17,7 @@ export interface SwapHistoryFilters {
 }
 
 export interface CreateSwapHistoryDto {
+  organizationId?: string;
   roomId: string;
   roomName?: string;
   partId: string;
@@ -22,6 +25,8 @@ export interface CreateSwapHistoryDto {
   floor?: string;
   oldSerialNo: string;
   newSerialNo: string;
+  replacedPartCode?: string;
+  replacedSerialNumber?: string;
   sourceWarehouse?: string;
   swappedBy?: string;
   swapReason?: string;
@@ -32,6 +37,7 @@ export class SwapHistoryService {
   async create(data: CreateSwapHistoryDto) {
     const swap = await prisma.swapHistory.create({
       data: {
+        organizationId: data.organizationId || 'BHEL',
         roomId: data.roomId.trim(),
         roomName: data.roomName?.trim() || null,
         partId: data.partId.trim(),
@@ -39,6 +45,8 @@ export class SwapHistoryService {
         floor: data.floor?.trim() || null,
         oldSerialNo: data.oldSerialNo.trim(),
         newSerialNo: data.newSerialNo.trim(),
+        replacedPartCode: data.replacedPartCode?.trim() || null,
+        replacedSerialNumber: data.replacedSerialNumber?.trim() || null,
         sourceWarehouse: data.sourceWarehouse?.trim() || 'Delhi Store',
         swappedBy: data.swappedBy?.trim() || 'System / Technician',
         swapReason: data.swapReason?.trim() || 'Stock Replacement',
@@ -50,7 +58,8 @@ export class SwapHistoryService {
 
   async getAll(filters: SwapHistoryFilters) {
     const { page, limit, skip } = parsePagination(filters);
-    const where: Prisma.SwapHistoryWhereInput = {};
+    const orgFilter = buildOrgFilter(filters.organizationId || 'BHEL');
+    const where: Prisma.SwapHistoryWhereInput = { AND: [orgFilter] };
 
     if (filters.roomId) where.roomId = { contains: filters.roomId };
     if (filters.partId) where.partId = { contains: filters.partId };
@@ -99,7 +108,8 @@ export class SwapHistoryService {
   }
 
   async exportExcel(filters: SwapHistoryFilters) {
-    const where: Prisma.SwapHistoryWhereInput = {};
+    const orgFilter = buildOrgFilter(filters.organizationId || 'BHEL');
+    const where: Prisma.SwapHistoryWhereInput = { AND: [orgFilter] };
     if (filters.roomId) where.roomId = { contains: filters.roomId };
     if (filters.partId) where.partId = { contains: filters.partId };
     if (filters.buildingName) where.buildingName = { contains: filters.buildingName };

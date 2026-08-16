@@ -372,52 +372,6 @@ export class DispatchService {
 
     // Non-critical post-transaction automation wrapped safely
     try {
-      if (data.roomId || buildingName) {
-        const partSerialNo = originalSerial !== 'Bulk' && originalSerial ? originalSerial : `${item.spareId}-${Date.now()}`;
-        const partId = item.partCode || item.partId || item.productName;
-        const oemName = item.oem?.name || 'Standard OEM';
-
-        const existingLocInv = await prisma.locationInventory.findUnique({
-          where: { partSerialNo },
-        });
-
-        if (existingLocInv) {
-          await prisma.locationInventory.update({
-            where: { id: existingLocInv.id },
-            data: {
-              installationDate: dispatchTimestamp,
-              oem: oemName,
-              partId,
-              roomId: data.roomId || existingLocInv.roomId,
-              locationClass: data.locationClass || existingLocInv.locationClass,
-              solutionType: data.solutionType || existingLocInv.solutionType,
-              buildingName: buildingName || existingLocInv.buildingName,
-              roomName: data.roomName || existingLocInv.roomName,
-              floor: data.floor || existingLocInv.floor,
-              subUnit: data.sublocation || existingLocInv.subUnit,
-            },
-          });
-        } else {
-          await prisma.locationInventory.create({
-            data: {
-              installationDate: dispatchTimestamp,
-              oem: oemName,
-              partId,
-              partSerialNo,
-              roomId: data.roomId || 'ROOM-GENERAL',
-              buildingName: buildingName,
-              roomName: data.roomName || '',
-              floor: data.floor || '',
-              unit: data.unit || 'Main Unit',
-              subUnit: data.sublocation || 'Main Sublocation',
-              state: data.state || 'Delhi',
-              solutionType: data.solutionType || 'General',
-              locationClass: data.locationClass || 'Class A',
-            },
-          });
-        }
-      }
-
       if (userComments) {
         await prisma.comment.create({
           data: {

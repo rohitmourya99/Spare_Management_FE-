@@ -27,9 +27,18 @@ export class DispatchController {
   }
 
   async create(req: Request, res: Response) {
-    const orgId = extractOrgId(req);
-    const dispatch = await dispatchService.create(req.body, req.user!.userId, orgId);
-    res.status(200).json({ success: true, message: 'Dispatch created successfully', data: dispatch });
+    try {
+      const orgId = extractOrgId(req);
+      const userId = req.user?.userId || 'SYSTEM';
+      const dispatch = await dispatchService.create(req.body, userId, orgId);
+      res.status(200).json({ success: true, message: 'Dispatch created successfully', data: dispatch });
+    } catch (err: any) {
+      res.status(err.statusCode || 400).json({
+        success: false,
+        message: err.message || 'Failed to create dispatch',
+        error: err.stack || String(err),
+      });
+    }
   }
 
   async approve(req: Request, res: Response) {

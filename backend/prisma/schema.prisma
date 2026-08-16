@@ -309,22 +309,35 @@ model Setting {
 // ==============================================
 
 model Dispatch {
-  id               String    @id @default(uuid())
-  dispatchNo       String    @unique  // DS-2026-00001
-  inventoryItemId  String
-  inventoryItem    InventoryItem @relation(fields: [inventoryItemId], references: [id])
-  siteId           String
-  site             Site      @relation(fields: [siteId], references: [id])
-  organizationId   String?   @default("BHEL")
-  organization     Organization? @relation(fields: [organizationId], references: [id])
-  quantity         Int       @default(1)
+  id               String         @id @default(uuid())
+  dispatchNo       String         @unique  // DS-2026-00001
+  inventoryItemId  String?
+  inventoryItem    InventoryItem? @relation(fields: [inventoryItemId], references: [id])
+  siteId           String?
+  site             Site?          @relation(fields: [siteId], references: [id])
+  organizationId   String?        @default("BHEL")
+  organization     Organization?  @relation(fields: [organizationId], references: [id])
+  quantity         Int            @default(1)
   courierName      String?
+  courierPartner   String?
   trackingNo       String?
-  dispatchDate     DateTime?
+  trackingAwb      String?
+  dispatchDate     DateTime?      @default(now())
   expectedDelivery DateTime?
   podUrl           String?
-  status           String    @default("DRAFT")
+  status           String         @default("DISPATCHED")
   remarks          String?
+
+  spareItemName    String?
+  oem              String?
+  serialNumber     String?
+  sourceWarehouse  String?
+  spocName         String?
+  spocContact      String?
+
+  faultyItemId       String?
+  faultyPartCode     String?
+  faultySerialNumber String?
 
   unit          String?
   sublocation   String?
@@ -336,8 +349,8 @@ model Dispatch {
   solutionType  String?
   locationClass String?
 
-  createdById  String
-  createdBy    User         @relation("CreatedByUser", fields: [createdById], references: [id])
+  createdById  String?
+  createdBy    User?        @relation("CreatedByUser", fields: [createdById], references: [id])
   approvedById String?
   approvedBy   User?        @relation("ApprovedByUser", fields: [approvedById], references: [id])
   approvedAt   DateTime?

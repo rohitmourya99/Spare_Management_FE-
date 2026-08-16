@@ -26,7 +26,9 @@ export interface CreateDispatchDto {
   locationClass?: string;
   quantity?: number;
   courierName?: string;
+  courierPartner?: string;
   trackingNo?: string;
+  trackingAwb?: string;
   dispatchDate?: string;
   expectedDelivery?: string;
   engineerName?: string;
@@ -272,12 +274,23 @@ export class DispatchService {
           inventoryItemId: itemId,
           siteId: targetSiteId,
           organizationId: targetOrgId,
+          spareItemName: item.productName || 'Spare Item',
+          oem: (item as any).oem?.name || 'Standard OEM',
+          serialNumber: originalSerial,
+          sourceWarehouse: item.store || 'Delhi Store',
+          spocName: spocName || null,
+          spocContact: spocPhone || null,
           quantity: qtyToDispatch,
-          courierName: data.courierName || null,
-          trackingNo: data.trackingNo || null,
+          courierName: data.courierName || data.courierPartner || null,
+          courierPartner: data.courierName || data.courierPartner || null,
+          trackingNo: data.trackingNo || data.trackingAwb || null,
+          trackingAwb: data.trackingNo || data.trackingAwb || null,
           dispatchDate: dispatchTimestamp,
           expectedDelivery: data.expectedDelivery ? new Date(data.expectedDelivery) : null,
           remarks: lockedRemarks,
+          faultyItemId: data.faultyItemId || null,
+          faultyPartCode: faultyPart || null,
+          faultySerialNumber: faultySerial || null,
           sublocation: data.sublocation || null,
           floor: data.floor || null,
           buildingName: buildingName,
@@ -292,7 +305,7 @@ export class DispatchService {
         },
         include: {
           inventoryItem: { select: { spareId: true, productName: true, serialNumber: true, store: true, partCode: true } },
-          site: { select: { siteName: true } },
+          site: { select: { siteName: true, contactPerson: true, phone: true } },
         },
       }),
       prisma.inventoryItem.update({
@@ -458,21 +471,28 @@ export class DispatchService {
       throw new AppError(400, 'Dispatch already cancelled');
     }
 
+    const itemId = dispatch.inventoryItemId;
+    const invItem = dispatch.inventoryItem;
+    if (!itemId || !invItem) {
+      await prisma.dispatch.update({ where: { id }, data: { status: DispatchStatus.CANCELLED } });
+      return { message: 'Dispatch cancelled successfully' };
+    }
+
     // Restore available quantity
-    const newAvail = dispatch.inventoryItem.availableQuantity + dispatch.quantity;
+    const newAvail = invItem.availableQuantity + dispatch.quantity;
 
     await prisma.$transaction([
       prisma.inventoryItem.update({
-        where: { id: dispatch.inventoryItemId },
+        where: { id: itemId },
         data: { availableQuantity: newAvail, status: 'AVAILABLE' },
       }),
       prisma.dispatch.update({ where: { id }, data: { status: DispatchStatus.CANCELLED } }),
       prisma.inventoryMovement.create({
         data: {
-          inventoryItemId: dispatch.inventoryItemId,
+          inventoryItemId: itemId,
           type: 'ADJUSTMENT',
           quantity: dispatch.quantity,
-          previousStock: dispatch.inventoryItem.availableQuantity,
+          previousStock: invItem.availableQuantity,
           newStock: newAvail,
           referenceId: dispatch.dispatchNo,
           performedById: userId,

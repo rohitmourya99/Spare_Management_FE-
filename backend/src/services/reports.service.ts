@@ -57,7 +57,7 @@ export class ReportsService {
           orderBy: { createdAt: 'desc' },
         });
         return dispatches.map((d) => {
-          let dispatchedSerial = d.inventoryItem.serialNumber || 'N/A';
+          let dispatchedSerial = d.serialNumber || d.inventoryItem?.serialNumber || 'N/A';
           let remarksClean = d.remarks || '';
           if (d.remarks && d.remarks.includes('[Dispatched SN:')) {
             const match = d.remarks.match(/\[Dispatched SN:\s*([^\]]+)\]/);
@@ -67,16 +67,16 @@ export class ReportsService {
           }
 
           return {
-            'Part ID': d.inventoryItem.partCode || d.inventoryItem.partId || d.inventoryItem.productName,
+            'Part ID': d.spareItemName || d.inventoryItem?.partCode || d.inventoryItem?.partId || d.inventoryItem?.productName || 'Spare Item',
             'Dispatched Serial No': dispatchedSerial,
-            'Installed Room ID': d.roomId || d.inventoryItem.dispatchedToRoomId || 'N/A',
+            'Installed Room ID': d.roomId || d.inventoryItem?.dispatchedToRoomId || 'N/A',
             'Sublocation': d.sublocation || d.site?.subLocation || 'N/A',
             'State': d.state || d.site?.state || 'N/A',
             'Building Name': d.buildingName || d.site?.siteName || 'N/A',
             'Floor': d.floor || 'N/A',
             'Room Name': d.roomName || 'N/A',
             'Dispatch Date': d.dispatchDate ? new Date(d.dispatchDate).toISOString().replace('T', ' ').substring(0, 19) : d.createdAt.toISOString().replace('T', ' ').substring(0, 19),
-            'Dispatched By': d.createdBy.name,
+            'Dispatched By': d.createdBy?.name || 'System / Admin',
             'Comments / Remarks': remarksClean,
           };
         });

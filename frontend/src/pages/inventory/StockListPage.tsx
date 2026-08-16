@@ -501,7 +501,7 @@ export const StockListPage: React.FC = () => {
                           </span>
                         ) : (
                           <span className="text-slate-600 italic bg-slate-100 px-2 py-0.5 rounded text-[11px] font-medium border border-slate-200">
-                            Bulk Item
+                            Non-Serialized
                           </span>
                         )}
                       </td>

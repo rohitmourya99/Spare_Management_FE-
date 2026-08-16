@@ -485,7 +485,7 @@ export const InventoryListPage: React.FC = () => {
                   ) : (
                     installedItems.map((item, index) => {
                       const sequenceNo = ((page - 1) * 15) + index + 1;
-                      const serialDisplay = formatSerialDisplay(item.partSerialNo, '');
+                      const serialDisplay = formatSerialDisplay(item.partSerialNo, '', item.roomId);
                       const formatDate = (d: string | null | undefined) =>
                         d ? new Date(d).toLocaleDateString('en-IN') : null;
                       return (
@@ -498,11 +498,13 @@ export const InventoryListPage: React.FC = () => {
                           <td className="p-3 font-mono font-bold text-indigo-600">{item.partId}</td>
                           <td className="p-3 font-mono">
                             {serialDisplay ? (
-                              <span className="px-2 py-0.5 rounded font-bold border text-xs bg-emerald-50 text-emerald-800 border-emerald-200">
+                              <span className="px-2 py-0.5 rounded font-bold border text-xs bg-indigo-50 text-indigo-700 border-indigo-200">
                                 {serialDisplay}
                               </span>
                             ) : (
-                              <span className="text-slate-400 font-normal italic">-</span>
+                              <span className="text-slate-600 italic bg-slate-100 px-2 py-0.5 rounded text-[11px] font-medium border border-slate-200">
+                                Non-Serialized
+                              </span>
                             )}
                           </td>
                           <td className="p-3 font-mono text-slate-800 font-bold">{item.roomId}</td>

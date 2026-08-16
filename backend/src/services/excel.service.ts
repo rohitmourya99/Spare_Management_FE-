@@ -687,10 +687,7 @@ export class ExcelService {
             });
           }
         } else {
-          let finalSerial = exactSerial;
-          if (finalSerial && existingSerialSet.has(finalSerial.toLowerCase())) {
-            finalSerial = `${exactSerial}_${roomId}_${occIndex + 1}`;
-          }
+          let finalSerial = isBatchOrDummySerial(exactSerial) ? '' : exactSerial;
           if (finalSerial) {
             existingSerialSet.add(finalSerial.toLowerCase());
           }

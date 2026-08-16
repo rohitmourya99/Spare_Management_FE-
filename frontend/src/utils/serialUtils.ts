@@ -4,17 +4,21 @@
  * should be identified and hidden/formatted appropriately so invalid batch IDs are never exposed.
  */
 
-export const isRealSerial = (sn?: string | null): boolean => {
+export const isRealSerial = (sn?: string | null, roomId?: string | null): boolean => {
   if (!sn) return false;
   const s = String(sn).trim();
   if (!s) return false;
 
   const upper = s.toUpperCase();
   if (
+    upper === '-' ||
     upper.includes('BATCH_') ||
     upper.startsWith('_BATCH') ||
     upper.startsWith('BATCH') ||
     upper.startsWith('XYZ') ||
+    upper.includes('_NOT APPLICABLE_') ||
+    upper.includes('NOT APPLICABLE') ||
+    upper.includes('NOTAPPLICABLE') ||
     upper === 'N/A' ||
     upper === 'NA' ||
     upper === 'NULL' ||
@@ -24,10 +28,18 @@ export const isRealSerial = (sn?: string | null): boolean => {
   ) {
     return false;
   }
+
+  if (roomId) {
+    const cleanRoom = String(roomId).trim().toUpperCase();
+    if (cleanRoom && (upper === cleanRoom || upper.includes(`_${cleanRoom}_`) || upper.endsWith(`_${cleanRoom}`))) {
+      return false;
+    }
+  }
+
   return true;
 };
 
-export const formatSerialDisplay = (sn?: string | null, fallback = ''): string => {
-  if (!isRealSerial(sn)) return fallback;
+export const formatSerialDisplay = (sn?: string | null, fallback = '', roomId?: string | null): string => {
+  if (!isRealSerial(sn, roomId)) return fallback;
   return String(sn).trim();
 };

@@ -9,10 +9,14 @@ export const isBatchOrDummySerial = (sn?: any): boolean => {
   const s = String(sn).trim().toUpperCase();
   return (
     s === '' ||
+    s === '-' ||
     s.includes('BATCH_') ||
     s.startsWith('_BATCH') ||
     s.startsWith('BATCH') ||
     s.startsWith('XYZ') ||
+    s.includes('_NOT APPLICABLE_') ||
+    s.includes('NOT APPLICABLE') ||
+    s.includes('NOTAPPLICABLE') ||
     s === 'N/A' ||
     s === 'NA' ||
     s === 'NULL' ||

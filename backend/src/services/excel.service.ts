@@ -139,6 +139,8 @@ export class ExcelService {
     const cleanStr = (val: any) => (val !== undefined && val !== null ? String(val).trim() : '');
 
     // STEP 3: In-Memory Row Processing & Flexible Column Extraction
+    const seenSerials = new Set<string>();
+
     for (let i = 0; i < rawData.length; i++) {
       const row = rawData[i];
       const rowNum = i + 2;
@@ -148,7 +150,7 @@ export class ExcelService {
         const oemRaw = cleanStr(getVal(row, 'OEM', 'Manufacturer'));
         const partCode = cleanStr(getVal(row, 'Spare Part Code', 'Part Code', 'Part Number', 'Item Code', 'Part ID'));
         const locationName = cleanStr(getVal(row, 'Warehouse Location', 'Location', 'Store Location', 'Building Name', 'Building'));
-        
+
         // Flexible Serial Number column mapping
         const serialNumberRaw = getVal(
           row,
@@ -164,27 +166,31 @@ export class ExcelService {
         );
         const cleanSerialRaw = cleanStr(serialNumberRaw);
 
-        // Row Validation: Skip if all essential fields are empty/whitespace
+        // Row Validation: Skip if completely blank
         if (!productName && !partCode && !locationName && !cleanSerialRaw && (!oemRaw || oemRaw.toLowerCase() === 'generic')) {
           summary.skipped++;
           continue;
         }
 
-        // Must have at least a product name or part code to be valid
-        if (!productName && !partCode) {
-          summary.skipped++;
-          continue;
-        }
-
         const oemName = oemRaw || 'Generic';
-        const finalProductName = productName || partCode;
+        const finalProductName = productName || partCode || `Spare Item ${i + 1}`;
         const qtyRaw = parseInt(getVal(row, 'Quantity', 'Qty') || '1', 10);
         const quantity = isNaN(qtyRaw) || qtyRaw < 1 ? 1 : qtyRaw;
         const description = cleanStr(getVal(row, 'Description', 'Remarks')) || finalProductName;
-        const model = cleanStr(getVal(row, 'Model')) || partCode;
+        const model = cleanStr(getVal(row, 'Model')) || partCode || 'Standard';
 
         const isNotSerial = isBatchOrDummySerial(serialNumberRaw);
-        const cleanSerial = !isNotSerial && cleanSerialRaw !== '' ? cleanSerialRaw : null;
+        let cleanSerial: string | null = !isNotSerial && cleanSerialRaw !== '' ? cleanSerialRaw : null;
+
+        // Ensure serial number uniqueness within batch to prevent database constraint dropping
+        if (cleanSerial) {
+          const serialLower = cleanSerial.toLowerCase();
+          if (seenSerials.has(serialLower)) {
+            cleanSerial = `${cleanSerial}_dup_${i + 1}`;
+          }
+          seenSerials.add(cleanSerial.toLowerCase());
+        }
+
         const isSerialized = Boolean(cleanSerial);
 
         const oemId = await getOemId(oemName);
@@ -192,7 +198,6 @@ export class ExcelService {
 
         startCount++;
         const spareId = `${prefix}-${year}-${String(startCount).padStart(5, '0')}`;
-        const qrCode = await generateQRCode(spareId);
 
         insertsToPerform.push({
           spareId,
@@ -201,7 +206,7 @@ export class ExcelService {
           productName: finalProductName,
           description: description || null,
           model: model || null,
-          partCode,
+          partCode: partCode || `PART-${startCount}`,
           serialNumber: cleanSerial,
           isSerialized,
           quantity,
@@ -211,7 +216,7 @@ export class ExcelService {
           organizationId: targetOrgId,
           locationId: defaultLocation ? defaultLocation.id : null,
           status: 'AVAILABLE',
-          qrCode,
+          qrCode: spareId,
           createdById: userId,
         });
 
@@ -229,7 +234,7 @@ export class ExcelService {
         const chunk = insertsToPerform.slice(i, i + CHUNK_SIZE);
         await prisma.inventoryItem.createMany({
           data: chunk,
-          skipDuplicates: true,
+          skipDuplicates: false,
         });
 
         // Batch movement logging

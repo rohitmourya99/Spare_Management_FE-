@@ -98,8 +98,20 @@ export class InventoryController {
       throw new AppError(400, 'Please upload an Excel file');
     }
     const store = (req.body.store === 'Bengaluru' ? 'Bengaluru' : 'Delhi') as 'Delhi' | 'Bengaluru';
-    const summary = await excelService.importInventory(req.file.buffer, store, req.user!.userId);
-    ApiResponse.success(res, summary, `Excel import completed for ${store} store`);
+    const orgId = extractOrgId(req);
+    const summary = await excelService.importInventory(req.file.buffer, store, req.user!.userId, orgId);
+    
+    res.status(200).json({
+      success: true,
+      message: `Successfully imported ${summary.imported} items out of ${summary.totalRows} from Excel for ${store} store`,
+      data: {
+        totalInExcel: summary.totalRows,
+        successfullyUploaded: summary.imported,
+        failed: summary.failed,
+        skipped: summary.skipped,
+        summary,
+      },
+    });
   }
 
   async importLocationInventory(req: Request, res: Response): Promise<void> {

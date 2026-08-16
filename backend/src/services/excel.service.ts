@@ -6,6 +6,7 @@ import { AppError } from '../middleware/error.middleware';
 import { activityService } from './activity.service';
 import { logger } from '../config/logger';
 import { isBatchOrDummySerial } from '../utils/export.util';
+import { buildOrgFilter } from '../utils/orgFilter.util';
 
 export interface ImportSummary {
   totalRows: number;
@@ -34,6 +35,9 @@ export class ExcelService {
     const sheet = workbook.Sheets[sheetName];
     const rawData = xlsx.utils.sheet_to_json<Record<string, any>>(sheet);
 
+    const targetOrgId = organizationId || 'BHEL';
+    const orgFilter = buildOrgFilter(targetOrgId);
+
     const summary: ImportSummary = {
       totalRows: rawData.length,
       validRows: rawData.length,
@@ -46,176 +50,226 @@ export class ExcelService {
       errors: [],
     };
 
-    let count = await prisma.inventoryItem.count();
+    if (rawData.length === 0) return summary;
 
+    // STEP 1: Single Pre-Fetch for active organizationId
+    const existingItems = await prisma.inventoryItem.findMany({
+      where: {
+        isDeleted: false,
+        AND: [orgFilter],
+      },
+      select: {
+        id: true,
+        spareId: true,
+        productName: true,
+        partCode: true,
+        serialNumber: true,
+        store: true,
+        quantity: true,
+        availableQuantity: true,
+        description: true,
+        model: true,
+        organizationId: true,
+        oemId: true,
+      },
+    });
+
+    // In-memory Hash Maps for O(1) matching
+    const serialMap = new Map<string, typeof existingItems[0]>();
+    const partStoreMap = new Map<string, typeof existingItems[0]>();
+    const nameStoreMap = new Map<string, typeof existingItems[0]>();
+
+    for (const item of existingItems) {
+      if (item.serialNumber) {
+        serialMap.set(item.serialNumber.trim().toLowerCase(), item);
+      }
+      if (item.partCode) {
+        const key = `${item.partCode.trim().toLowerCase()}_${item.store.trim().toLowerCase()}`;
+        if (!partStoreMap.has(key)) partStoreMap.set(key, item);
+      }
+      if (item.productName) {
+        const key = `${item.productName.trim().toLowerCase()}_${item.store.trim().toLowerCase()}`;
+        if (!nameStoreMap.has(key)) nameStoreMap.set(key, item);
+      }
+    }
+
+    // STEP 2: Pre-fetch & Cache OEMs, Categories, and Location
+    const allOems = await prisma.oEM.findMany();
+    const oemCache = new Map<string, string>();
+    for (const o of allOems) {
+      oemCache.set(o.name.trim().toLowerCase(), o.id);
+    }
+
+    const allCategories = await prisma.category.findMany();
+    const categoryCache = new Map<string, string>();
+    for (const c of allCategories) {
+      if (!categoryCache.has(c.oemId)) {
+        categoryCache.set(c.oemId, c.id);
+      }
+    }
+
+    let defaultLocation = await prisma.location.findFirst({
+      where: { name: { contains: store } },
+    });
+    if (!defaultLocation) {
+      defaultLocation = await prisma.location.findFirst();
+    }
+
+    const getVal = (row: Record<string, any>, ...keys: string[]) => {
+      const rowKeys = Object.keys(row);
+      for (const k of keys) {
+        const found = rowKeys.find((rk) => rk.trim().toLowerCase() === k.trim().toLowerCase());
+        if (found && row[found] !== undefined && row[found] !== null) return row[found];
+      }
+      return null;
+    };
+
+    const getOemId = async (oemName: string): Promise<string> => {
+      const cleanName = oemName.trim().toLowerCase();
+      if (oemCache.has(cleanName)) {
+        return oemCache.get(cleanName)!;
+      }
+      const newOem = await prisma.oEM.create({ data: { name: oemName } });
+      oemCache.set(cleanName, newOem.id);
+      return newOem.id;
+    };
+
+    const getCategoryId = async (oemId: string): Promise<string> => {
+      if (categoryCache.has(oemId)) {
+        return categoryCache.get(oemId)!;
+      }
+      const newCat = await prisma.category.create({ data: { name: 'General', oemId } });
+      categoryCache.set(oemId, newCat.id);
+      return newCat.id;
+    };
+
+    const updatesToPerform: Array<{
+      id: string;
+      productName: string;
+      description?: string | null;
+      model?: string | null;
+      oemId: string;
+      quantity: number;
+      availableQuantity: number;
+      organizationId: string;
+      prevAvail: number;
+    }> = [];
+
+    const insertsToPerform: Array<{
+      spareId: string;
+      oemId: string;
+      categoryId: string;
+      productName: string;
+      description?: string | null;
+      model?: string | null;
+      partCode: string;
+      serialNumber: string | null;
+      isSerialized: boolean;
+      quantity: number;
+      availableQuantity: number;
+      unit: string;
+      store: string;
+      organizationId: string;
+      locationId: string | null;
+      status: string;
+      qrCode: string;
+      createdById: string;
+    }> = [];
+
+    let startCount = await prisma.inventoryItem.count();
+    const prefix = store === 'Bengaluru' ? 'PDS-BLR' : 'PDS-DEL';
+    const year = new Date().getFullYear();
+
+    // STEP 3: In-Memory Row Processing & Categorization
     for (let i = 0; i < rawData.length; i++) {
       const row = rawData[i];
-      const rowNum = i + 2; // Accounting for 1-based index + header row
+      const rowNum = i + 2;
 
       try {
-        // Extract fields matching Excel headers flexibly
-        const getVal = (row: Record<string, any>, ...keys: string[]) => {
-          const rowKeys = Object.keys(row);
-          for (const k of keys) {
-            const found = rowKeys.find((rk) => rk.trim().toLowerCase() === k.trim().toLowerCase());
-            if (found && row[found] !== undefined && row[found] !== null) return row[found];
-          }
-          return null;
-        };
+        const productNameRaw = getVal(row, 'Spare Item', 'Part Name', 'Product Name', 'Description', 'Item Name');
+        if (!productNameRaw || productNameRaw.toString().trim() === '') {
+          summary.skipped++;
+          continue;
+        }
 
-        const productName = getVal(row, 'Spare Item', 'Part Name', 'Product Name', 'Description', 'Item Name');
+        const productName = productNameRaw.toString().trim();
         const oemName = (getVal(row, 'OEM', 'Manufacturer') || 'Generic').toString().trim();
         const partCode = (getVal(row, 'Spare Part Code', 'Part Code', 'Part Number', 'Item Code') || '').toString().trim();
         const serialNumber = getVal(row, 'Serial Number', 'Serial No', 'S/N', 'Serial Number ');
         const qtyRaw = parseInt(getVal(row, 'Quantity', 'Qty') || '1', 10);
         const quantity = isNaN(qtyRaw) || qtyRaw < 1 ? 1 : qtyRaw;
-        const locationName = getVal(row, 'Warehouse Location', 'Location', 'Store Location') || store;
         const description = getVal(row, 'Description', 'Remarks') || productName;
         const model = getVal(row, 'Model') || partCode;
-
-        if (!productName || productName.toString().trim() === '') {
-          summary.skipped++;
-          continue;
-        }
-
-        // Upsert OEM case-insensitively
-        let oem = await prisma.oEM.findFirst({
-          where: { name: { equals: oemName } },
-        });
-        if (!oem) {
-          oem = await prisma.oEM.create({ data: { name: oemName } });
-        }
-
-        // Upsert Category
-        let category = await prisma.category.findFirst({
-          where: { name: 'General', oemId: oem.id },
-        });
-        if (!category) {
-          category = await prisma.category.create({
-            data: { name: 'General', oemId: oem.id },
-          });
-        }
-
-        // Upsert Location if available
-        let location = await prisma.location.findFirst({
-          where: { name: { contains: store } },
-        });
-        if (!location) {
-          location = await prisma.location.findFirst();
-        }
 
         const isSerialized = !isBatchOrDummySerial(serialNumber);
         const cleanSerial = isSerialized ? serialNumber.toString().trim() : null;
 
-        // UPSERT MATCH CHECK:
-        // Match by cleanSerial OR (partCode + store/location + organizationId)
+        const oemId = await getOemId(oemName);
+        const categoryId = await getCategoryId(oemId);
+
+        // O(1) Match Check
         let existingItem = null;
         if (cleanSerial) {
-          existingItem = await prisma.inventoryItem.findFirst({
-            where: {
-              serialNumber: cleanSerial,
-              isDeleted: false,
-              OR: [{ organizationId }, { organizationId: null }],
-            },
-          });
+          existingItem = serialMap.get(cleanSerial.toLowerCase());
         }
-        
         if (!existingItem && partCode) {
-          existingItem = await prisma.inventoryItem.findFirst({
-            where: {
-              partCode,
-              store,
-              isDeleted: false,
-              OR: [{ organizationId }, { organizationId: null }],
-            },
-          });
+          existingItem = partStoreMap.get(`${partCode.toLowerCase()}_${store.toLowerCase()}`);
         }
-
         if (!existingItem && productName) {
-          existingItem = await prisma.inventoryItem.findFirst({
-            where: {
-              productName: productName.toString().trim(),
-              store,
-              isDeleted: false,
-              OR: [{ organizationId }, { organizationId: null }],
-            },
-          });
+          existingItem = nameStoreMap.get(`${productName.toLowerCase()}_${store.toLowerCase()}`);
         }
 
         if (existingItem) {
-          // UPSERT MATCH FOUND: Update existing record values & set/overwrite quantities
           const newQty = quantity;
           const currentIssued = existingItem.quantity - existingItem.availableQuantity;
           const newAvail = Math.max(0, newQty - currentIssued);
 
-          await prisma.inventoryItem.update({
-            where: { id: existingItem.id },
-            data: {
-              productName: productName.toString().trim(),
-              description: description ? description.toString().trim() : existingItem.description,
-              model: model ? model.toString().trim() : existingItem.model,
-              oemId: oem.id,
-              quantity: newQty,
-              availableQuantity: newAvail,
-              organizationId: existingItem.organizationId || organizationId || 'BHEL',
-              updatedById: userId,
-            },
-          });
-
-          await prisma.inventoryMovement.create({
-            data: {
-              inventoryItemId: existingItem.id,
-              type: 'IMPORT',
-              quantity,
-              previousStock: existingItem.availableQuantity,
-              newStock: newAvail,
-              performedById: userId,
-              remarks: `Excel UPSERT stock update (${store})`,
-            },
+          updatesToPerform.push({
+            id: existingItem.id,
+            productName,
+            description: description ? description.toString().trim() : existingItem.description,
+            model: model ? model.toString().trim() : existingItem.model,
+            oemId,
+            quantity: newQty,
+            availableQuantity: newAvail,
+            organizationId: existingItem.organizationId || targetOrgId,
+            prevAvail: existingItem.availableQuantity,
           });
 
           summary.updated++;
         } else {
-          // UPSERT NO MATCH FOUND: Insert new record
-          count++;
-          const prefix = store === 'Bengaluru' ? 'PDS-BLR' : 'PDS-DEL';
-          const spareId = `${prefix}-${new Date().getFullYear()}-${String(count).padStart(5, '0')}`;
+          startCount++;
+          const spareId = `${prefix}-${year}-${String(startCount).padStart(5, '0')}`;
           const qrCode = await generateQRCode(spareId);
 
-          const newItem = await prisma.inventoryItem.create({
-            data: {
-              spareId,
-              oemId: oem.id,
-              categoryId: category.id,
-              productName: productName.toString().trim(),
-              description: description ? description.toString().trim() : null,
-              model: model ? model.toString().trim() : null,
-              partCode,
-              serialNumber: cleanSerial,
-              isSerialized,
-              quantity,
-              availableQuantity: quantity,
-              unit: 'PCS',
-              store,
-              organizationId: organizationId || 'BHEL',
-              locationId: location ? location.id : null,
-              status: 'AVAILABLE',
-              qrCode,
-              createdById: userId,
-            },
-          });
+          const newItemData = {
+            spareId,
+            oemId,
+            categoryId,
+            productName,
+            description: description ? description.toString().trim() : null,
+            model: model ? model.toString().trim() : null,
+            partCode,
+            serialNumber: cleanSerial,
+            isSerialized,
+            quantity,
+            availableQuantity: quantity,
+            unit: 'PCS',
+            store,
+            organizationId: targetOrgId,
+            locationId: defaultLocation ? defaultLocation.id : null,
+            status: 'AVAILABLE',
+            qrCode,
+            createdById: userId,
+          };
 
-          await prisma.inventoryMovement.create({
-            data: {
-              inventoryItemId: newItem.id,
-              type: 'IMPORT',
-              quantity,
-              previousStock: 0,
-              newStock: quantity,
-              performedById: userId,
-              remarks: `Excel import initial stock (${store})`,
-            },
-          });
+          insertsToPerform.push(newItemData);
+
+          // Update in-memory map to handle duplicates within the same Excel file
+          const dummyItem: any = { ...newItemData, id: spareId };
+          if (cleanSerial) serialMap.set(cleanSerial.toLowerCase(), dummyItem);
+          if (partCode) partStoreMap.set(`${partCode.toLowerCase()}_${store.toLowerCase()}`, dummyItem);
+          if (productName) nameStoreMap.set(`${productName.toLowerCase()}_${store.toLowerCase()}`, dummyItem);
 
           summary.imported++;
         }
@@ -225,14 +279,88 @@ export class ExcelService {
       }
     }
 
+    // STEP 4: Execute Bulk Inserts in Chunks (500 rows per chunk)
+    if (insertsToPerform.length > 0) {
+      const CHUNK_SIZE = 500;
+      for (let i = 0; i < insertsToPerform.length; i += CHUNK_SIZE) {
+        const chunk = insertsToPerform.slice(i, i + CHUNK_SIZE);
+        await prisma.inventoryItem.createMany({
+          data: chunk,
+          skipDuplicates: true,
+        });
+
+        // Batch movement logging
+        const insertedItems = await prisma.inventoryItem.findMany({
+          where: { spareId: { in: chunk.map((c) => c.spareId) } },
+          select: { id: true, quantity: true },
+        });
+
+        if (insertedItems.length > 0) {
+          await prisma.inventoryMovement.createMany({
+            data: insertedItems.map((item) => ({
+              inventoryItemId: item.id,
+              type: 'IMPORT',
+              quantity: item.quantity,
+              previousStock: 0,
+              newStock: item.quantity,
+              performedById: userId,
+              remarks: `Excel import initial stock (${store})`,
+            })),
+          });
+        }
+      }
+    }
+
+    // STEP 5: Execute Batch Updates in Chunks (200 rows per chunk via $transaction)
+    if (updatesToPerform.length > 0) {
+      const BATCH_SIZE = 200;
+      for (let i = 0; i < updatesToPerform.length; i += BATCH_SIZE) {
+        const chunk = updatesToPerform.slice(i, i + BATCH_SIZE);
+        const txOps: any[] = [];
+
+        for (const item of chunk) {
+          txOps.push(
+            prisma.inventoryItem.update({
+              where: { id: item.id },
+              data: {
+                productName: item.productName,
+                description: item.description,
+                model: item.model,
+                oemId: item.oemId,
+                quantity: item.quantity,
+                availableQuantity: item.availableQuantity,
+                organizationId: item.organizationId,
+                updatedById: userId,
+              },
+            })
+          );
+          txOps.push(
+            prisma.inventoryMovement.create({
+              data: {
+                inventoryItemId: item.id,
+                type: 'IMPORT',
+                quantity: item.quantity,
+                previousStock: item.prevAvail,
+                newStock: item.availableQuantity,
+                performedById: userId,
+                remarks: `Excel UPSERT stock update (${store})`,
+              },
+            })
+          );
+        }
+
+        await prisma.$transaction(txOps);
+      }
+    }
+
     // Log Activity
     await prisma.activityLog.create({
       data: {
         userId,
-        organizationId: organizationId || 'BHEL',
+        organizationId: targetOrgId,
         action: 'IMPORT',
         entity: 'Inventory',
-        entityLabel: `${store} Store Excel UPSERT Import (${summary.imported} imported, ${summary.updated} updated)`,
+        entityLabel: `${store} Store Fast Excel UPSERT Import (${summary.imported} imported, ${summary.updated} updated)`,
         newValue: JSON.stringify(summary),
       },
     });

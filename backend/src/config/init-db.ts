@@ -6,6 +6,7 @@ import path from 'path';
 import fs from 'fs';
 
 import { patchLegacyOrganizationRecords } from '../utils/patchLegacyOrg';
+import { deduplicateStockItems } from '../utils/deduplicateStockItems';
 
 function getRowValue(row: Record<string, any>, ...possibleKeys: string[]): any {
   const rowKeys = Object.keys(row);
@@ -24,8 +25,9 @@ function getRowValue(row: Record<string, any>, ...possibleKeys: string[]): any {
  */
 export async function ensureDatabaseSeeded(): Promise<void> {
   try {
-    // 0. Seed & Tag Default Organization (BHEL)
+    // 0. Seed & Tag Default Organization (BHEL) and deduplicate stock items
     await patchLegacyOrganizationRecords();
+    await deduplicateStockItems();
 
     // 1. Ensure Default Users (Admin@123, Inv@123, Eng@123, View@123)
     const hashedAdmin = await bcrypt.hash('Admin@123', 10);

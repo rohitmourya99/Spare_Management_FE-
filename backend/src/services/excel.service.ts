@@ -26,7 +26,8 @@ export class ExcelService {
   async importInventory(
     fileBuffer: Buffer,
     store: 'Delhi' | 'Bengaluru',
-    userId: string
+    userId: string,
+    organizationId: string = 'BHEL'
   ): Promise<ImportSummary> {
     const workbook = xlsx.read(fileBuffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
@@ -62,13 +63,13 @@ export class ExcelService {
           return null;
         };
 
-        const productName = getVal(row, 'Spare Item', 'Part Name', 'Product Name', 'Description');
+        const productName = getVal(row, 'Spare Item', 'Part Name', 'Product Name', 'Description', 'Item Name');
         const oemName = (getVal(row, 'OEM', 'Manufacturer') || 'Generic').toString().trim();
-        const partCode = (getVal(row, 'Spare Part Code', 'Part Code', 'Part Number') || '').toString().trim();
+        const partCode = (getVal(row, 'Spare Part Code', 'Part Code', 'Part Number', 'Item Code') || '').toString().trim();
         const serialNumber = getVal(row, 'Serial Number', 'Serial No', 'S/N', 'Serial Number ');
         const qtyRaw = parseInt(getVal(row, 'Quantity', 'Qty') || '1', 10);
         const quantity = isNaN(qtyRaw) || qtyRaw < 1 ? 1 : qtyRaw;
-        const locationName = getVal(row, 'Warehouse Location', 'Location') || store;
+        const locationName = getVal(row, 'Warehouse Location', 'Location', 'Store Location') || store;
         const description = getVal(row, 'Description', 'Remarks') || productName;
         const model = getVal(row, 'Model') || partCode;
 
@@ -106,33 +107,57 @@ export class ExcelService {
         const isSerialized = !isBatchOrDummySerial(serialNumber);
         const cleanSerial = isSerialized ? serialNumber.toString().trim() : null;
 
-        // Check if item already exists by Serial Number or Part Code + Product Name + Store
+        // UPSERT MATCH CHECK:
+        // Match by cleanSerial OR (partCode + store/location + organizationId)
         let existingItem = null;
         if (cleanSerial) {
-          existingItem = await prisma.inventoryItem.findUnique({
-            where: { serialNumber: cleanSerial },
-          });
-        } else if (partCode) {
           existingItem = await prisma.inventoryItem.findFirst({
             where: {
-              productName: productName.toString().trim(),
+              serialNumber: cleanSerial,
+              isDeleted: false,
+              OR: [{ organizationId }, { organizationId: null }],
+            },
+          });
+        }
+        
+        if (!existingItem && partCode) {
+          existingItem = await prisma.inventoryItem.findFirst({
+            where: {
               partCode,
               store,
               isDeleted: false,
+              OR: [{ organizationId }, { organizationId: null }],
+            },
+          });
+        }
+
+        if (!existingItem && productName) {
+          existingItem = await prisma.inventoryItem.findFirst({
+            where: {
+              productName: productName.toString().trim(),
+              store,
+              isDeleted: false,
+              OR: [{ organizationId }, { organizationId: null }],
             },
           });
         }
 
         if (existingItem) {
-          // Update existing item stock
-          const newQty = existingItem.quantity + quantity;
-          const newAvail = existingItem.availableQuantity + quantity;
+          // UPSERT MATCH FOUND: Update existing record values & set/overwrite quantities
+          const newQty = quantity;
+          const currentIssued = existingItem.quantity - existingItem.availableQuantity;
+          const newAvail = Math.max(0, newQty - currentIssued);
 
           await prisma.inventoryItem.update({
             where: { id: existingItem.id },
             data: {
+              productName: productName.toString().trim(),
+              description: description ? description.toString().trim() : existingItem.description,
+              model: model ? model.toString().trim() : existingItem.model,
+              oemId: oem.id,
               quantity: newQty,
               availableQuantity: newAvail,
+              organizationId: existingItem.organizationId || organizationId || 'BHEL',
               updatedById: userId,
             },
           });
@@ -145,13 +170,13 @@ export class ExcelService {
               previousStock: existingItem.availableQuantity,
               newStock: newAvail,
               performedById: userId,
-              remarks: `Excel import quantity addition (${store})`,
+              remarks: `Excel UPSERT stock update (${store})`,
             },
           });
 
           summary.updated++;
         } else {
-          // Create new spare item
+          // UPSERT NO MATCH FOUND: Insert new record
           count++;
           const prefix = store === 'Bengaluru' ? 'PDS-BLR' : 'PDS-DEL';
           const spareId = `${prefix}-${new Date().getFullYear()}-${String(count).padStart(5, '0')}`;
@@ -172,6 +197,7 @@ export class ExcelService {
               availableQuantity: quantity,
               unit: 'PCS',
               store,
+              organizationId: organizationId || 'BHEL',
               locationId: location ? location.id : null,
               status: 'AVAILABLE',
               qrCode,
@@ -203,9 +229,10 @@ export class ExcelService {
     await prisma.activityLog.create({
       data: {
         userId,
+        organizationId: organizationId || 'BHEL',
         action: 'IMPORT',
         entity: 'Inventory',
-        entityLabel: `${store} Store Excel Import (${summary.imported} imported, ${summary.updated} updated)`,
+        entityLabel: `${store} Store Excel UPSERT Import (${summary.imported} imported, ${summary.updated} updated)`,
         newValue: JSON.stringify(summary),
       },
     });

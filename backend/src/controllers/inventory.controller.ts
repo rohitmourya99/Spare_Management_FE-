@@ -39,7 +39,8 @@ export class InventoryController {
   }
 
   async create(req: Request, res: Response): Promise<void> {
-    const item = await inventoryService.create(req.body, req.user!.userId);
+    const orgId = extractOrgId(req);
+    const item = await inventoryService.create(req.body, req.user!.userId, orgId);
     ApiResponse.created(res, item, 'Inventory item created');
   }
 

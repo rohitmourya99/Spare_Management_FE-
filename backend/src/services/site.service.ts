@@ -62,7 +62,8 @@ export class SiteService {
       .filter(Boolean)
       .join(', ');
 
-    const newSite = await prisma.site.create({ data: { ...data, fullAddress, organizationId: organizationId || 'BHEL' } });
+    const targetOrgId = (data as any).organizationId || organizationId || 'BHEL';
+    const newSite = await prisma.site.create({ data: { ...data, fullAddress, organizationId: targetOrgId } });
 
     if (userId) {
       await activityService.logActivity({

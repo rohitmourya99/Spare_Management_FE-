@@ -36,9 +36,10 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [isLoadingOrgs, setIsLoadingOrgs] = useState<boolean>(false);
 
   const setSelectedOrg = (orgId: string) => {
-    setSelectedOrgState(orgId);
-    localStorage.setItem('selected_organization', orgId);
-    // Reload window to trigger clean re-fetch across all active query components
+    if (!orgId || !orgId.trim()) return;
+    const cleanOrg = orgId.trim();
+    setSelectedOrgState(cleanOrg);
+    localStorage.setItem('selected_organization', cleanOrg);
     window.location.reload();
   };
 

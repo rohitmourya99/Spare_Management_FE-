@@ -34,6 +34,7 @@ export interface CreateInventoryDto {
   quantity: number;
   unit?: string;
   store?: string;
+  organizationId?: string;
   locationId?: string;
   rack?: string;
   bin?: string;
@@ -165,7 +166,8 @@ export class InventoryService {
   /**
    * Create new inventory item
    */
-  async create(data: CreateInventoryDto, userId: string) {
+  async create(data: CreateInventoryDto, userId: string, organizationId: string = 'BHEL') {
+    const targetOrgId = data.organizationId || organizationId || 'BHEL';
     const count = await prisma.inventoryItem.count();
     const prefix = data.store === 'Bengaluru' ? 'PDS-BLR' : 'PDS-DEL';
     const spareId = `${prefix}-${new Date().getFullYear()}-${String(count + 1).padStart(5, '0')}`;
@@ -208,6 +210,7 @@ export class InventoryService {
         availableQuantity: quantity,
         unit: data.unit || 'PCS',
         store: data.store || 'Delhi',
+        organizationId: targetOrgId,
         locationId: data.locationId || null,
         rack: data.rack,
         bin: data.bin,

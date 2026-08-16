@@ -56,6 +56,9 @@ export class InventoryController {
 
   async getDashboardStats(req: Request, res: Response): Promise<void> {
     try {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
       const orgId = extractOrgId(req);
       const stats = await inventoryService.getDashboardStats(orgId);
       res.status(200).json({ success: true, data: stats });

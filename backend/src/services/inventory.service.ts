@@ -423,6 +423,11 @@ export class InventoryService {
     try {
       const orgFilter = buildOrgFilter(organizationId);
       const baseWhere: Prisma.InventoryItemWhereInput = { isDeleted: false, AND: [orgFilter] };
+      const activeStockWhere: Prisma.InventoryItemWhereInput = {
+        isDeleted: false,
+        status: { notIn: ['DISPATCHED', 'REMOVED', 'CONSUMED'] },
+        AND: [orgFilter],
+      };
       const stockAnalysis = await this.calculatePartCodeLowStock(organizationId).catch(() => ({
         lowStockCount: 0,
         outOfStockCount: 0,
@@ -451,14 +456,15 @@ export class InventoryService {
         failedLoginAttemptsCount,
         recentInventoryUpdates,
       ] = await Promise.all([
-        prisma.inventoryItem.count({ where: baseWhere }).catch(() => 0),
-        prisma.inventoryItem.count({ where: { isDeleted: false, isSerialized: true, AND: [orgFilter] } }).catch(() => 0),
-        prisma.inventoryItem.count({ where: { isDeleted: false, isSerialized: false, AND: [orgFilter] } }).catch(() => 0),
+        prisma.inventoryItem.count({ where: activeStockWhere }).catch(() => 0),
+        prisma.inventoryItem.count({ where: { ...activeStockWhere, isSerialized: true } }).catch(() => 0),
+        prisma.inventoryItem.count({ where: { ...activeStockWhere, isSerialized: false } }).catch(() => 0),
         prisma.oEM.count({ where: { isActive: true } }).catch(() => 0),
 
         prisma.inventoryItem.findMany({
           where: {
             isDeleted: false,
+            status: { notIn: ['DISPATCHED', 'REMOVED', 'CONSUMED'] },
             AND: [
               orgFilter,
               {
@@ -475,6 +481,7 @@ export class InventoryService {
         prisma.inventoryItem.findMany({
           where: {
             isDeleted: false,
+            status: { notIn: ['DISPATCHED', 'REMOVED', 'CONSUMED'] },
             AND: [
               orgFilter,
               {
@@ -516,7 +523,7 @@ export class InventoryService {
         // OEM distribution
         prisma.inventoryItem.groupBy({
           by: ['oemId'],
-          where: baseWhere,
+          where: activeStockWhere,
           _count: { id: true },
           _sum: { quantity: true },
         }).catch(() => []),
@@ -538,17 +545,16 @@ export class InventoryService {
         }).catch(() => []),
       ]);
 
-      // Calculate Delhi store metrics
-      let delhiTotalStock = 0;
+      // Calculate Delhi store metrics (AVAILABLE + RESERVED only)
       let delhiAvailable = 0;
       let delhiReserved = 0;
       for (const item of (delhiStats as any[])) {
+        if (['DISPATCHED', 'REMOVED', 'CONSUMED'].includes(item.status)) continue;
         const qty = item.quantity || 1;
-        delhiTotalStock += qty;
         if (item.isSerialized) {
           if (item.status === 'AVAILABLE') {
             delhiAvailable += 1;
-          } else {
+          } else if (item.status === 'RESERVED') {
             delhiReserved += 1;
           }
         } else {
@@ -562,18 +568,18 @@ export class InventoryService {
           }
         }
       }
+      const delhiTotalStock = delhiAvailable + delhiReserved;
 
-      // Calculate Bengaluru store metrics
-      let bengaluruTotalStock = 0;
+      // Calculate Bengaluru store metrics (AVAILABLE + RESERVED only)
       let bengaluruAvailable = 0;
       let bengaluruReserved = 0;
       for (const item of (bengaluruStats as any[])) {
+        if (['DISPATCHED', 'REMOVED', 'CONSUMED'].includes(item.status)) continue;
         const qty = item.quantity || 1;
-        bengaluruTotalStock += qty;
         if (item.isSerialized) {
           if (item.status === 'AVAILABLE') {
             bengaluruAvailable += 1;
-          } else {
+          } else if (item.status === 'RESERVED') {
             bengaluruReserved += 1;
           }
         } else {
@@ -587,6 +593,7 @@ export class InventoryService {
           }
         }
       }
+      const bengaluruTotalStock = bengaluruAvailable + bengaluruReserved;
 
       // Format OEM Distribution with names
       const oems = await prisma.oEM.findMany().catch(() => []);

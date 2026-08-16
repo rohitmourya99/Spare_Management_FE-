@@ -86,6 +86,7 @@ export const DashboardPage: React.FC = () => {
       const res = await api.get('/inventory/dashboard-stats');
       return res.data.data;
     },
+    refetchInterval: 10000,
     refetchOnWindowFocus: true,
     refetchOnMount: 'always',
     staleTime: 0,
@@ -116,8 +117,8 @@ export const DashboardPage: React.FC = () => {
       const res = await api.get('/stock/low-stock-details');
       return res.data;
     },
-    refetchInterval: false,
-    refetchOnWindowFocus: false,
+    refetchInterval: 10000,
+    refetchOnWindowFocus: true,
   });
 
   const handleOpenStockModal = (e?: React.MouseEvent) => {
@@ -132,7 +133,8 @@ export const DashboardPage: React.FC = () => {
       const res = await api.get('/inventory?limit=500');
       return Array.isArray(res.data?.data) ? res.data.data : (res.data?.data?.items || []);
     },
-    refetchInterval: false,
+    refetchInterval: 10000,
+    refetchOnWindowFocus: true,
   });
 
   const { data: dispatchesQueryData } = useQuery({
@@ -310,6 +312,10 @@ export const DashboardPage: React.FC = () => {
       items = items.filter((i: any) => getStoreName(i).includes('delhi'));
     } else if (selectedStore === 'BENGALURU') {
       items = items.filter((i: any) => getStoreName(i).includes('bengaluru') || getStoreName(i).includes('blr'));
+    }
+
+    if (['TOTAL_SPARE_PARTS', 'SERIALIZED_PARTS', 'NON_SERIALIZED', 'DELHI_STORE', 'BENGALURU_STORE', 'PRIMARY_STORE'].includes(activeCardFilter)) {
+      items = items.filter((i: any) => i.status !== 'DISPATCHED' && i.status !== 'REMOVED' && i.status !== 'CONSUMED');
     }
 
     switch (activeCardFilter) {

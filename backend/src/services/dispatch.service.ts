@@ -4,6 +4,7 @@ import { prisma } from '../config/database';
 import { AppError } from '../middleware/error.middleware';
 import { parsePagination, buildPagination } from '../utils/response.util';
 import { activityService } from './activity.service';
+import { buildOrgFilter } from '../utils/orgFilter.util';
 
 export interface CreateDispatchDto {
   inventoryItemId?: string;
@@ -39,19 +40,22 @@ export class DispatchService {
     limit?: string;
   }, organizationId: string = 'BHEL') {
     const { page, limit, skip } = parsePagination(filters);
-    const where: Prisma.DispatchWhereInput = { organizationId };
+    const orgFilter = buildOrgFilter(organizationId);
+    const where: Prisma.DispatchWhereInput = { AND: [orgFilter] };
 
     if (filters.status) where.status = filters.status;
     if (filters.siteId) where.siteId = filters.siteId;
     if (filters.search) {
-      where.OR = [
-        { dispatchNo: { contains: filters.search } },
-        { trackingNo: { contains: filters.search } },
-        { site: { siteName: { contains: filters.search } } },
-        { inventoryItem: { productName: { contains: filters.search } } },
-        { buildingName: { contains: filters.search } },
-        { roomId: { contains: filters.search } },
-      ];
+      (where.AND as any[]).push({
+        OR: [
+          { dispatchNo: { contains: filters.search } },
+          { trackingNo: { contains: filters.search } },
+          { site: { siteName: { contains: filters.search } } },
+          { inventoryItem: { productName: { contains: filters.search } } },
+          { buildingName: { contains: filters.search } },
+          { roomId: { contains: filters.search } },
+        ],
+      });
     }
 
     const [dispatches, total] = await Promise.all([

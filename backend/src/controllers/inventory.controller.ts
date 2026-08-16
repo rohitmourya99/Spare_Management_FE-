@@ -6,10 +6,11 @@ import { ApiResponse } from '../utils/response.util';
 import { exportToExcel, exportToCSV, exportInventoryToPDF, formatInventoryForExport } from '../utils/export.util';
 import { prisma } from '../config/database';
 import { AppError } from '../middleware/error.middleware';
+import { extractOrgId } from '../utils/orgFilter.util';
 
 export class InventoryController {
   async getAll(req: Request, res: Response): Promise<void> {
-    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
+    const orgId = extractOrgId(req);
     const result = await inventoryService.getAll(req.query as any, orgId);
     ApiResponse.paginated(res, result.items, result.pagination);
   }
@@ -53,13 +54,13 @@ export class InventoryController {
   }
 
   async getDashboardStats(req: Request, res: Response): Promise<void> {
-    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
+    const orgId = extractOrgId(req);
     const stats = await inventoryService.getDashboardStats(orgId);
     ApiResponse.success(res, stats);
   }
 
   async getStockAlerts(req: Request, res: Response): Promise<void> {
-    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
+    const orgId = extractOrgId(req);
     const alerts = await inventoryService.getStockAlerts(orgId);
     res.status(200).json({
       success: true,
@@ -68,7 +69,7 @@ export class InventoryController {
   }
 
   async getDynamicLowStockDetails(req: Request, res: Response): Promise<void> {
-    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
+    const orgId = extractOrgId(req);
     const details = await inventoryService.getDynamicLowStockDetails(orgId);
     res.status(200).json(details);
   }
@@ -106,13 +107,13 @@ export class InventoryController {
   }
 
   async getLocationInventories(req: Request, res: Response): Promise<void> {
-    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
+    const orgId = extractOrgId(req);
     const result = await inventoryService.getLocationInventories(req.query as any, orgId);
     ApiResponse.paginated(res, result.items, result.pagination);
   }
 
   async getReplacementAuditLogs(req: Request, res: Response): Promise<void> {
-    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
+    const orgId = extractOrgId(req);
     const result = await inventoryService.getReplacementAuditLogs(req.query as any, orgId);
     ApiResponse.paginated(res, result.logs, result.pagination);
   }
@@ -182,7 +183,7 @@ export class InventoryController {
   }
 
   async getLocationHierarchy(req: Request, res: Response): Promise<void> {
-    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
+    const orgId = extractOrgId(req);
     const hierarchy = await inventoryService.getLocationHierarchy(orgId);
     ApiResponse.success(res, hierarchy);
   }
@@ -199,25 +200,28 @@ export class InventoryController {
 
   // Exports
   async exportExcel(req: Request, res: Response): Promise<void> {
-    const { items } = await inventoryService.getAll({ ...req.query as any, limit: '10000' });
+    const orgId = extractOrgId(req);
+    const { items } = await inventoryService.getAll({ ...req.query as any, limit: '10000' }, orgId);
     const formatted = formatInventoryForExport(items);
     exportToExcel(res, formatted, 'Inventory', `Spare_Inventory_${new Date().toISOString().split('T')[0]}`);
   }
 
   async exportCSV(req: Request, res: Response): Promise<void> {
-    const { items } = await inventoryService.getAll({ ...req.query as any, limit: '10000' });
+    const orgId = extractOrgId(req);
+    const { items } = await inventoryService.getAll({ ...req.query as any, limit: '10000' }, orgId);
     const formatted = formatInventoryForExport(items);
     exportToCSV(res, formatted, `Spare_Inventory_${new Date().toISOString().split('T')[0]}`);
   }
 
   async exportPDF(req: Request, res: Response): Promise<void> {
-    const { items } = await inventoryService.getAll({ ...req.query as any, limit: '10000' });
+    const orgId = extractOrgId(req);
+    const { items } = await inventoryService.getAll({ ...req.query as any, limit: '10000' }, orgId);
     exportInventoryToPDF(res, items, 'Spare Parts Inventory Report', `Spare_Inventory_${new Date().toISOString().split('T')[0]}`);
   }
 
   // Master data endpoints
   async getOEMs(req: Request, res: Response): Promise<void> {
-    const orgId = (req.query.organizationId as string) || req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
+    const orgId = extractOrgId(req);
 
     const oems = await prisma.oEM.findMany({
       where: {

@@ -11,11 +11,12 @@ import { ApiResponse } from '../utils/response.util';
 import { AppError } from '../middleware/error.middleware';
 import { UserRole } from '../types';
 import { exportToCSV, exportToExcel } from '../utils/export.util';
+import { extractOrgId } from '../utils/orgFilter.util';
 
 // Dispatch Controller
 export class DispatchController {
   async getAll(req: Request, res: Response) {
-    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
+    const orgId = extractOrgId(req);
     const result = await dispatchService.getAll(req.query as any, orgId);
     ApiResponse.paginated(res, result.dispatches, result.pagination);
   }
@@ -54,7 +55,7 @@ export class DispatchController {
 // Pickup Controller
 export class PickupController {
   async getAll(req: Request, res: Response) {
-    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
+    const orgId = extractOrgId(req);
     const result = await pickupService.getAll(req.query as any, orgId);
     ApiResponse.paginated(res, result.pickups, result.pagination);
   }
@@ -115,13 +116,13 @@ export class RMAController {
 // Site Controller
 export class SiteController {
   async getAll(req: Request, res: Response) {
-    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
+    const orgId = extractOrgId(req);
     const result = await siteService.getAll(req.query as any, orgId);
     ApiResponse.paginated(res, result.sites, result.pagination);
   }
 
   async getDropdown(req: Request, res: Response) {
-    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
+    const orgId = extractOrgId(req);
     const sites = await siteService.getAll_dropdown(orgId);
     ApiResponse.success(res, sites);
   }
@@ -132,7 +133,7 @@ export class SiteController {
   }
 
   async create(req: Request, res: Response) {
-    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
+    const orgId = extractOrgId(req);
     const site = await siteService.create(req.body, req.user?.userId, orgId);
     ApiResponse.created(res, site, 'Site created');
   }
@@ -166,7 +167,7 @@ export class ReportsController {
   async generateReport(req: Request, res: Response) {
     const { type, format } = req.query as { type: string; format: 'excel' | 'pdf' | 'csv' };
     if (!type) throw new AppError(400, 'Report type is required');
-    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
+    const orgId = extractOrgId(req);
 
     if (format) {
       if (req.user?.role === UserRole.ENGINEER) {
@@ -194,7 +195,7 @@ export class ReportsController {
    */
   async generateNamedReport(req: Request, res: Response, reportType: string) {
     const { format } = req.query as { format?: 'excel' | 'pdf' | 'csv' };
-    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
+    const orgId = extractOrgId(req);
 
     if (format) {
       if (req.user?.role === UserRole.ENGINEER) {
@@ -220,7 +221,7 @@ export class ReportsController {
 // User Controller
 export class UserController {
   async getAll(req: Request, res: Response) {
-    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
+    const orgId = extractOrgId(req);
     const result = await userService.getAll(req.query as any, req.user?.role as any, orgId);
     ApiResponse.paginated(res, result.users, result.pagination);
   }
@@ -276,7 +277,7 @@ export class ActivityController {
       ApiResponse.forbidden(res, 'Read Only users cannot access Activity Logs');
       return;
     }
-    const orgId = req.organizationId || (req.headers['x-organization-id'] as string) || 'BHEL';
+    const orgId = extractOrgId(req);
     const result = await activityService.getAll(req.query as any, req.user as any, orgId);
     ApiResponse.paginated(res, result.logs, result.pagination);
   }

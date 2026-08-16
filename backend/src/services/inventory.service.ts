@@ -6,6 +6,7 @@ import { parsePagination, buildPagination } from '../utils/response.util';
 import { generateQRCode } from '../utils/qrcode.util';
 import { isBatchOrDummySerial } from '../utils/export.util';
 import { activityService } from './activity.service';
+import { buildOrgFilter } from '../utils/orgFilter.util';
 
 export interface InventoryFilters {
   search?: string;
@@ -49,23 +50,26 @@ export class InventoryService {
    */
   async getAll(filters: InventoryFilters, organizationId: string = 'BHEL') {
     const { page, limit, skip } = parsePagination(filters);
+    const orgFilter = buildOrgFilter(organizationId);
     const where: Prisma.InventoryItemWhereInput = {
       isDeleted: false,
-      organizationId,
+      AND: [orgFilter],
     };
 
     if (filters.search) {
-      where.OR = [
-        { spareId: { contains: filters.search } },
-        { productName: { contains: filters.search } },
-        { model: { contains: filters.search } },
-        { partId: { contains: filters.search } },
-        { partCode: { contains: filters.search } },
-        { serialNumber: { contains: filters.search } },
-        { oem: { name: { contains: filters.search } } },
-        { category: { name: { contains: filters.search } } },
-        { description: { contains: filters.search } },
-      ];
+      (where.AND as any[]).push({
+        OR: [
+          { spareId: { contains: filters.search } },
+          { productName: { contains: filters.search } },
+          { model: { contains: filters.search } },
+          { partId: { contains: filters.search } },
+          { partCode: { contains: filters.search } },
+          { serialNumber: { contains: filters.search } },
+          { oem: { name: { contains: filters.search } } },
+          { category: { name: { contains: filters.search } } },
+          { description: { contains: filters.search } },
+        ],
+      });
     }
 
     if (filters.oemId) where.oemId = filters.oemId;
@@ -382,8 +386,8 @@ export class InventoryService {
    * Comprehensive Dashboard Statistics with Part Code 50% Threshold Low Stock Rule
    */
   async getDashboardStats(organizationId: string = 'BHEL') {
-    const orgWhere = { organizationId };
-    const baseWhere: Prisma.InventoryItemWhereInput = { isDeleted: false, organizationId };
+    const orgFilter = buildOrgFilter(organizationId);
+    const baseWhere: Prisma.InventoryItemWhereInput = { isDeleted: false, AND: [orgFilter] };
     const stockAnalysis = await this.calculatePartCodeLowStock(organizationId);
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
@@ -408,28 +412,28 @@ export class InventoryService {
       failedLoginAttemptsCount,
       recentInventoryUpdates,
     ] = await Promise.all([
-      prisma.inventoryItem.count({ where: { isDeleted: false, organizationId } }),
-      prisma.inventoryItem.count({ where: { isDeleted: false, isSerialized: true, organizationId } }),
-      prisma.inventoryItem.count({ where: { isDeleted: false, isSerialized: false, organizationId } }),
+      prisma.inventoryItem.count({ where: baseWhere }),
+      prisma.inventoryItem.count({ where: { isDeleted: false, isSerialized: true, AND: [orgFilter] } }),
+      prisma.inventoryItem.count({ where: { isDeleted: false, isSerialized: false, AND: [orgFilter] } }),
       prisma.oEM.count({ where: { isActive: true } }),
 
       // Delhi store stats
       prisma.inventoryItem.aggregate({
-        where: { isDeleted: false, store: 'Delhi', organizationId },
+        where: { isDeleted: false, store: 'Delhi', AND: [orgFilter] },
         _count: { id: true },
         _sum: { quantity: true, availableQuantity: true },
       }),
 
       // Bengaluru store stats
       prisma.inventoryItem.aggregate({
-        where: { isDeleted: false, store: 'Bengaluru', organizationId },
+        where: { isDeleted: false, store: 'Bengaluru', AND: [orgFilter] },
         _count: { id: true },
         _sum: { quantity: true, availableQuantity: true },
       }),
 
       // Recent Dispatches
       prisma.dispatch.findMany({
-        where: { organizationId },
+        where: { AND: [orgFilter] },
         take: 5,
         orderBy: { createdAt: 'desc' },
         include: { inventoryItem: true, site: true, createdBy: { select: { name: true } } },
@@ -437,7 +441,7 @@ export class InventoryService {
 
       // Recent Pickups
       prisma.pickup.findMany({
-        where: { organizationId },
+        where: { AND: [orgFilter] },
         take: 5,
         orderBy: { createdAt: 'desc' },
         include: { inventoryItem: true, site: true, createdBy: { select: { name: true } } },
@@ -445,7 +449,7 @@ export class InventoryService {
 
       // Recent Activity
       prisma.activityLog.findMany({
-        where: { organizationId },
+        where: { AND: [orgFilter] },
         take: 8,
         orderBy: { createdAt: 'desc' },
         include: { user: { select: { name: true, role: true } } },
@@ -454,7 +458,7 @@ export class InventoryService {
       // OEM distribution
       prisma.inventoryItem.groupBy({
         by: ['oemId'],
-        where: { isDeleted: false, organizationId },
+        where: baseWhere,
         _count: { id: true },
         _sum: { quantity: true },
       }),
@@ -463,13 +467,13 @@ export class InventoryService {
       this.getMonthlyStats('pickup', organizationId),
 
       // Phase 3 Activity Metrics
-      prisma.activityLog.count({ where: { organizationId, createdAt: { gte: startOfToday } } }),
-      prisma.activityLog.count({ where: { organizationId } }),
-      prisma.dispatch.count({ where: { organizationId, createdAt: { gte: startOfToday } } }),
-      prisma.pickup.count({ where: { organizationId, createdAt: { gte: startOfToday } } }),
-      prisma.activityLog.count({ where: { organizationId, action: 'Failed Login', createdAt: { gte: startOfToday } } }),
+      prisma.activityLog.count({ where: { AND: [orgFilter], createdAt: { gte: startOfToday } } }),
+      prisma.activityLog.count({ where: { AND: [orgFilter] } }),
+      prisma.dispatch.count({ where: { AND: [orgFilter], createdAt: { gte: startOfToday } } }),
+      prisma.pickup.count({ where: { AND: [orgFilter], createdAt: { gte: startOfToday } } }),
+      prisma.activityLog.count({ where: { AND: [orgFilter], action: 'Failed Login', createdAt: { gte: startOfToday } } }),
       prisma.inventoryItem.findMany({
-        where: { isDeleted: false, organizationId },
+        where: baseWhere,
         orderBy: { updatedAt: 'desc' },
         take: 5,
         include: { oem: true },
@@ -480,9 +484,9 @@ export class InventoryService {
     const oems = await prisma.oEM.findMany();
     const oemMap = new Map(oems.map((o) => [o.id, o.name]));
     const oemDistribution = oemDistributionRaw.map((item) => ({
-      name: oemMap.get(item.oemId) || 'Unknown',
+      name: oemMap.get(item.oemId) || 'Unknown OEM',
       count: item._count.id,
-      totalQuantity: item._sum.quantity || 0,
+      quantity: item._sum.quantity || 0,
     }));
 
     return {
@@ -526,8 +530,9 @@ export class InventoryService {
    * Group active inventory items by Part Code and calculate Part Code level low stock alerts (<= 50% available stock).
    */
   async calculatePartCodeLowStock(organizationId: string = 'BHEL') {
+    const orgFilter = buildOrgFilter(organizationId);
     const activeItems = await prisma.inventoryItem.findMany({
-      where: { isDeleted: false, organizationId },
+      where: { isDeleted: false, AND: [orgFilter] },
       include: { oem: { select: { name: true } } },
     });
 
@@ -630,8 +635,9 @@ export class InventoryService {
    * Get stock alert detailed breakdown for low stock and out of stock items
    */
   async getStockAlerts(organizationId: string = 'BHEL') {
+    const orgFilter = buildOrgFilter(organizationId);
     const activeItems = await prisma.inventoryItem.findMany({
-      where: { isDeleted: false, organizationId },
+      where: { isDeleted: false, AND: [orgFilter] },
       include: { oem: { select: { name: true } }, location: { select: { name: true } } },
     });
 
@@ -659,7 +665,7 @@ export class InventoryService {
     const lowStockItems = stockItems.filter((item) => item.quantity > 0 && item.quantity <= item.reorderLevel);
     const outOfStockItems = stockItems.filter((item) => item.quantity === 0);
 
-    const partCodeAnalysis = await this.calculatePartCodeLowStock();
+    const partCodeAnalysis = await this.calculatePartCodeLowStock(organizationId);
 
     return {
       summary: {
@@ -676,8 +682,9 @@ export class InventoryService {
    * Dynamic Real-time Low Stock Breakdown
    */
   async getDynamicLowStockDetails(organizationId: string = 'BHEL') {
+    const orgFilter = buildOrgFilter(organizationId);
     const allStock = await prisma.inventoryItem.findMany({
-      where: { isDeleted: false, organizationId },
+      where: { isDeleted: false, AND: [orgFilter] },
       include: {
         oem: { select: { id: true, name: true } },
         category: { select: { id: true, name: true } },
@@ -733,17 +740,18 @@ export class InventoryService {
   }
 
   private async getMonthlyStats(type: 'dispatch' | 'pickup', organizationId: string = 'BHEL') {
+    const orgFilter = buildOrgFilter(organizationId);
     const months = [];
     for (let i = 5; i >= 0; i--) {
       const date = new Date();
       date.setMonth(date.getMonth() - i);
       const start = new Date(date.getFullYear(), date.getMonth(), 1);
-      const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+      const end = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59);
 
       const count =
         type === 'dispatch'
-          ? await prisma.dispatch.count({ where: { organizationId, createdAt: { gte: start, lte: end } } })
-          : await prisma.pickup.count({ where: { organizationId, createdAt: { gte: start, lte: end } } });
+          ? await prisma.dispatch.count({ where: { AND: [orgFilter], createdAt: { gte: start, lte: end } } })
+          : await prisma.pickup.count({ where: { AND: [orgFilter], createdAt: { gte: start, lte: end } } });
 
       months.push({
         month: start.toLocaleString('default', { month: 'short' }),

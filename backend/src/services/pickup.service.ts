@@ -4,11 +4,12 @@ import { prisma } from '../config/database';
 import { AppError } from '../middleware/error.middleware';
 import { parsePagination, buildPagination } from '../utils/response.util';
 import { activityService } from './activity.service';
+import { buildOrgFilter } from '../utils/orgFilter.util';
 
 export interface CreatePickupDto {
   inventoryItemId: string;
   siteId: string;
-  quantity: number;
+  quantity?: number;
   courierName?: string;
   trackingNo?: string;
   faultDescription?: string;
@@ -37,16 +38,19 @@ export interface OemReceiptDto {
 export class PickupService {
   async getAll(filters: { search?: string; status?: PickupStatus; page?: string; limit?: string }, organizationId: string = 'BHEL') {
     const { page, limit, skip } = parsePagination(filters);
-    const where: Prisma.PickupWhereInput = { organizationId };
+    const orgFilter = buildOrgFilter(organizationId);
+    const where: Prisma.PickupWhereInput = { AND: [orgFilter] };
 
     if (filters.status) where.status = filters.status;
     if (filters.search) {
-      where.OR = [
-        { pickupNo: { contains: filters.search } },
-        { trackingNo: { contains: filters.search } },
-        { site: { siteName: { contains: filters.search } } },
-        { faultDescription: { contains: filters.search } },
-      ];
+      (where.AND as any[]).push({
+        OR: [
+          { pickupNo: { contains: filters.search } },
+          { trackingNo: { contains: filters.search } },
+          { site: { siteName: { contains: filters.search } } },
+          { faultDescription: { contains: filters.search } },
+        ],
+      });
     }
 
     const [pickups, total] = await Promise.all([

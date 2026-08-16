@@ -2,19 +2,23 @@ import { prisma } from '../config/database';
 import { AppError } from '../middleware/error.middleware';
 import { parsePagination, buildPagination } from '../utils/response.util';
 import { activityService } from './activity.service';
+import { buildOrgFilter } from '../utils/orgFilter.util';
 
 export class SiteService {
   async getAll(filters: { search?: string; city?: string; state?: string; page?: string; limit?: string }, organizationId: string = 'BHEL') {
     const { page, limit, skip } = parsePagination(filters);
+    const orgFilter = buildOrgFilter(organizationId);
 
-    const where: any = { organizationId };
+    const where: any = { AND: [orgFilter] };
     if (filters.search) {
-      where.OR = [
-        { siteName: { contains: filters.search } },
-        { city: { contains: filters.search } },
-        { contactPerson: { contains: filters.search } },
-        { pin: { contains: filters.search } },
-      ];
+      where.AND.push({
+        OR: [
+          { siteName: { contains: filters.search } },
+          { city: { contains: filters.search } },
+          { contactPerson: { contains: filters.search } },
+          { pin: { contains: filters.search } },
+        ],
+      });
     }
     if (filters.city) where.city = { contains: filters.city };
     if (filters.state) where.state = { contains: filters.state };
@@ -58,7 +62,7 @@ export class SiteService {
       .filter(Boolean)
       .join(', ');
 
-    const newSite = await prisma.site.create({ data: { ...data, fullAddress, organizationId } });
+    const newSite = await prisma.site.create({ data: { ...data, fullAddress, organizationId: organizationId || 'BHEL' } });
 
     if (userId) {
       await activityService.logActivity({
@@ -132,8 +136,9 @@ export class SiteService {
   }
 
   async getAll_dropdown(organizationId: string = 'BHEL') {
+    const orgFilter = buildOrgFilter(organizationId);
     return await prisma.site.findMany({
-      where: { isActive: true, organizationId },
+      where: { isActive: true, AND: [orgFilter] },
       select: { id: true, siteName: true, city: true, state: true, contactPerson: true, phone: true, email: true, fullAddress: true },
       orderBy: { siteName: 'asc' },
     });

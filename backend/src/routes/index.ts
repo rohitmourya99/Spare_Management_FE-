@@ -432,11 +432,13 @@ syncRoutes.post('/push', async (req, res, next) => {
 // Mount sub-routers
 router.use('/auth', authRoutes);
 router.use('/inventory', inventoryRoutes);
+router.use('/stock-list', inventoryRoutes);
 router.use('/stock', stockRoutes);
 router.use('/dispatch', dispatchRoutes);
 router.use('/pickup', pickupRoutes);
 router.use('/rma', rmaRoutes);
 router.use('/sites', siteRoutes);
+router.use('/site-master', siteRoutes);
 router.use('/reports', reportsRoutes);
 router.use('/users', userRoutes);
 router.use('/activity', activityRoutes);

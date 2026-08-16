@@ -1,12 +1,13 @@
 import { prisma } from '../config/database';
 import { parsePagination, buildPagination } from '../utils/response.util';
 import { UserRole } from '../types';
+import { buildOrgFilter } from '../utils/orgFilter.util';
 
-export interface CreateActivityLogDTO {
+export interface LogActivityDto {
   userId: string;
   userName?: string;
   userRole?: string;
-  module: 'Inventory' | 'Dispatch' | 'Pickup' | 'Reports' | 'Import' | 'Site Master' | 'User Management' | 'Authentication' | string;
+  module?: string;
   action: string;
   entity?: string;
   entityId?: string;
@@ -23,30 +24,22 @@ export interface CreateActivityLogDTO {
 
 export class ActivityService {
   /**
-   * Automatically Log Activity
+   * Log an activity in the audit trail
    */
-  async logActivity(data: CreateActivityLogDTO) {
+  async logActivity(data: LogActivityDto): Promise<void> {
     try {
-      // Lookup user name/role if omitted
-      let uName = data.userName;
-      let uRole = data.userRole;
-      if ((!uName || !uRole) && data.userId) {
-        const u = await prisma.user.findUnique({
-          where: { id: data.userId },
-          select: { name: true, role: true },
-        });
-        if (u) {
-          uName = uName || u.name;
-          uRole = uRole || u.role;
-        }
-      }
+      const user = await prisma.user.findUnique({
+        where: { id: data.userId },
+        select: { name: true, role: true, organizationId: true },
+      });
 
-      return await prisma.activityLog.create({
+      await prisma.activityLog.create({
         data: {
           userId: data.userId,
-          userName: uName || 'System User',
-          userRole: uRole || 'SYSTEM',
-          module: data.module,
+          userName: data.userName || user?.name || 'System User',
+          userRole: data.userRole || user?.role || 'SYSTEM',
+          organizationId: user?.organizationId || 'BHEL',
+          module: data.module || 'System',
           action: data.action,
           entity: data.entity || data.module,
           entityId: data.entityId,
@@ -61,14 +54,13 @@ export class ActivityService {
           userAgent: data.userAgent,
         },
       });
-    } catch (e) {
-      console.error('Failed to log activity:', e);
-      return null;
+    } catch (error) {
+      console.error('Failed to log activity:', error);
     }
   }
 
   /**
-   * Fetch Activity Logs with RBAC Visibility and Filters
+   * Get activity logs with filters and pagination
    */
   async getAll(
     filters: {
@@ -79,9 +71,11 @@ export class ActivityService {
       partCode?: string;
       serialNumber?: string;
       site?: string;
-      search?: string;
+      startDate?: string;
+      endDate?: string;
       from?: string;
       to?: string;
+      search?: string;
       page?: string;
       limit?: string;
     },
@@ -89,7 +83,8 @@ export class ActivityService {
     organizationId: string = 'BHEL'
   ) {
     const { page, limit, skip } = parsePagination(filters);
-    const where: any = { organizationId };
+    const orgFilter = buildOrgFilter(organizationId);
+    const where: any = { AND: [orgFilter] };
 
     // RBAC Access Control Scoping
     if (currentUser.role === UserRole.ENGINEER) {
@@ -110,21 +105,25 @@ export class ActivityService {
     if (filters.site) where.siteName = { contains: filters.site };
 
     if (filters.search) {
-      where.OR = [
-        { userName: { contains: filters.search } },
-        { action: { contains: filters.search } },
-        { module: { contains: filters.search } },
-        { entityLabel: { contains: filters.search } },
-        { partCode: { contains: filters.search } },
-        { serialNumber: { contains: filters.search } },
-        { siteName: { contains: filters.search } },
-      ];
+      where.AND.push({
+        OR: [
+          { userName: { contains: filters.search } },
+          { action: { contains: filters.search } },
+          { module: { contains: filters.search } },
+          { entityLabel: { contains: filters.search } },
+          { partCode: { contains: filters.search } },
+          { serialNumber: { contains: filters.search } },
+          { siteName: { contains: filters.search } },
+        ],
+      });
     }
 
-    if (filters.from || filters.to) {
+    const fromDate = filters.from || filters.startDate;
+    const toDate = filters.to || filters.endDate;
+    if (fromDate || toDate) {
       where.createdAt = {};
-      if (filters.from) where.createdAt.gte = new Date(filters.from);
-      if (filters.to) where.createdAt.lte = new Date(filters.to);
+      if (fromDate) where.createdAt.gte = new Date(fromDate);
+      if (toDate) where.createdAt.lte = new Date(toDate);
     }
 
     const [logs, total] = await Promise.all([

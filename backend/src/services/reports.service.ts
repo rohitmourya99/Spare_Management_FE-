@@ -2,6 +2,7 @@ import { prisma } from '../config/database';
 import { exportToExcel, exportToCSV, exportInventoryToPDF, isBatchOrDummySerial } from '../utils/export.util';
 import { Response } from 'express';
 import { inventoryService } from './inventory.service';
+import { buildOrgFilter } from '../utils/orgFilter.util';
 
 export class ReportsService {
   /**
@@ -9,6 +10,7 @@ export class ReportsService {
    */
   async getReportData(reportType: string, filters: any = {}, organizationId: string = 'BHEL') {
     const { store, oemId, startDate, endDate } = filters;
+    const orgFilter = buildOrgFilter(organizationId);
 
     const dateFilter: any = {};
     if (startDate) dateFilter.gte = new Date(startDate);
@@ -16,7 +18,7 @@ export class ReportsService {
 
     switch (reportType) {
       case 'inventory': {
-        const where: any = { isDeleted: false, organizationId };
+        const where: any = { isDeleted: false, AND: [orgFilter] };
         if (store) where.store = store;
         if (oemId) where.oemId = oemId;
         const items = await prisma.inventoryItem.findMany({
@@ -43,7 +45,7 @@ export class ReportsService {
       }
 
       case 'dispatch': {
-        const where: any = { organizationId };
+        const where: any = { AND: [orgFilter] };
         if (startDate || endDate) where.createdAt = dateFilter;
         const dispatches = await prisma.dispatch.findMany({
           where,
@@ -81,7 +83,7 @@ export class ReportsService {
       }
 
       case 'pickup': {
-        const where: any = { organizationId };
+        const where: any = { AND: [orgFilter] };
         if (startDate || endDate) where.createdAt = dateFilter;
         const pickups = await prisma.pickup.findMany({
           where,
@@ -109,7 +111,7 @@ export class ReportsService {
       }
 
       case 'movement': {
-        const where: any = { organizationId };
+        const where: any = { AND: [orgFilter] };
         if (startDate || endDate) where.createdAt = dateFilter;
         const movements = await prisma.inventoryMovement.findMany({
           where,
@@ -148,7 +150,7 @@ export class ReportsService {
       case 'oem': {
         const oems = await prisma.oEM.findMany({
           include: {
-            items: { where: { isDeleted: false } },
+            items: { where: { isDeleted: false, AND: [orgFilter] } },
           },
         });
         return oems.map((o) => {
@@ -169,7 +171,7 @@ export class ReportsService {
       }
 
       case 'activity': {
-        const where: any = { organizationId };
+        const where: any = { AND: [orgFilter] };
         if (startDate || endDate) where.createdAt = dateFilter;
         const logs = await prisma.activityLog.findMany({
           where,
@@ -188,7 +190,7 @@ export class ReportsService {
       }
 
       case 'swap_tracking': {
-        const where: any = { organizationId };
+        const where: any = { AND: [orgFilter] };
         if (startDate || endDate) where.swappedAt = dateFilter;
         if (filters.building) where.buildingName = { contains: filters.building };
         if (filters.partId) where.partId = { contains: filters.partId };
@@ -235,7 +237,7 @@ export class ReportsService {
 
       case 'comments': {
         const comments = await prisma.comment.findMany({
-          where: { inventoryItem: { organizationId } },
+          where: { inventoryItem: { AND: [orgFilter] } },
           include: {
             inventoryItem: true,
             user: true,
@@ -254,7 +256,7 @@ export class ReportsService {
 
       case 'site_wise': {
         const sites = await prisma.site.findMany({
-          where: { organizationId },
+          where: { AND: [orgFilter] },
           include: {
             dispatches: { include: { inventoryItem: true } },
             pickups: { include: { inventoryItem: true } },
@@ -272,17 +274,17 @@ export class ReportsService {
 
       case 'store_wise': {
         const delhiCount = await prisma.inventoryItem.count({
-          where: { store: 'Delhi', isDeleted: false, organizationId },
+          where: { store: 'Delhi', isDeleted: false, AND: [orgFilter] },
         });
         const delhiQty = await prisma.inventoryItem.aggregate({
-          where: { store: 'Delhi', isDeleted: false, organizationId },
+          where: { store: 'Delhi', isDeleted: false, AND: [orgFilter] },
           _sum: { quantity: true, availableQuantity: true },
         });
         const blrCount = await prisma.inventoryItem.count({
-          where: { store: 'Bengaluru', isDeleted: false, organizationId },
+          where: { store: 'Bengaluru', isDeleted: false, AND: [orgFilter] },
         });
         const blrQty = await prisma.inventoryItem.aggregate({
-          where: { store: 'Bengaluru', isDeleted: false, organizationId },
+          where: { store: 'Bengaluru', isDeleted: false, AND: [orgFilter] },
           _sum: { quantity: true, availableQuantity: true },
         });
 
@@ -306,6 +308,7 @@ export class ReportsService {
         const where: any = {
           isDeleted: false,
           availableQuantity: 0,
+          AND: [orgFilter],
         };
         if (store) where.store = store;
         const items = await prisma.inventoryItem.findMany({
@@ -330,6 +333,7 @@ export class ReportsService {
 
       case 'site_master': {
         const sites = await prisma.site.findMany({
+          where: { AND: [orgFilter] },
           orderBy: { siteName: 'asc' },
         });
         return sites.map((s) => ({
@@ -361,6 +365,7 @@ export class ReportsService {
               gte: now,
               lte: cutoff,
             },
+            AND: [orgFilter],
           },
           include: { oem: true, category: true, location: true },
           orderBy: { warrantyEnd: 'asc' },

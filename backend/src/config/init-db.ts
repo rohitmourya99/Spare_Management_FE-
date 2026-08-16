@@ -5,6 +5,8 @@ import xlsx from 'xlsx';
 import path from 'path';
 import fs from 'fs';
 
+import { patchLegacyOrganizationRecords } from '../utils/patchLegacyOrg';
+
 function getRowValue(row: Record<string, any>, ...possibleKeys: string[]): any {
   const rowKeys = Object.keys(row);
   for (const pKey of possibleKeys) {
@@ -23,24 +25,7 @@ function getRowValue(row: Record<string, any>, ...possibleKeys: string[]): any {
 export async function ensureDatabaseSeeded(): Promise<void> {
   try {
     // 0. Seed & Tag Default Organization (BHEL)
-    try {
-      await prisma.organization.upsert({
-        where: { id: 'BHEL' },
-        update: { name: 'BHEL', code: 'BHEL', status: 'ACTIVE' },
-        create: { id: 'BHEL', name: 'BHEL', code: 'BHEL', status: 'ACTIVE' },
-      }).catch(() => {});
-
-      await prisma.user.updateMany({ where: { organizationId: null }, data: { organizationId: 'BHEL' } }).catch(() => {});
-      await prisma.inventoryItem.updateMany({ where: { organizationId: null }, data: { organizationId: 'BHEL' } }).catch(() => {});
-      await prisma.location.updateMany({ where: { organizationId: null }, data: { organizationId: 'BHEL' } }).catch(() => {});
-      await prisma.site.updateMany({ where: { organizationId: null }, data: { organizationId: 'BHEL' } }).catch(() => {});
-      await prisma.dispatch.updateMany({ where: { organizationId: null }, data: { organizationId: 'BHEL' } }).catch(() => {});
-      await prisma.pickup.updateMany({ where: { organizationId: null }, data: { organizationId: 'BHEL' } }).catch(() => {});
-      await prisma.activityLog.updateMany({ where: { organizationId: null }, data: { organizationId: 'BHEL' } }).catch(() => {});
-      logger.info('🏢 Default Organization [BHEL] seeded and verified.');
-    } catch (orgErr) {
-      logger.warn('Organization init notice:', orgErr);
-    }
+    await patchLegacyOrganizationRecords();
 
     // 1. Ensure Default Users (Admin@123, Inv@123, Eng@123, View@123)
     const hashedAdmin = await bcrypt.hash('Admin@123', 10);
@@ -143,6 +128,7 @@ export async function ensureDatabaseSeeded(): Promise<void> {
               contactPerson: getRowValue(row, 'Contact Person Name') || '',
               phone: (getRowValue(row, 'Contact Number', 'Phone') || '').toString(),
               email: getRowValue(row, 'Email') || '',
+              organizationId: 'BHEL',
             },
           });
         }
@@ -205,6 +191,7 @@ export async function ensureDatabaseSeeded(): Promise<void> {
               bin: (getRowValue(row, 'Bin', 'Bin No') || '').toString() || null,
               status: 'AVAILABLE',
               createdById: superAdmin.id,
+              organizationId: 'BHEL',
             },
           });
         }

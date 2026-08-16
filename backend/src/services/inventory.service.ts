@@ -459,7 +459,11 @@ export class InventoryService {
         prisma.inventoryItem.count({ where: activeStockWhere }).catch(() => 0),
         prisma.inventoryItem.count({ where: { ...activeStockWhere, isSerialized: true } }).catch(() => 0),
         prisma.inventoryItem.count({ where: { ...activeStockWhere, isSerialized: false } }).catch(() => 0),
-        prisma.oEM.count({ where: { isActive: true } }).catch(() => 0),
+        prisma.inventoryItem.findMany({
+          where: { isDeleted: false, AND: [orgFilter] },
+          select: { oemId: true },
+          distinct: ['oemId'],
+        }).catch(() => []),
 
         prisma.inventoryItem.findMany({
           where: {
@@ -468,10 +472,13 @@ export class InventoryService {
             AND: [
               orgFilter,
               {
-                OR: [
-                  { store: { contains: 'Delhi', mode: 'insensitive' } },
-                  { store: { contains: 'Main', mode: 'insensitive' } },
-                ],
+                NOT: {
+                  OR: [
+                    { store: { contains: 'Bengaluru', mode: 'insensitive' } },
+                    { store: { contains: 'Bangalore', mode: 'insensitive' } },
+                    { store: { contains: 'BLR', mode: 'insensitive' } },
+                  ],
+                },
               },
             ],
           },
@@ -609,7 +616,7 @@ export class InventoryService {
           totalSpareParts: totalItems || 0,
           totalSerializedParts: totalSerialized || 0,
           totalNonSerializedParts: totalNonSerialized || 0,
-          totalOEMs: (oemDistributionRaw || []).length,
+          totalOEMs: Math.max((oemCount as any[])?.length || 0, (oemDistributionRaw || []).length),
           delhiTotalStock,
           bengaluruTotalStock,
           lowStockCount: stockAnalysis.lowStockCount || 0,

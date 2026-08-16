@@ -86,7 +86,7 @@ export const DashboardPage: React.FC = () => {
       const res = await api.get('/inventory/dashboard-stats');
       return res.data.data;
     },
-    refetchInterval: 10000,
+    refetchInterval: 5000,
     refetchOnWindowFocus: true,
     refetchOnMount: 'always',
     staleTime: 0,
@@ -117,7 +117,7 @@ export const DashboardPage: React.FC = () => {
       const res = await api.get('/stock/low-stock-details');
       return res.data;
     },
-    refetchInterval: 10000,
+    refetchInterval: 5000,
     refetchOnWindowFocus: true,
   });
 
@@ -133,7 +133,7 @@ export const DashboardPage: React.FC = () => {
       const res = await api.get('/inventory?limit=500');
       return Array.isArray(res.data?.data) ? res.data.data : (res.data?.data?.items || []);
     },
-    refetchInterval: 10000,
+    refetchInterval: 5000,
     refetchOnWindowFocus: true,
   });
 
@@ -743,7 +743,7 @@ export const DashboardPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Top 13 Metric Stat Cards (Interactive 1-Click Filters) */}
+      {/* Top Metric Stat Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
         {topSummaryCards.map((card) => (
           <StatCard
@@ -752,8 +752,6 @@ export const DashboardPage: React.FC = () => {
             value={card.value}
             icon={card.icon}
             color={card.color}
-            isActive={activeCardFilter === card.id}
-            onClick={() => handleCardClick(card.id)}
           />
         ))}
       </div>
@@ -1455,143 +1453,7 @@ export const DashboardPage: React.FC = () => {
             </div>
           </Card>
         )}
-
-        {/* Quick Actions Shortcuts */}
-        <Card title="Quick Tasks" subtitle="Frequently used actions">
-          <div className="grid grid-cols-2 gap-2 mt-1">
-            {quickActions.map((action, idx) => {
-              const Icon = action.icon;
-              return (
-                <Link
-                  key={idx}
-                  to={action.path}
-                  className={`bg-gradient-to-r ${action.gradient} text-white rounded-xl px-3 py-2.5 flex items-center gap-2 text-xs font-bold shadow-md transition-all hover:-translate-y-0.5 active:translate-y-0`}
-                >
-                  <Icon className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">{action.label}</span>
-                </Link>
-              );
-            })}
-          </div>
-        </Card>
       </div>
-
-      {/* Low Stock Alert Bar & Breakdown */}
-      {stockMetrics.affectedTypesCount > 0 && (
-        <div className="mb-6 p-5 rounded-2xl bg-gradient-to-br from-amber-50 via-orange-50/40 to-amber-50/80 border border-amber-200/90 shadow-md">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-amber-100/90 flex items-center justify-center shrink-0 border border-amber-300 text-amber-600 shadow-xs">
-                <AlertTriangle className="w-5 h-5 text-amber-600 animate-pulse" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-extrabold text-amber-950">Stock Reorder Warning</p>
-                  <span className="bg-amber-200 text-amber-900 text-[10px] font-black px-2 py-0.5 rounded-full border border-amber-300">
-                    {stockMetrics.affectedTypesCount} Part Types Affected
-                  </span>
-                </div>
-                <p className="text-xs text-amber-800 font-medium mt-0.5">
-                  <span className="font-bold text-amber-950">{stockMetrics.affectedTypesCount} Part Types Affected: </span>
-                  <span className="font-bold text-amber-950">{stockMetrics.lowStockCount} item(s) are running low. </span>
-                  <span className="font-bold text-rose-700">{stockMetrics.outOfStockCount} item(s) are completely out of stock.</span>
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Detailed Low-Stock Parts Breakdown Table */}
-          <div className="mt-4 pt-4 border-t border-amber-200/80">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs font-black text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
-                  <ShieldAlert className="w-4 h-4 text-amber-600" />
-                  Dynamic 50% Threshold Low-Stock Breakdown ({stockMetrics.lowStockCount} Low Stock / {stockMetrics.outOfStockCount} Out of Stock)
-                </p>
-                <span className="text-[11px] font-semibold text-amber-800">
-                  Showing all {stockMetrics.lowStockItems.length} real-time affected part records
-                </span>
-              </div>
-
-              <div className="overflow-x-auto rounded-xl border border-amber-200 bg-white/90 shadow-sm">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-amber-100 bg-amber-50/60 text-[11px] font-extrabold text-amber-900 uppercase tracking-wider">
-                      <th className="p-2.5">Part ID / Code</th>
-                      <th className="p-2.5">Spare Part Name</th>
-                      <th className="p-2.5">OEM Vendor</th>
-                      <th className="p-2.5">Store Location</th>
-                      <th className="p-2.5">Current Stock</th>
-                      <th className="p-2.5">50% Reorder Threshold</th>
-                      <th className="p-2.5">Stock Status</th>
-                      <th className="p-2.5 text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-amber-100/70 text-xs text-slate-900">
-                    {stockMetrics.lowStockItems.length === 0 ? (
-                      <tr>
-                        <td colSpan={8} className="p-4 text-center text-amber-800 text-xs font-semibold">
-                          No low stock breakdown records available.
-                        </td>
-                      </tr>
-                    ) : (
-                      stockMetrics.lowStockItems.map((item: any, idx: number) => {
-                        const partId = item.partId || item.spareId || item.partCode || 'N/A';
-                        const name = item.productName || item.partName || 'Spare Item';
-                        const oem = item.oemName || 'Standard OEM';
-                        const avail = item.availableQuantity ?? item.quantity ?? 0;
-                        const totalCap = item.totalQuantity || 10;
-                        const minThreshold = Math.ceil(totalCap * 0.5);
-                        const storeLoc = item.store || item.location || 'Delhi';
-                        const isZero = avail === 0;
-
-                        return (
-                          <tr key={idx} className="hover:bg-amber-50/50 transition-colors">
-                            <td className="p-2.5 font-mono text-indigo-700 font-extrabold text-[11px]">
-                              {partId}
-                            </td>
-                            <td className="p-2.5 font-bold text-slate-900">
-                              {name}
-                            </td>
-                            <td className="p-2.5 font-semibold text-slate-700">
-                              {oem}
-                            </td>
-                            <td className="p-2.5">
-                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border ${storeLoc.toLowerCase().includes('delhi') ? 'bg-blue-50 text-blue-800 border-blue-200' : 'bg-orange-50 text-orange-800 border-orange-200'}`}>
-                                <MapPin className="w-3 h-3" />
-                                {storeLoc}
-                              </span>
-                            </td>
-                            <td className="p-2.5 font-black">
-                              <span className={isZero ? 'text-rose-700' : 'text-amber-700'}>
-                                {avail} {item.unit || 'PCS'}
-                              </span>
-                            </td>
-                            <td className="p-2.5 font-semibold text-slate-600">
-                              {minThreshold} {item.unit || 'PCS'} <span className="text-[10px] text-slate-400 font-normal">(50% of {totalCap})</span>
-                            </td>
-                            <td className="p-2.5">
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase border ${isZero ? 'bg-rose-100 text-rose-800 border-rose-300' : 'bg-amber-100 text-amber-800 border-amber-300'}`}>
-                                {isZero ? 'OUT OF STOCK' : 'LOW STOCK'}
-                              </span>
-                            </td>
-                            <td className="p-2.5 text-right">
-                              <button
-                                onClick={() => navigate(`/stock-list?search=${encodeURIComponent(item.partCode || name)}`)}
-                                className="px-2.5 py-1 rounded-lg bg-amber-600 text-white hover:bg-amber-700 text-[11px] font-bold transition-all shadow-xs inline-flex items-center gap-1"
-                              >
-                                View Part <ChevronRight className="w-3 h-3" />
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-        </div>
-      )}
 
       {/* Monthly Dispatch & Pickup Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">

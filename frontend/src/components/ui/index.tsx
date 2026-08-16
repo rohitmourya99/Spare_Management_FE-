@@ -224,11 +224,14 @@ export interface StatCardProps {
 }
 
 export const StatCard: React.FC<StatCardProps> = ({ title, value, icon: Icon, color, trend, onClick, isActive }) => {
+  const isClickable = Boolean(onClick);
   return (
     <div
-      role="button"
-      tabIndex={0}
-      className={`bg-white rounded-2xl p-4 border transition-all duration-200 hover:-translate-y-1 hover:border-indigo-500 hover:shadow-xl cursor-pointer select-none ${
+      role={isClickable ? "button" : undefined}
+      tabIndex={isClickable ? 0 : undefined}
+      className={`bg-white rounded-2xl p-4 border transition-all duration-200 ${
+        isClickable ? 'hover:-translate-y-1 hover:border-indigo-500 hover:shadow-xl cursor-pointer select-none' : ''
+      } ${
         isActive
           ? 'border-2 border-indigo-600 bg-indigo-50/40 ring-2 ring-indigo-500/20 shadow-lg font-black'
           : 'border-slate-200/90'

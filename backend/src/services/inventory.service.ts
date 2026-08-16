@@ -267,10 +267,21 @@ export class InventoryService {
 
     const isSerialized = data.serialNumber ? Boolean(data.serialNumber.trim()) : existing.isSerialized;
 
+    let targetAvailableQty = (data as any).availableQuantity;
+    const inputStatus = (data as any).status;
+    if (inputStatus && inputStatus !== existing.status) {
+      if (inputStatus === 'AVAILABLE') {
+        targetAvailableQty = data.quantity ?? existing.quantity;
+      } else if (inputStatus === 'RESERVED') {
+        targetAvailableQty = 0;
+      }
+    }
+
     const updated = await prisma.inventoryItem.update({
       where: { id },
       data: {
         ...data,
+        availableQuantity: targetAvailableQty !== undefined ? targetAvailableQty : undefined,
         isSerialized,
         warrantyStart: data.warrantyStart ? new Date(data.warrantyStart) : undefined,
         warrantyEnd: data.warrantyEnd ? new Date(data.warrantyEnd) : undefined,
@@ -286,7 +297,6 @@ export class InventoryService {
 
     // Compute field diffs for audit trail
     const changes: string[] = [];
-    const inputStatus = (data as any).status;
     if (inputStatus && inputStatus !== existing.status) changes.push(`Status: ${existing.status} → ${inputStatus}`);
     if (data.quantity !== undefined && data.quantity !== existing.quantity) changes.push(`Quantity: ${existing.quantity} → ${data.quantity}`);
     if (data.serialNumber !== undefined && data.serialNumber !== existing.serialNumber) changes.push(`Serial No: ${existing.serialNumber || 'N/A'} → ${data.serialNumber || 'N/A'}`);
@@ -446,19 +456,38 @@ export class InventoryService {
         prisma.inventoryItem.count({ where: { isDeleted: false, isSerialized: false, AND: [orgFilter] } }).catch(() => 0),
         prisma.oEM.count({ where: { isActive: true } }).catch(() => 0),
 
-        // Delhi store stats
-        prisma.inventoryItem.aggregate({
-          where: { isDeleted: false, store: 'Delhi', AND: [orgFilter] },
-          _count: { id: true },
-          _sum: { quantity: true, availableQuantity: true },
-        }).catch(() => ({ _count: { id: 0 }, _sum: { quantity: 0, availableQuantity: 0 } })),
+        prisma.inventoryItem.findMany({
+          where: {
+            isDeleted: false,
+            AND: [
+              orgFilter,
+              {
+                OR: [
+                  { store: { contains: 'Delhi', mode: 'insensitive' } },
+                  { store: { contains: 'Main', mode: 'insensitive' } },
+                ],
+              },
+            ],
+          },
+          select: { id: true, isSerialized: true, status: true, quantity: true, availableQuantity: true },
+        }).catch(() => []),
 
-        // Bengaluru store stats
-        prisma.inventoryItem.aggregate({
-          where: { isDeleted: false, store: 'Bengaluru', AND: [orgFilter] },
-          _count: { id: true },
-          _sum: { quantity: true, availableQuantity: true },
-        }).catch(() => ({ _count: { id: 0 }, _sum: { quantity: 0, availableQuantity: 0 } })),
+        prisma.inventoryItem.findMany({
+          where: {
+            isDeleted: false,
+            AND: [
+              orgFilter,
+              {
+                OR: [
+                  { store: { contains: 'Bengaluru', mode: 'insensitive' } },
+                  { store: { contains: 'Bangalore', mode: 'insensitive' } },
+                  { store: { contains: 'BLR', mode: 'insensitive' } },
+                ],
+              },
+            ],
+          },
+          select: { id: true, isSerialized: true, status: true, quantity: true, availableQuantity: true },
+        }).catch(() => []),
 
         // Recent Dispatches
         prisma.dispatch.findMany({
@@ -509,6 +538,56 @@ export class InventoryService {
         }).catch(() => []),
       ]);
 
+      // Calculate Delhi store metrics
+      let delhiTotalStock = 0;
+      let delhiAvailable = 0;
+      let delhiReserved = 0;
+      for (const item of (delhiStats as any[])) {
+        const qty = item.quantity || 1;
+        delhiTotalStock += qty;
+        if (item.isSerialized) {
+          if (item.status === 'AVAILABLE') {
+            delhiAvailable += 1;
+          } else {
+            delhiReserved += 1;
+          }
+        } else {
+          const avail = Math.max(0, Math.min(qty, item.availableQuantity ?? qty));
+          const res = Math.max(0, qty - avail);
+          if (item.status === 'RESERVED') {
+            delhiReserved += qty;
+          } else {
+            delhiAvailable += avail;
+            delhiReserved += res;
+          }
+        }
+      }
+
+      // Calculate Bengaluru store metrics
+      let bengaluruTotalStock = 0;
+      let bengaluruAvailable = 0;
+      let bengaluruReserved = 0;
+      for (const item of (bengaluruStats as any[])) {
+        const qty = item.quantity || 1;
+        bengaluruTotalStock += qty;
+        if (item.isSerialized) {
+          if (item.status === 'AVAILABLE') {
+            bengaluruAvailable += 1;
+          } else {
+            bengaluruReserved += 1;
+          }
+        } else {
+          const avail = Math.max(0, Math.min(qty, item.availableQuantity ?? qty));
+          const res = Math.max(0, qty - avail);
+          if (item.status === 'RESERVED') {
+            bengaluruReserved += qty;
+          } else {
+            bengaluruAvailable += avail;
+            bengaluruReserved += res;
+          }
+        }
+      }
+
       // Format OEM Distribution with names
       const oems = await prisma.oEM.findMany().catch(() => []);
       const oemMap = new Map((oems || []).map((o) => [o.id, o.name]));
@@ -524,8 +603,8 @@ export class InventoryService {
           totalSerializedParts: totalSerialized || 0,
           totalNonSerializedParts: totalNonSerialized || 0,
           totalOEMs: (oemDistributionRaw || []).length,
-          delhiTotalStock: delhiStats._sum?.quantity || 0,
-          bengaluruTotalStock: bengaluruStats._sum?.quantity || 0,
+          delhiTotalStock,
+          bengaluruTotalStock,
           lowStockCount: stockAnalysis.lowStockCount || 0,
           outOfStockCount: stockAnalysis.outOfStockCount || 0,
           todaysActivitiesCount: todaysActivitiesCount || 0,
@@ -535,14 +614,16 @@ export class InventoryService {
           failedLoginAttemptsCount: failedLoginAttemptsCount || 0,
         },
         delhiStoreSummary: {
-          totalItems: delhiStats._count?.id || 0,
-          totalQuantity: delhiStats._sum?.quantity || 0,
-          availableQuantity: delhiStats._sum?.availableQuantity || 0,
+          totalItems: (delhiStats as any[]).length,
+          totalQuantity: delhiTotalStock,
+          availableQuantity: delhiAvailable,
+          reservedQuantity: delhiReserved,
         },
         bengaluruStoreSummary: {
-          totalItems: bengaluruStats._count?.id || 0,
-          totalQuantity: bengaluruStats._sum?.quantity || 0,
-          availableQuantity: bengaluruStats._sum?.availableQuantity || 0,
+          totalItems: (bengaluruStats as any[]).length,
+          totalQuantity: bengaluruTotalStock,
+          availableQuantity: bengaluruAvailable,
+          reservedQuantity: bengaluruReserved,
         },
         recentDispatches: recentDispatches || [],
         recentPickups: recentPickups || [],

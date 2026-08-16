@@ -276,9 +276,10 @@ export class DispatchService {
 
     const lockedRemarks = [faultyText, `[Dispatched SN: ${originalSerial}]`, userComments].filter(Boolean).join(' ');
 
-    // Transaction array for atomic database operations
-    const txOperations: Prisma.PrismaPromise<any>[] = [
-      prisma.dispatch.create({
+    // Interactive Prisma Transaction for safe atomic database operations
+    const dispatch = await prisma.$transaction(async (tx) => {
+      // 1. Create Dispatch record
+      const newDispatch = await tx.dispatch.create({
         data: {
           dispatchNo,
           inventoryItemId: itemId,
@@ -317,8 +318,10 @@ export class DispatchService {
           inventoryItem: { select: { spareId: true, productName: true, serialNumber: true, store: true, partCode: true } },
           site: { select: { siteName: true, contactPerson: true, phone: true } },
         },
-      }),
-      prisma.inventoryItem.update({
+      });
+
+      // 2. Update stock item quantity and status
+      await tx.inventoryItem.update({
         where: { id: itemId },
         data: {
           availableQuantity: newAvail,
@@ -328,8 +331,10 @@ export class DispatchService {
           remarks: userComments || item.remarks,
           updatedById: userId,
         },
-      }),
-      prisma.inventoryMovement.create({
+      });
+
+      // 3. Log Inventory Movement
+      await tx.inventoryMovement.create({
         data: {
           inventoryItemId: itemId,
           type: 'DISPATCH',
@@ -340,11 +345,10 @@ export class DispatchService {
           performedById: userId,
           remarks: `Dispatched to site (${buildingName} / Room ${data.roomId || 'N/A'}) (Dispatch #${dispatchNo})`,
         },
-      }),
-    ];
+      });
 
-    txOperations.push(
-      prisma.swapHistory.create({
+      // 4. Log Swap History Audit Record
+      await tx.swapHistory.create({
         data: {
           roomId: data.roomId || 'ROOM-GENERAL',
           roomName: data.roomName || '',
@@ -357,12 +361,10 @@ export class DispatchService {
           swappedBy: (data as any).createdBy || userId || 'Technician',
           swapReason: faultyText || `Outbound Dispatch (Dispatch #${dispatchNo})`,
         },
-      })
-    );
+      });
 
-    // Run all core creation & update queries inside a single Prisma transaction
-    const txResults = await prisma.$transaction(txOperations);
-    const dispatch = txResults[0];
+      return newDispatch;
+    });
 
     // Non-critical post-transaction automation wrapped safely
     try {

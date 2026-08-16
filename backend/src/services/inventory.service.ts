@@ -319,6 +319,34 @@ export class InventoryService {
   }
 
   /**
+   * Delete inventory item (soft delete)
+   */
+  async delete(id: string, userId: string) {
+    const item = await prisma.inventoryItem.findFirst({ where: { id } });
+    if (!item) throw new AppError(404, 'Inventory item not found');
+
+    const updated = await prisma.inventoryItem.update({
+      where: { id },
+      data: { isDeleted: true, updatedById: userId },
+    });
+
+    await activityService.logActivity({
+      userId,
+      module: 'Inventory',
+      action: 'Delete Part',
+      entity: 'InventoryItem',
+      entityId: id,
+      entityLabel: `${item.partCode || item.spareId} - ${item.productName}`,
+      partCode: item.partCode || undefined,
+      serialNumber: item.serialNumber || undefined,
+      oldValue: 'Active Inventory',
+      newValue: 'Deleted Inventory',
+    });
+
+    return updated;
+  }
+
+  /**
    * Archive inventory item (Archive Instead of Delete)
    */
   async archiveItem(id: string, userId: string) {
@@ -376,13 +404,6 @@ export class InventoryService {
     });
 
     return updated;
-  }
-
-  /**
-   * Soft Delete inventory item
-   */
-  async delete(id: string, userId: string) {
-    return this.archiveItem(id, userId);
   }
 
   /**

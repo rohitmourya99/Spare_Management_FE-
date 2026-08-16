@@ -5,7 +5,7 @@ import {
   Search, Plus, Download, Upload, QrCode, Eye,
   ChevronLeft, ChevronRight, X, AlertTriangle, CheckCircle2,
   Package, RefreshCw, FileUp, Building2, MapPin, User, Phone, Mail,
-  Truck, Check, Clock, Tag, Cpu, Archive
+  Truck, Check, Clock, Tag, Cpu, Archive, Trash2
 } from 'lucide-react';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useOrganization } from '../../context/OrganizationContext';
@@ -85,6 +85,25 @@ export const StockListPage: React.FC = () => {
       setRestockSerial('');
       setRestockQty(1);
       setRestockRemarks('');
+    },
+  });
+
+  // Delete Confirmation Modal State
+  const [deleteConfirmItem, setDeleteConfirmItem] = useState<InventoryItem | null>(null);
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await api.delete(`/inventory/${id}`);
+      return res.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      setToastMessage(data?.message || 'Stock item deleted successfully.');
+      setTimeout(() => setToastMessage(null), 4000);
+      setDeleteConfirmItem(null);
+    },
+    onError: (err: any) => {
+      alert(err?.response?.data?.message || 'Failed to delete item.');
     },
   });
 
@@ -549,38 +568,18 @@ export const StockListPage: React.FC = () => {
                           )}
                           <button
                             onClick={() => navigate(`/inventory/${item.id}`)}
-                            className="p-1.5 rounded bg-slate-100 hover:bg-indigo-600 text-slate-700 hover:text-white border border-slate-200 transition-colors"
+                            className="p-1.5 rounded bg-slate-100 hover:bg-indigo-600 text-slate-700 hover:text-white border border-slate-200 transition-colors cursor-pointer"
                             title="View / Edit Details"
                           >
                             <Eye className="w-3.5 h-3.5" />
                           </button>
-                          {user?.role === 'SUPER_ADMIN' && (
-                            <button
-                              onClick={async () => {
-                                if (window.confirm(`Are you sure you want to archive "${item.productName}"?`)) {
-                                  try {
-                                    await api.post(`/inventory/${item.id}/archive`);
-                                    queryClient.invalidateQueries({ queryKey: ['inventory'] });
-                                  } catch (err: any) {
-                                    alert(err?.response?.data?.message || 'Failed to archive item');
-                                  }
-                                }
-                              }}
-                              className="p-1.5 rounded bg-slate-100 hover:bg-rose-600 text-slate-700 hover:text-white border border-slate-200 transition-colors"
-                              title="Archive Part"
-                            >
-                              <Archive className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                          {item.qrCode && (
-                            <button
-                              onClick={() => setQrModalItem(item)}
-                              className="p-1.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors"
-                              title="View QR Code"
-                            >
-                              <QrCode className="w-3.5 h-3.5" />
-                            </button>
-                          )}
+                          <button
+                            onClick={() => setDeleteConfirmItem(item)}
+                            className="p-1.5 rounded bg-rose-50 hover:bg-rose-600 text-rose-600 hover:text-white border border-rose-200 transition-colors cursor-pointer"
+                            title="Delete Stock Item"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -952,6 +951,47 @@ export const StockListPage: React.FC = () => {
               </Button>
             </div>
           </form>
+        )}
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={!!deleteConfirmItem}
+        onClose={() => setDeleteConfirmItem(null)}
+        title="Confirm Stock Item Deletion"
+        maxWidth="md"
+      >
+        {deleteConfirmItem && (
+          <div className="space-y-4">
+            <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-black text-rose-900">Permanent Item Deletion</p>
+                <p className="text-xs font-semibold text-rose-700 mt-1">
+                  Are you sure you want to delete <span className="font-extrabold text-slate-900">"{deleteConfirmItem.partCode || deleteConfirmItem.productName}"</span> ({deleteConfirmItem.productName}) from the stock list?
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmItem(null)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteMutation.isPending}
+                onClick={() => deleteMutation.mutate(deleteConfirmItem.id)}
+                className="px-4 py-2 text-xs font-black text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 rounded-xl shadow-sm transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                {deleteMutation.isPending ? 'Deleting...' : 'Delete Permanently'}
+              </button>
+            </div>
+          </div>
         )}
       </Modal>
     </Layout>

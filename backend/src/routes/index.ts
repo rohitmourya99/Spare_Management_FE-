@@ -131,7 +131,7 @@ inventoryRoutes.post('/:id/comments', authorize(UserRole.SUPER_ADMIN, UserRole.I
 inventoryRoutes.get('/:id', (req, res, next) => inventoryController.getById(req, res).catch(next));
 inventoryRoutes.post('/', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN), (req, res, next) => inventoryController.create(req, res).catch(next));
 inventoryRoutes.put('/:id', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN), (req, res, next) => inventoryController.update(req, res).catch(next));
-inventoryRoutes.delete('/:id', authorize(UserRole.SUPER_ADMIN), (req, res, next) => inventoryController.delete(req, res).catch(next));
+inventoryRoutes.delete('/:id', authorize(UserRole.SUPER_ADMIN, UserRole.INVENTORY_ADMIN), (req, res, next) => inventoryController.delete(req, res).catch(next));
 
 // ==============================================
 // DISPATCH ROUTES (Blocked for Read Only)

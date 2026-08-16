@@ -437,7 +437,6 @@ export const StockListPage: React.FC = () => {
               <option value="OUT_OF_STOCK">❌ Out of Stock</option>
               <option value="AVAILABLE">Available</option>
               <option value="RESERVED">Reserved</option>
-              <option value="DISPATCHED">Dispatched</option>
             </select>
           </div>
         </div>
@@ -543,7 +542,6 @@ export const StockListPage: React.FC = () => {
                             >
                               <option value="AVAILABLE">Available</option>
                               <option value="RESERVED">Reserved</option>
-                              <option value="DISPATCHED">Dispatched</option>
                             </select>
                           )}
                         </div>

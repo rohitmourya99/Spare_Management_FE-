@@ -30,11 +30,18 @@ export function extractOrgId(req: Request | any): string {
  * organizationId is 'BHEL' OR organizationId IS NULL, ensuring legacy un-tagged records are included.
  * For any other organization (e.g. 'JPR'), it strictly matches organizationId = activeOrg.
  */
-export function buildOrgFilter(organizationId?: string | null): { OR: Array<{ organizationId: string | null }> } | { organizationId: string } {
-  const cleanOrg = (organizationId && String(organizationId).trim() && String(organizationId).trim() !== 'null' && String(organizationId).trim() !== 'undefined')
-    ? String(organizationId).trim()
-    : 'BHEL';
+export function buildOrgFilter(organizationId?: string | null): any {
+  if (!organizationId || String(organizationId).trim().toUpperCase() === 'ALL') {
+    return {
+      OR: [
+        { organizationId: 'BHEL' },
+        { organizationId: 'METLIFE' },
+        { organizationId: null },
+      ],
+    };
+  }
 
+  const cleanOrg = String(organizationId).trim();
   if (cleanOrg === 'BHEL') {
     return {
       OR: [
@@ -44,5 +51,10 @@ export function buildOrgFilter(organizationId?: string | null): { OR: Array<{ or
     };
   }
 
-  return { organizationId: cleanOrg };
+  return {
+    OR: [
+      { organizationId: cleanOrg },
+      { organizationId: null },
+    ],
+  };
 }

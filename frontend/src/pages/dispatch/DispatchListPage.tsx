@@ -83,7 +83,7 @@ export const DispatchListPage: React.FC = () => {
   const { data, isLoading } = useQuery({
     queryKey: ['dispatches', search, selectedOrg],
     queryFn: async () => {
-      const res = await api.get('/dispatch', { params: { search } });
+      const res = await api.get('/dispatch', { params: { search, limit: 200, organizationId: selectedOrg } });
       return res.data;
     },
   });
@@ -249,7 +249,15 @@ export const DispatchListPage: React.FC = () => {
     setSelectedSite(found);
   };
 
-  const dispatches: any[] = data?.data || [];
+  const dispatches: any[] = Array.isArray(data?.data)
+    ? data.data
+    : Array.isArray(data?.dispatches)
+    ? data.dispatches
+    : Array.isArray(data?.items)
+    ? data.items
+    : Array.isArray(data)
+    ? data
+    : [];
 
   const [swapModalOpen, setSwapModalOpen] = useState(false);
   const [swapForm, setSwapForm] = useState({

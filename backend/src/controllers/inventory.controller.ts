@@ -104,9 +104,13 @@ export class InventoryController {
     res.status(200).json({
       success: true,
       message: `Successfully imported ${summary.imported} items out of ${summary.totalRows} from Excel for ${store} store`,
+      excelTotalRows: summary.totalRows,
+      databaseInsertedCount: summary.imported,
       data: {
         totalInExcel: summary.totalRows,
         successfullyUploaded: summary.imported,
+        excelTotalRows: summary.totalRows,
+        databaseInsertedCount: summary.imported,
         failed: summary.failed,
         skipped: summary.skipped,
         summary,

@@ -61,28 +61,6 @@ export class ExcelService {
       },
     });
 
-    // STEP 2: Pre-fetch & Cache OEMs, Categories, and Location
-    const allOems = await prisma.oEM.findMany();
-    const oemCache = new Map<string, string>();
-    for (const o of allOems) {
-      oemCache.set(o.name.trim().toLowerCase(), o.id);
-    }
-
-    const allCategories = await prisma.category.findMany();
-    const categoryCache = new Map<string, string>();
-    for (const c of allCategories) {
-      if (!categoryCache.has(c.oemId)) {
-        categoryCache.set(c.oemId, c.id);
-      }
-    }
-
-    let defaultLocation = await prisma.location.findFirst({
-      where: { name: { contains: store } },
-    });
-    if (!defaultLocation) {
-      defaultLocation = await prisma.location.findFirst();
-    }
-
     const getVal = (row: Record<string, any>, ...keys: string[]) => {
       const rowKeys = Object.keys(row);
       for (const k of keys) {
@@ -92,24 +70,70 @@ export class ExcelService {
       return null;
     };
 
-    const getOemId = async (oemName: string): Promise<string> => {
-      const cleanName = oemName.trim().toLowerCase();
-      if (oemCache.has(cleanName)) {
-        return oemCache.get(cleanName)!;
-      }
-      const newOem = await prisma.oEM.create({ data: { name: oemName } });
-      oemCache.set(cleanName, newOem.id);
-      return newOem.id;
-    };
+    const cleanStr = (val: any) => (val !== undefined && val !== null ? String(val).trim() : '');
 
-    const getCategoryId = async (oemId: string): Promise<string> => {
-      if (categoryCache.has(oemId)) {
-        return categoryCache.get(oemId)!;
+    // STEP 2: Pre-fetch & Bulk Create OEMs, Categories, and Location (ZERO AWAIT inside row loop)
+    const rawOemNames = new Set<string>();
+    for (const row of rawData) {
+      const o = cleanStr(getVal(row, 'OEM', 'Manufacturer'));
+      if (o) rawOemNames.add(o);
+    }
+    if (rawOemNames.size === 0) rawOemNames.add('Generic');
+
+    const existingOems = await prisma.oEM.findMany();
+    const oemCache = new Map<string, string>();
+    for (const o of existingOems) {
+      oemCache.set(o.name.trim().toLowerCase(), o.id);
+    }
+
+    const missingOemData: Array<{ name: string }> = [];
+    for (const oName of rawOemNames) {
+      if (!oemCache.has(oName.trim().toLowerCase())) {
+        missingOemData.push({ name: oName.trim() });
       }
-      const newCat = await prisma.category.create({ data: { name: 'General', oemId } });
-      categoryCache.set(oemId, newCat.id);
-      return newCat.id;
-    };
+    }
+    if (missingOemData.length > 0) {
+      await prisma.oEM.createMany({ data: missingOemData, skipDuplicates: true });
+      const refetchedOems = await prisma.oEM.findMany();
+      for (const o of refetchedOems) {
+        oemCache.set(o.name.trim().toLowerCase(), o.id);
+      }
+    }
+
+    const fallbackOemId = oemCache.get('generic') || Array.from(oemCache.values())[0];
+
+    const existingCategories = await prisma.category.findMany();
+    const categoryCache = new Map<string, string>();
+    for (const c of existingCategories) {
+      if (!categoryCache.has(c.oemId)) {
+        categoryCache.set(c.oemId, c.id);
+      }
+    }
+
+    const missingCategories: Array<{ name: string; oemId: string }> = [];
+    for (const oemId of oemCache.values()) {
+      if (!categoryCache.has(oemId)) {
+        missingCategories.push({ name: 'General', oemId });
+      }
+    }
+    if (missingCategories.length > 0) {
+      await prisma.category.createMany({ data: missingCategories, skipDuplicates: true });
+      const refetchedCats = await prisma.category.findMany();
+      for (const c of refetchedCats) {
+        if (!categoryCache.has(c.oemId)) {
+          categoryCache.set(c.oemId, c.id);
+        }
+      }
+    }
+
+    const fallbackCategoryId = Array.from(categoryCache.values())[0];
+
+    let defaultLocation = await prisma.location.findFirst({
+      where: { name: { contains: store } },
+    });
+    if (!defaultLocation) {
+      defaultLocation = await prisma.location.findFirst();
+    }
 
     const insertsToPerform: Array<{
       spareId: string;
@@ -136,9 +160,7 @@ export class ExcelService {
     const prefix = store === 'Bengaluru' ? 'PDS-BLR' : 'PDS-DEL';
     const year = new Date().getFullYear();
 
-    const cleanStr = (val: any) => (val !== undefined && val !== null ? String(val).trim() : '');
-
-    // STEP 3: In-Memory Row Processing & Flexible Column Extraction
+    // STEP 3: Ultra-Fast Synchronous Row Processing (100% In-Memory, ZERO AWAIT inside loop)
     const seenSerials = new Set<string>();
 
     for (let i = 0; i < rawData.length; i++) {
@@ -151,7 +173,6 @@ export class ExcelService {
         const partCode = cleanStr(getVal(row, 'Spare Part Code', 'Part Code', 'Part Number', 'Item Code', 'Part ID'));
         const locationName = cleanStr(getVal(row, 'Warehouse Location', 'Location', 'Store Location', 'Building Name', 'Building'));
 
-        // Flexible Serial Number column mapping
         const serialNumberRaw = getVal(
           row,
           'PART SERIAL NO.',
@@ -166,7 +187,6 @@ export class ExcelService {
         );
         const cleanSerialRaw = cleanStr(serialNumberRaw);
 
-        // Row Validation: Skip if completely blank
         if (!productName && !partCode && !locationName && !cleanSerialRaw && (!oemRaw || oemRaw.toLowerCase() === 'generic')) {
           summary.skipped++;
           continue;
@@ -182,7 +202,6 @@ export class ExcelService {
         const isNotSerial = isBatchOrDummySerial(serialNumberRaw);
         let cleanSerial: string | null = !isNotSerial && cleanSerialRaw !== '' ? cleanSerialRaw : null;
 
-        // Ensure serial number uniqueness within batch to prevent database constraint dropping
         if (cleanSerial) {
           const serialLower = cleanSerial.toLowerCase();
           if (seenSerials.has(serialLower)) {
@@ -193,8 +212,8 @@ export class ExcelService {
 
         const isSerialized = Boolean(cleanSerial);
 
-        const oemId = await getOemId(oemName);
-        const categoryId = await getCategoryId(oemId);
+        const oemId = oemCache.get(oemName.toLowerCase()) || fallbackOemId;
+        const categoryId = categoryCache.get(oemId) || fallbackCategoryId;
 
         startCount++;
         const spareId = `${prefix}-${year}-${String(startCount).padStart(5, '0')}`;
